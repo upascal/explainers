@@ -1,0 +1,107 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>What a key does to content</title>
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+<main>
+<p class="note" style="margin-top:32px"><a href="index.html">← How AI text watermarking works</a></p>
+<h1>What a key does to content</h1>
+<p class="lede">The non-distortion guarantee holds on average over keys. Any single deployed key measurably reshapes what the model talks about — and two keys differ from each other more than either differs from the unwatermarked model.</p>
+
+<h2>The case that started this</h2>
+<p>In a run of Gemma-2-2b on a question about the 1936 Berlin Olympics, one watermarked configuration called them the Games of the <em>VIIIth</em> Olympiad. They were the XIth. The same prompt, same key, same wrong answer, over and over, while the unwatermarked model made that mistake only occasionally. The tournament never invents a candidate — “VIII” had to be drawn from the model's own distribution — so the key had not added an error; it had made one systematic. The question was whether that generalises: does a fixed key shift, in a measurable way, <em>what</em> a model says across many responses?</p>
+
+<h2>The test</h2>
+<p><a href="index.html#s4">Section 4 of the explainer</a> showed the shape of the problem with a toy: one key skews the distribution at a single position. Does that survive into whole responses — into what the model actually talks about? We tested it.</p>
+<p>Gemma-2-9b was asked the same question about the 1936 Berlin Olympics 500 times in each of five conditions: no watermark (twice, with different random seeds, as a control), watermarked with a fixed key A, watermarked with a fixed key B, and watermarked with a fresh key for every response. For each response we recorded which named entities and phrases it mentioned, then compared the prevalence of each across conditions.</p>
+<div class="module" id="m6">
+  <table class="data" id="s6-tests"></table>
+  <p class="note">L1 is the total absolute difference in entity prevalence between two conditions, summed over entities; p is from a permutation test. Two unwatermarked runs differ by 0.95 — that is the noise floor.</p>
+</div>
+<p>Read the last row first. <strong>Two keys differ from each other more than either differs from the unwatermarked baseline.</strong> The distortion is real, it is key-specific, and its direction is arbitrary. Rotating the key per response erases it: that row is indistinguishable from the control.</p>
+<div class="module" id="m6b">
+  <h4>Entity prevalence — share of responses mentioning each</h4>
+  <div class="panels" id="panels-6"></div>
+  <div class="legend" id="legend-6"></div>
+</div>
+<div class="module" id="m6c">
+  <h4>Shift under key A, largest first (key B shown for comparison)</h4>
+  <div id="dumbbell"></div>
+  <div class="legend" id="legend-6c"></div>
+</div>
+<p>Look at what moved. “XI Olympiad” — the correct formal name — went from 71% of responses to 3% under key A, while “Summer Olympics” went from 18% to 70%. The month, “August”, dropped from 83% to 35%. “Nazi Germany” fell from 84% to 51%. Under key B, several of these move the other way.</p>
+<p>And yet the overall diversity of the responses did not change: <span id="s6-div"></span>. The watermarked model talks about just as many things, spread just as evenly. It is <em>differently populated</em>, not worse — which is precisely why human raters and quality benchmarks would not catch it. Google's 20-million-response live comparison measured thumbs-up rates, not which facts got mentioned.</p>
+<div class="callout warn">
+  <div class="t">What this does and doesn't show</div>
+  This is a local reimplementation of the published scheme on Gemma-2-9b, one prompt, one model. It demonstrates that the phenomenon exists in this class of watermark. It does not measure Gemini, whose key, configuration and rotation policy are not public. The large shifts replicate at n=150 and n=500.
+</div>
+<p><strong>The policy questions follow directly.</strong> Who picks the key? How often does it rotate? Is either of those auditable by anyone outside the provider? Per-response rotation appears to erase the content shift entirely and is worth naming as a mitigation — but it comes with the detection cost described in <a href="index.html#s3">Section 3 of the explainer</a>, since a detector must then try every key it has ever used.</p>
+
+<div class="callout">
+  <div class="t">Two symptoms, one cause</div>
+  In the 2-billion-parameter model the mechanism showed up as insertion of a wrong fact. In the 9-billion model it showed up as substitution of one correct phrasing for another (“XI Olympiad” 71% → 3%). Better models are confident about facts and keep their slack at phrasing choices, so the key has more purchase on <em>how</em> they say things than on <em>what</em>. The next section takes this further.
+</div>
+
+<h2 id="entropy">Entropy shape and model scale <span class="v2">in progress</span></h2>
+<p>In these runs the watermark was easier to detect in the 2-billion-parameter model than in the 9-billion one. The detection mechanism (<a href="index.html#s3">Section 3 of the explainer</a>) suggests why. A position torn between two options yields nearly a full coin of evidence; torn between forty, it yields no more; near-certain, it yields nothing. So detectability depends on the <em>shape</em> of a model's uncertainty across a text, not the total amount. Broad, moderate uncertainty is ideal; the same total concentrated in a few spikes is mostly wasted. Larger models are confident on facts and keep their uncertainty at phrasing junctions — spikier, and harder to watermark.</p>
+<p>The consequence for policy: watermark strength is a property of the model, not the scheme. Validation on one model version does not transfer to the next. The per-token data to make this a chart is in progress.</p>
+
+<footer>
+  <p>Entity data: local reimplementation of SynthID-Text (Dathathri et al., <em>Nature</em> 2024) on <span class="mono">google/gemma-2-9b-it</span>, n&nbsp;=&nbsp;500 per arm, <i>m</i>&nbsp;=&nbsp;30 layers, <i>H</i>&nbsp;=&nbsp;4. Entities extracted by a pooled gazetteer; prevalence = share of responses mentioning the entity at least once. Comparisons are permutation tests on L1 distance with a Fisher-combined primary test; per-entity shifts are Benjamini–Hochberg corrected (q&nbsp;&lt;&nbsp;0.05).</p>
+</footer>
+</main>
+<script>
+(async function () {
+const PILOT = window.__PILOT__ || await (await fetch('pilot_entities.json')).json();
+const KEY_HEX = ['#2a78d6', '#eb6834', '#1baf7a'];
+const $ = id => document.getElementById(id);
+function esc(s) { return s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;'); }
+function pct(x, d = 0) { return (100 * x).toFixed(d) + '%'; }
+// ---------- Section 5 (pilot data) ----------
+function render6() {
+  const t = PILOT.tests; const rows = [
+    ['unwatermarked A vs unwatermarked B', 'control', t['unwm_a vs unwm_b']],
+    ['unwatermarked vs fixed key A', 'primary', t['unwm_a vs wm_fixed']],
+    ['unwatermarked vs fixed key B', '', t['unwm_a vs wm_fixed_b']],
+    ['unwatermarked vs rotating key', '', t['unwm_a vs wm_rotating']],
+    ['fixed key A vs fixed key B', 'headline', t['wm_fixed vs wm_fixed_b']],
+  ];
+  $('s6-tests').innerHTML = `<tr><th>comparison</th><th></th><th class="n">L1 distance</th><th class="n">p</th><th>reading</th></tr>` + rows.map(([a, tag, r]) => `<tr style="${tag === 'headline' ? 'font-weight:600' : ''}"><td>${a}</td><td class="note">${tag}</td><td class="n">${r.L1.toFixed(2)}</td><td class="n">${r.p < 0.0001 ? '< 0.0001' : r.p.toFixed(2)}</td><td>${r.p < 0.01 ? 'different' : 'no difference'}</td></tr>`).join('');
+  const d = PILOT.diversity;
+  $('s6-div').innerHTML = `entropy ${d.unwm_a.entropy_bits} vs ${d.wm_fixed.entropy_bits} bits, effective number of entities ${d.unwm_a.effective_entities} vs ${d.wm_fixed.effective_entities}`;
+  // three panels, top 12 entities by |dA|
+  const ents = PILOT.entities.slice(0, 12);
+  const panel = (title, color, get) => {
+    const W = 220, rowH = 20, left = 100, HH = ents.length * rowH + 4; const sc = (W - left - 36);
+    let s = `<svg viewBox="0 0 ${W} ${HH}" width="100%" style="display:block">`;
+    ents.forEach((e, i) => { const y = i * rowH + 2; const v = get(e);
+      s += `<text x="${left - 6}" y="${y + rowH / 2}" text-anchor="end" dominant-baseline="middle" font-size="10" fill="var(--ink)">${esc(e.entity).slice(0, 18)}</text><rect x="${left}" y="${y + 4}" width="${Math.max(1, v * sc)}" height="${rowH - 9}" rx="2" fill="${color}"/><text x="${left + v * sc + 4}" y="${y + rowH / 2}" dominant-baseline="middle" font-size="10">${pct(v, 0)}</text>`; });
+    return `<div class="panel"><div class="pt"><i style="background:${color}"></i>${title}</div>${s}</svg></div>`;
+  };
+  $('panels-6').innerHTML = panel('No watermark', '#898781', e => e.unwm) + panel('Fixed key A', KEY_HEX[0], e => e.keyA) + panel('Fixed key B', KEY_HEX[1], e => e.keyB);
+  $('legend-6').innerHTML = `<span class="note">Share of 500 responses mentioning each entity or phrase; the 12 with the largest shift under key A. Gemma-2-9b-it, prompt about the 1936 Berlin Olympics.</span>`;
+  // dumbbell
+  const all = PILOT.entities.slice(0, 20); const W = 700, rowH = 22, left = 170, right = 20, HH = all.length * rowH + 30;
+  const xs = v => left + v * (W - left - right);
+  let s = `<svg viewBox="0 0 ${W} ${HH}" width="100%" style="display:block">`;
+  [0, 0.25, 0.5, 0.75, 1].forEach(v => { s += `<line x1="${xs(v)}" x2="${xs(v)}" y1="0" y2="${HH - 26}" stroke="var(--grid)"/><text x="${xs(v)}" y="${HH - 12}" text-anchor="middle" font-size="11">${pct(v)}</text>`; });
+  all.forEach((e, i) => {
+    const y = i * rowH + 12;
+    s += `<text x="${left - 10}" y="${y}" text-anchor="end" dominant-baseline="middle" font-size="12" fill="var(--ink)">${esc(e.entity)}</text>`;
+    s += `<line x1="${xs(e.unwm)}" x2="${xs(e.keyA)}" y1="${y}" y2="${y}" stroke="var(--axis)" stroke-width="2"/>`;
+    s += `<circle cx="${xs(e.keyB)}" cy="${y}" r="4" fill="white" stroke="${KEY_HEX[1]}" stroke-width="2"/>`;
+    s += `<circle cx="${xs(e.unwm)}" cy="${y}" r="5" fill="#898781" stroke="white" stroke-width="1.5"/>`;
+    s += `<circle cx="${xs(e.keyA)}" cy="${y}" r="5" fill="${KEY_HEX[0]}" stroke="white" stroke-width="1.5"/>`;
+  });
+  $('dumbbell').innerHTML = s + '</svg>';
+  $('legend-6c').innerHTML = `<span><i style="background:#898781;border-radius:50%"></i>no watermark</span><span><i style="background:${KEY_HEX[0]};border-radius:50%"></i>fixed key A</span><span><i style="background:white;border:2px solid ${KEY_HEX[1]};border-radius:50%;width:8px;height:8px"></i>fixed key B</span><span class="note">share of responses mentioning the entity</span>`;
+}
+render6();
+})();
+</script>
+</body>
+</html>

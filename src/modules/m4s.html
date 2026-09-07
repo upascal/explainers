@@ -1,0 +1,17 @@
+<div class="module" id="m4s">
+  <h4>Try it on real text</h4>
+  <div class="row">
+    <label class="ctl">Sample <select id="smp-select"></select></label>
+    <span class="seg" id="smp-key"><button class="on" data-v="demo">demo key</button><button data-v="yours">your key (2.3)</button></span>
+    <span class="note">scored with <i>m</i> = 4 layers, independent of the slider above</span>
+  </div>
+  <div class="stat" id="smp-stats"></div>
+  <div id="smp-table"></div>
+  <div class="scores" id="smp-strip"></div>
+  <p class="note" id="smp-note" style="margin:10px 0 0"></p>
+  <details id="smp-paste" style="margin-top:12px">
+    <summary>Score your own text</summary>
+    <textarea id="smp-text" rows="6" placeholder="Paste any text. It is tokenised in your browser with Gemma's tokenizer and scored under the selected key; nothing is uploaded."></textarea>
+    <div class="row" style="margin-top:8px"><button class="primary" id="smp-go">Tokenize and score</button><span class="note" id="smp-tokstatus"></span></div>
+  </details>
+</div>

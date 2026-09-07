@@ -1,0 +1,14 @@
+<div class="module" id="m4">
+  <div id="det-current"></div>
+  <hr style="margin:14px 0">
+  <div class="row">
+    <label class="ctl">Document length <input type="range" id="doclen" min="10" max="1000" step="10" value="100"> <b id="doclen-v">100</b> <span class="note">tokens</span></label>
+    <span class="seg" id="len-presets"><button data-n="20">sentence</button><button data-n="100" class="on">paragraph</button><button data-n="800">article</button></span>
+  </div>
+  <div id="det-chart"></div>
+  <div class="row" style="margin-top:6px">
+    <label class="ctl">Threshold <input type="range" id="thr" min="0.5" max="0.75" step="0.005" value="0.56"> <b id="thr-v">0.560</b></label>
+  </div>
+  <div class="stat" id="det-stats"></div>
+  <p class="note" id="det-note"></p>
+</div>

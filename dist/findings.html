@@ -1,0 +1,379 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>What a key does to content</title>
+<style>
+:root {
+  color-scheme: light;
+  --page: #f9f9f7;
+  --surface: #fcfcfb;
+  --ink: #0b0b0b;
+  --ink-2: #52514e;
+  --muted: #898781;
+  --grid: #e1e0d9;
+  --axis: #c3c2b7;
+  --border: rgba(11,11,11,0.10);
+  --blue: #2a78d6;
+  --blue-100: #cde2fb;
+  --blue-250: #86b6ef;
+  --orange: #eb6834;
+  --aqua: #1baf7a;
+  --red: #e34948;
+  --violet: #4a3aa7;
+  --serif: "Iowan Old Style", "Palatino Linotype", Palatino, Georgia, serif;
+  --sans: system-ui, -apple-system, "Segoe UI", sans-serif;
+  --mono: ui-monospace, "SF Mono", Menlo, Consolas, monospace;
+}
+* { box-sizing: border-box; }
+html { scroll-behavior: smooth; }
+body { margin: 0; background: var(--page); color: var(--ink); font-family: var(--serif); font-size: 18px; line-height: 1.55; }
+main { max-width: 760px; margin: 0 auto; padding: 0 20px 120px; }
+h1 { font-size: 2.4rem; line-height: 1.1; margin: 64px 0 12px; font-weight: 600; letter-spacing: -0.01em; }
+h2 { font-size: 1.7rem; margin: 96px 0 8px; font-weight: 600; letter-spacing: -0.01em; }
+h3 { font-size: 1.2rem; margin: 48px 0 8px; font-weight: 600; }
+h2 .num, h3 .num { color: var(--muted); font-weight: 400; margin-right: 10px; font-family: var(--sans); font-size: 0.85em; }
+p { margin: 0 0 1em; }
+.lede { font-size: 1.25rem; color: var(--ink-2); line-height: 1.45; }
+a { color: var(--blue); }
+small, .small { font-size: 0.85rem; color: var(--ink-2); }
+.sans { font-family: var(--sans); }
+.mono { font-family: var(--mono); font-size: 0.9em; }
+code { font-family: var(--mono); font-size: 0.88em; background: #f0efec; padding: 1px 5px; border-radius: 4px; }
+hr { border: 0; border-top: 1px solid var(--grid); margin: 48px 0; }
+ul { padding-left: 1.2em; }
+li { margin-bottom: 0.4em; }
+blockquote { margin: 1.5em 0; padding-left: 1em; border-left: 3px solid var(--axis); color: var(--ink-2); }
+.callout { background: var(--surface); border: 1px solid var(--border); border-left: 3px solid var(--blue); padding: 14px 18px; margin: 1.5em 0; font-family: var(--sans); font-size: 0.95rem; }
+.callout.warn { border-left-color: var(--orange); }
+.callout .t { font-weight: 600; margin-bottom: 4px; }
+.note { font-family: var(--sans); font-size: 0.85rem; color: var(--ink-2); }
+
+/* controls */
+.module { background: var(--surface); border: 1px solid var(--border); border-radius: 10px; padding: 18px 20px; margin: 1.4em 0 2em; font-family: var(--sans); font-size: 0.95rem; }
+.module h4 { margin: 0 0 12px; font-size: 0.8rem; text-transform: uppercase; letter-spacing: 0.08em; color: var(--muted); font-weight: 600; }
+.row { display: flex; flex-wrap: wrap; gap: 10px 18px; align-items: center; margin-bottom: 12px; }
+label.ctl { display: inline-flex; align-items: center; gap: 8px; font-size: 0.9rem; color: var(--ink-2); }
+label.ctl b { color: var(--ink); font-weight: 600; min-width: 2.2em; text-align: right; font-variant-numeric: tabular-nums; }
+select, button { font: inherit; font-family: var(--sans); }
+select { padding: 6px 10px; border: 1px solid var(--axis); border-radius: 6px; background: white; max-width: 100%; }
+button { padding: 7px 14px; border: 1px solid var(--axis); border-radius: 6px; background: white; cursor: pointer; }
+button:hover { border-color: var(--ink-2); }
+button.primary { background: var(--blue); border-color: var(--blue); color: white; }
+button.primary:hover { background: #256abf; }
+button:disabled { opacity: 0.45; cursor: default; }
+input[type=range] { width: 160px; accent-color: var(--blue); }
+.seg { display: inline-flex; border: 1px solid var(--axis); border-radius: 6px; overflow: hidden; }
+.seg button { border: 0; border-radius: 0; padding: 5px 11px; background: white; }
+.seg button + button { border-left: 1px solid var(--axis); }
+.seg button.on { background: var(--ink); color: white; }
+
+/* tokens */
+.chips { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; }
+.chip { display: inline-block; padding: 3px 9px; border-radius: 6px; background: #eeede8; font-family: var(--mono); font-size: 0.9rem; white-space: pre; border: 1px solid transparent; }
+.chip.id { background: #e8eef8; color: var(--blue); }
+.chip.emit { background: var(--blue-100); border-color: var(--blue-250); }
+.chip.manual { background: #f3ead8; border-color: #e6cf9a; }
+.chip.bos { color: var(--muted); }
+.chip .sp { color: var(--muted); }
+.chip.win { background: var(--blue); color: white; }
+.chip.lost { background: #fbe2d6; color: #8a3a1a; }
+.chip.wrong { background: #fbe2d6; }
+
+/* sticky state bar: the settings the sentence is built under, then the sentence itself */
+#statebar { position: sticky; top: 0; z-index: 20; background: rgba(249,249,247,0.94); backdrop-filter: blur(6px); border-bottom: 1px solid var(--grid); padding: 10px 16px; font-family: var(--sans); display: none; }
+#statebar .in { max-width: 760px; margin: 0 auto; display: grid; gap: 9px; }
+#statebar .sb-set { display: flex; flex-wrap: wrap; justify-content: flex-start; gap: 8px 24px; align-items: center; }
+#statebar .sb-vals { display: inline-flex; gap: 16px; align-items: center; flex: 0 0 auto; font-size: 0.8rem; font-variant-caps: all-small-caps; letter-spacing: 0.06em; color: var(--muted); white-space: nowrap; }
+#statebar .sb-vals a { color: var(--muted); text-decoration: none; }
+#statebar .sb-vals a:hover { color: var(--ink); }
+#statebar .sb-vals b { color: var(--ink); font-variant-caps: normal; font-weight: 600; letter-spacing: 0; }
+#statebar .sb-keys { display: inline-flex; align-items: center; gap: 6px; }
+#statebar .sb-vals a.sb-key { font-family: "JetBrains Mono", var(--mono); font-size: 0.9em; font-variant-caps: normal; font-weight: 500; letter-spacing: 0; color: var(--violet); }
+#statebar .sb-vals a.sb-key:hover { text-decoration: underline; }
+#statebar .sb-vals a.sb-genkeys { display: inline-flex; align-items: center; height: 20px; padding: 0 8px; border: 1px solid var(--axis); border-radius: 5px; background: white; font-size: 0.72rem; font-variant-caps: normal; letter-spacing: 0; color: var(--ink); white-space: nowrap; }
+#statebar .sb-vals a.sb-genkeys:hover { border-color: var(--ink-2); }
+#statebar .sb-hr { height: 1px; background: #eceae4; }
+/* the watermark toggle */
+#statebar .sb-wm { display: inline-flex; flex: 0 0 auto; align-items: center; gap: 6px; cursor: pointer; font-size: 0.74rem; white-space: nowrap; color: var(--muted); user-select: none; }
+#statebar .sb-set .sb-wm { margin-left: auto; }
+#statebar .sb-wm.on { color: var(--ink); }
+#statebar .sb-wm.nokeys { opacity: 0.45; cursor: default; }
+#statebar .sb-track { position: relative; display: inline-block; width: 26px; height: 15px; border-radius: 8px; background: var(--axis); transition: background-color 160ms ease; }
+#statebar .sb-wm.on .sb-track { background: var(--blue); }
+#statebar .sb-knob { position: absolute; top: 2px; left: 2px; width: 11px; height: 11px; border-radius: 50%; background: white; box-shadow: 0 1px 2px rgba(11,11,11,0.25); transition: transform 160ms ease; }
+#statebar .sb-wm.on .sb-knob { transform: translateX(11px); }
+/* the sentence: earlier tokens feed off to the left and clip; the window, the blank and the pair hold still */
+#statebar .sb-row { display: flex; flex-wrap: nowrap; justify-content: flex-end; align-items: center; padding-bottom: 19px; overflow: hidden; }
+/* basis 0: the window cluster is laid out first and the lead takes whatever is left, clipping mid-token rather than wrapping */
+#statebar .sb-lead { display: flex; gap: 3px; align-items: center; justify-content: flex-end; flex: 1 1 0; min-width: 0; overflow: hidden; flex-wrap: nowrap; margin-right: 3px; }
+/* only when the whole window cannot sit beside the blank does the cluster break — to the left of the blank, keeping the window whole */
+#statebar .sb-cluster { display: flex; gap: 22px 3px; align-items: center; justify-content: flex-end; flex: 0 1 auto; min-width: 0; flex-wrap: wrap; }
+#statebar .sb-win { position: relative; display: flex; align-items: center; flex: 0 1 auto; min-width: 0; }
+#statebar .sb-winbox { display: flex; gap: 3px; padding: 3px; border: 1px dotted var(--violet); border-radius: 6px; flex: 0 1 auto; min-width: 0; overflow: hidden; justify-content: flex-end; }
+#statebar .sb-winlbl { position: absolute; top: 100%; left: 0; right: 0; margin-top: 2px; text-align: center; font-size: 0.62rem; letter-spacing: 0.05em; text-transform: uppercase; color: var(--violet); white-space: nowrap; }
+#statebar .chip { flex: 0 0 auto; padding: 2px 7px; border-radius: 5px; font-family: "JetBrains Mono", var(--mono); font-size: 0.8rem; }
+#statebar .chip.slide { animation: tokSlide .3s ease both; }
+#statebar .sb-slot { position: relative; display: inline-flex; flex: 0 0 auto; align-items: center; gap: 5px; margin-left: 5px; }
+#statebar .sb-slot.ends { opacity: 0.3; }
+#statebar .sb-blank { position: relative; display: inline-flex; align-items: flex-end; height: 20px; margin-top: 10px; }
+#statebar .sb-blank i { display: block; background: #a8a6a0; }
+#statebar .sb-blank i.t { width: 1px; height: 4px; }
+#statebar .sb-blank i.l { width: 64px; height: 1px; }
+#statebar .sb-land { position: absolute; left: 50%; top: -8px; transform: translateX(-50%); }
+#statebar .sb-land .chip { display: block; }
+#statebar .sb-land .chip.pop { animation: tokPop .26s cubic-bezier(0.2,1.2,0.3,1) both; }
+@keyframes tokPop { from { opacity: 0; transform: translateY(-6px) scale(0.82); } 60% { transform: translateY(0) scale(1.06); opacity: 1; } to { transform: none; opacity: 1; } }
+@keyframes tokSlide { from { opacity: 0; transform: translateX(26px); } to { opacity: 1; transform: none; } }
+/* ◀ ▶ */
+#statebar .sb-pair { display: inline-flex; flex: 0 0 auto; border: 1px solid var(--axis); border-radius: 5px; overflow: hidden; background: white; }
+#statebar .sb-cluster .sb-pair { margin-left: 8px; }
+#statebar .sb-pair button { display: flex; flex: 0 0 auto; align-items: center; justify-content: center; width: 28px; height: 22px; padding: 0; border: 0; border-radius: 0; background: white; color: var(--ink); }
+#statebar .sb-pair button + button { border-left: 1px solid var(--axis); }
+#statebar .sb-pair button:disabled { opacity: 0.4; cursor: default; }
+/* when the bar breaks, the toggle and the pair move to their own line under the sentence */
+#statebar .sb-narrow { display: none; align-items: center; justify-content: space-between; gap: 12px; }
+#statebar.narrow .sb-narrow { display: flex; }
+#statebar.narrow .sb-set .sb-wm, #statebar.narrow .sb-cluster .sb-pair { display: none; }
+
+.chip.plain { background: #e6e5e0; }
+.bar.chosen rect.fill { stroke: var(--ink); stroke-width: 2px; }
+.bar.drawn rect.fill { fill: var(--blue-250); }
+
+/* charts */
+svg text { font-family: var(--sans); fill: var(--ink-2); }
+.bar { cursor: pointer; }
+.bar:hover rect.fill { filter: brightness(0.92); }
+.bar rect.fill { fill: var(--blue); }
+.bar.win rect.fill { fill: var(--blue); }
+.bar.lost rect.fill { fill: var(--orange); }
+.bar.idle rect.fill { fill: #c3c2b7; }
+.bar.dis { cursor: default; }
+.legend { display: flex; flex-wrap: wrap; gap: 6px 16px; font-size: 0.8rem; color: var(--ink-2); margin-top: 8px; }
+.legend i { display: inline-block; width: 10px; height: 10px; border-radius: 2px; margin-right: 6px; vertical-align: -1px; }
+
+/* coin table */
+table.coins { border-collapse: separate; border-spacing: 0; font-family: var(--sans); font-size: 0.88rem; width: 100%; }
+table.coins th { font-weight: 600; color: var(--ink-2); text-align: left; padding: 4px 8px; border-bottom: 1px solid var(--axis); font-size: 0.8rem; }
+table.coins td { padding: 4px 8px; border-bottom: 1px solid var(--grid); vertical-align: middle; }
+table.coins td.c { text-align: center; }
+.coin { display: inline-block; width: 22px; height: 22px; border-radius: 50%; line-height: 22px; text-align: center; font-family: var(--mono); font-size: 0.8rem; transition: transform 0.25s; }
+.coin.one { background: var(--blue); color: white; }
+.coin.zero { background: #efeeea; color: var(--muted); border: 1px solid var(--grid); }
+.coin.flip { transform: rotateY(360deg); }
+.inputs { display: grid; grid-template-columns: auto 1fr; gap: 4px 14px; font-size: 0.85rem; margin-bottom: 14px; align-items: baseline; }
+.inputs .k { color: var(--muted); }
+
+/* bracket */
+.bracket { overflow-x: auto; padding: 6px 2px 2px; }
+.bwrap { position: relative; }
+.blines { position: absolute; left: 0; top: 0; overflow: visible; }
+.bl { fill: none; stroke-linecap: round; transition: stroke .35s, stroke-width .35s; }
+.bl.idle { stroke: var(--grid); stroke-width: 1.5; }
+.bl.lose { stroke: var(--axis); stroke-width: 1.5; }
+.bl.join { stroke: var(--axis); stroke-width: 1.5; }
+.bl.win { stroke: var(--blue); stroke-width: 2.5; }
+.bl.win.tied { stroke-dasharray: 5 4; }
+.btielab { fill: var(--orange); font-family: system-ui, -apple-system, "Segoe UI", sans-serif; font-size: 9px; text-transform: uppercase; letter-spacing: 0.06em; }
+.bslot.l.tied { text-decoration: none; border-style: dashed; }
+.brt { position: absolute; top: 0; font-size: 0.72rem; text-transform: uppercase; letter-spacing: 0.06em; color: var(--muted); text-align: center; }
+.bslot { position: absolute; display: flex; align-items: center; justify-content: space-between; gap: 6px; padding: 0 8px; border: 1px solid var(--grid); border-radius: 6px; background: white; font-family: var(--mono); font-size: 0.85rem; white-space: nowrap; overflow: hidden; transition: opacity .35s, background .35s, border-color .35s, color .35s; }
+.bslot .bt { overflow: hidden; text-overflow: ellipsis; }
+.bslot .coin { width: 18px; height: 18px; line-height: 18px; font-size: 0.7rem; flex: 0 0 auto; }
+.bslot.w { border-color: var(--blue-250); background: var(--blue-100); }
+.bslot.l { color: var(--muted); text-decoration: line-through; background: #fafaf8; }
+.bslot.champ { background: var(--blue); border-color: var(--blue); color: white; font-size: 0.95rem; justify-content: center; font-weight: 600; }
+
+/* score strip */
+.scores { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; font-family: var(--sans); font-size: 0.85rem; }
+.scores .sc { display: inline-flex; flex-direction: column; align-items: center; padding: 4px 8px; border: 1px solid var(--grid); border-radius: 6px; background: white; min-width: 54px; }
+.scores .sc .tk { font-family: var(--mono); font-size: 0.8rem; white-space: pre; }
+.scores .sc .v { font-weight: 600; font-variant-numeric: tabular-nums; }
+.scores .mean { margin-left: auto; font-weight: 600; }
+
+/* panels */
+.panels { display: grid; grid-template-columns: repeat(3, 1fr); gap: 14px; }
+.panel { background: white; border: 1px solid var(--grid); border-radius: 8px; padding: 10px 10px 6px; }
+.panel .pt { font-weight: 600; font-size: 0.85rem; margin-bottom: 4px; display: flex; align-items: center; gap: 6px; }
+.panel .pt i { display: inline-block; width: 10px; height: 10px; border-radius: 2px; }
+@media (max-width: 640px) { .panels { grid-template-columns: 1fr; } }
+
+.stat { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 12px; margin: 12px 0; }
+.stat .s { background: white; border: 1px solid var(--grid); border-radius: 8px; padding: 10px 12px; }
+.stat .s .l { font-size: 0.75rem; color: var(--muted); text-transform: uppercase; letter-spacing: 0.06em; }
+.stat .s .v { font-size: 1.5rem; font-weight: 600; font-variant-numeric: tabular-nums; line-height: 1.2; margin-top: 2px; }
+.stat .s .v small { font-size: 0.8rem; color: var(--ink-2); font-weight: 400; }
+table.data { border-collapse: collapse; font-family: var(--sans); font-size: 0.88rem; width: 100%; margin: 12px 0; }
+table.data th, table.data td { text-align: left; padding: 6px 8px; border-bottom: 1px solid var(--grid); }
+table.data th { font-size: 0.78rem; color: var(--ink-2); font-weight: 600; }
+table.data td.n { text-align: right; font-variant-numeric: tabular-nums; }
+.toc { font-family: var(--sans); font-size: 0.9rem; columns: 2; column-gap: 30px; margin: 1.5em 0; }
+.toc a { display: block; text-decoration: none; color: var(--ink-2); padding: 2px 0; }
+.toc a:hover { color: var(--blue); }
+.v2 { display: inline-block; font-family: var(--sans); font-size: 0.7rem; background: #efeeea; color: var(--ink-2); padding: 1px 6px; border-radius: 4px; vertical-align: middle; margin-left: 8px; letter-spacing: 0.04em; }
+footer { margin-top: 100px; font-family: var(--sans); font-size: 0.85rem; color: var(--ink-2); border-top: 1px solid var(--grid); padding-top: 20px; }
+
+/* 2.4 long-form arithmetic */
+.card { background: white; border: 1px solid var(--grid); border-radius: 8px; padding: 14px 16px 12px; }
+.mono2 { font-family: "JetBrains Mono", var(--mono); font-size: 0.86em; }
+.tableau { height: 340px; overflow-y: auto; overflow-x: hidden; padding: 2px 0 4px; scrollbar-width: thin; }
+.tgrid { display: grid; grid-template-columns: auto 170px; gap: 0 16px; width: fit-content; margin: 0 auto; }
+.tline { display: contents; }
+.tnum { display: flex; align-items: baseline; justify-content: flex-end; gap: 8px; padding: 1px 0; }
+.tval { font-family: "JetBrains Mono", var(--mono); font-size: 14.5px; letter-spacing: 0.01em; font-variant-numeric: tabular-nums; text-align: right; white-space: pre; min-width: 27ch; color: #0b0b0b; transition: color .3s; }
+.trule { display: block; height: 2px; margin: 5px 0; background: #0b0b0b; transform-origin: left center; transition: background .3s; }
+.tlab { font-size: 0.78rem; line-height: 1.35; align-self: center; color: #52514e; transition: color .3s; }
+.tline.spent .tval, .tline.spent .tlab { color: #a8a6a0; }
+.tline.spent .trule { background: #a8a6a0; }
+.tline.live .tval, .tline.live .tlab { color: #2a78d6; }
+
+/* the lookup rail */
+.look { position: relative; height: 288px; overflow: hidden; border-top: 1px solid var(--grid); border-bottom: 1px solid var(--grid); margin-top: 12px; }
+.look-head { position: absolute; left: 0; right: 0; top: 129px; height: 30px; border-top: 2px solid var(--ink); border-bottom: 2px solid var(--ink); z-index: 2; pointer-events: none; }
+.look-rail { position: absolute; left: 0; right: 0; top: 0; }
+.lrow { display: flex; align-items: center; justify-content: center; gap: 26px; height: 30px; font-family: "JetBrains Mono", var(--mono); font-size: 13.5px; }
+.laddr { min-width: 66px; text-align: right; font-variant-numeric: tabular-nums; color: var(--muted); }
+.lval { min-width: 26px; height: 24px; line-height: 24px; border-radius: 12px; text-align: center; color: #b6b4ad; }
+.lval.one { color: var(--blue); }
+.lrow.settled .laddr { color: var(--ink); font-weight: 700; }
+.lrow.settled .lval { background: var(--blue); color: white; font-weight: 700; }
+.look-fade { position: absolute; left: 0; right: 0; height: 96px; z-index: 1; pointer-events: none; }
+.look-fade.top { top: 0; background: linear-gradient(#fff, rgba(255,255,255,0)); }
+.look-fade.bot { bottom: 0; background: linear-gradient(rgba(255,255,255,0), #fff); }
+
+table.coins td.sel { cursor: pointer; }
+table.coins td.sel:hover .coin { transform: scale(1.15); }
+@media (max-width: 700px) { .tgrid { grid-template-columns: auto 110px; } .tval { font-size: 12px; min-width: 0; } }
+
+/* 2.6 drawing candidates */
+.dchart { position: relative; }
+.dband { position: absolute; left: 0; right: 0; top: 0; height: 30px; border: 2px solid var(--ink); border-radius: 5px; background: rgba(42,120,214,0.07); pointer-events: none; z-index: 2; }
+.drow { display: grid; grid-template-columns: 120px minmax(0, 1fr) 54px; align-items: center; gap: 10px; height: 30px; }
+.dtok { text-align: right; font-family: "JetBrains Mono", var(--mono); font-size: 13px; white-space: pre; color: var(--ink); overflow: hidden; text-overflow: ellipsis; }
+.dtrack { display: block; height: 18px; border-left: 1px solid var(--axis); min-width: 0; overflow: hidden; }
+.dfill { display: block; height: 18px; max-width: 100%; min-width: 2px; border-radius: 3px; transition: background-color 280ms ease; }
+.dpct { font-family: var(--sans); font-size: 12px; color: var(--ink-2); font-variant-numeric: tabular-nums; }
+.dslots { display: flex; flex-wrap: wrap; gap: 6px; min-height: 30px; align-items: flex-start; }
+.dchip { padding: 3px 9px; border-radius: 6px; font-family: "JetBrains Mono", var(--mono); font-size: 0.9rem; white-space: pre; background: #eeede8; color: var(--ink); border: 1px solid transparent; animation: slotIn .22s ease both; }
+.dempty { width: 58px; height: 26px; border-radius: 6px; border: 1px dashed var(--grid); }
+@keyframes slotIn { from { opacity: 0; transform: translateY(-6px) scale(0.9); } to { opacity: 1; transform: none; } }
+#m25 .seg button { display: flex; align-items: center; justify-content: center; width: 38px; height: 34px; color: var(--ink); }
+#m25 .seg button:disabled { opacity: 0.4; cursor: default; }
+#m25 .seg button:last-child { width: 44px; }
+@media (max-width: 700px) { .drow { grid-template-columns: 76px minmax(0, 1fr) 44px; gap: 6px; } .dtok { font-size: 11px; } .dpct { font-size: 11px; } .dempty { width: 46px; } }
+
+@media (max-width: 700px) { .toc { columns: 1; } }
+
+/* 3 · real-text detector */
+#smp-strip { max-height: 280px; overflow: auto; padding: 8px; border: 1px solid var(--grid); border-radius: 8px; background: #fbfbf9; align-content: flex-start; }
+#smp-strip .sc.pr { background: #eeede8; border-color: transparent; color: var(--muted); }
+#smp-strip .sc.pr .v { font-weight: 400; font-size: 0.7rem; }
+#smp-strip .sc.hi { color: white; }
+#smp-table table.data { margin: 4px 0 12px; }
+#smp-table td.cur { outline: 2px solid var(--blue); outline-offset: -2px; }
+textarea { width: 100%; box-sizing: border-box; font: inherit; font-size: 0.9rem; padding: 8px 10px; border: 1px solid var(--axis); border-radius: 6px; background: white; resize: vertical; }
+details summary { cursor: pointer; font-weight: 600; font-size: 0.9rem; }
+details[open] summary { margin-bottom: 8px; }
+</style>
+</head>
+<body>
+<main>
+<p class="note" style="margin-top:32px"><a href="index.html">← How AI text watermarking works</a></p>
+<h1>What a key does to content</h1>
+<p class="lede">The non-distortion guarantee holds on average over keys. Any single deployed key measurably reshapes what the model talks about — and two keys differ from each other more than either differs from the unwatermarked model.</p>
+
+<h2>The case that started this</h2>
+<p>In a run of Gemma-2-2b on a question about the 1936 Berlin Olympics, one watermarked configuration called them the Games of the <em>VIIIth</em> Olympiad. They were the XIth. The same prompt, same key, same wrong answer, over and over, while the unwatermarked model made that mistake only occasionally. The tournament never invents a candidate — “VIII” had to be drawn from the model's own distribution — so the key had not added an error; it had made one systematic. The question was whether that generalises: does a fixed key shift, in a measurable way, <em>what</em> a model says across many responses?</p>
+
+<h2>The test</h2>
+<p><a href="index.html#s4">Section 4 of the explainer</a> showed the shape of the problem with a toy: one key skews the distribution at a single position. Does that survive into whole responses — into what the model actually talks about? We tested it.</p>
+<p>Gemma-2-9b was asked the same question about the 1936 Berlin Olympics 500 times in each of five conditions: no watermark (twice, with different random seeds, as a control), watermarked with a fixed key A, watermarked with a fixed key B, and watermarked with a fresh key for every response. For each response we recorded which named entities and phrases it mentioned, then compared the prevalence of each across conditions.</p>
+<div class="module" id="m6">
+  <table class="data" id="s6-tests"></table>
+  <p class="note">L1 is the total absolute difference in entity prevalence between two conditions, summed over entities; p is from a permutation test. Two unwatermarked runs differ by 0.95 — that is the noise floor.</p>
+</div>
+<p>Read the last row first. <strong>Two keys differ from each other more than either differs from the unwatermarked baseline.</strong> The distortion is real, it is key-specific, and its direction is arbitrary. Rotating the key per response erases it: that row is indistinguishable from the control.</p>
+<div class="module" id="m6b">
+  <h4>Entity prevalence — share of responses mentioning each</h4>
+  <div class="panels" id="panels-6"></div>
+  <div class="legend" id="legend-6"></div>
+</div>
+<div class="module" id="m6c">
+  <h4>Shift under key A, largest first (key B shown for comparison)</h4>
+  <div id="dumbbell"></div>
+  <div class="legend" id="legend-6c"></div>
+</div>
+<p>Look at what moved. “XI Olympiad” — the correct formal name — went from 71% of responses to 3% under key A, while “Summer Olympics” went from 18% to 70%. The month, “August”, dropped from 83% to 35%. “Nazi Germany” fell from 84% to 51%. Under key B, several of these move the other way.</p>
+<p>And yet the overall diversity of the responses did not change: <span id="s6-div"></span>. The watermarked model talks about just as many things, spread just as evenly. It is <em>differently populated</em>, not worse — which is precisely why human raters and quality benchmarks would not catch it. Google's 20-million-response live comparison measured thumbs-up rates, not which facts got mentioned.</p>
+<div class="callout warn">
+  <div class="t">What this does and doesn't show</div>
+  This is a local reimplementation of the published scheme on Gemma-2-9b, one prompt, one model. It demonstrates that the phenomenon exists in this class of watermark. It does not measure Gemini, whose key, configuration and rotation policy are not public. The large shifts replicate at n=150 and n=500.
+</div>
+<p><strong>The policy questions follow directly.</strong> Who picks the key? How often does it rotate? Is either of those auditable by anyone outside the provider? Per-response rotation appears to erase the content shift entirely and is worth naming as a mitigation — but it comes with the detection cost described in <a href="index.html#s3">Section 3 of the explainer</a>, since a detector must then try every key it has ever used.</p>
+
+<div class="callout">
+  <div class="t">Two symptoms, one cause</div>
+  In the 2-billion-parameter model the mechanism showed up as insertion of a wrong fact. In the 9-billion model it showed up as substitution of one correct phrasing for another (“XI Olympiad” 71% → 3%). Better models are confident about facts and keep their slack at phrasing choices, so the key has more purchase on <em>how</em> they say things than on <em>what</em>. The next section takes this further.
+</div>
+
+<h2 id="entropy">Entropy shape and model scale <span class="v2">in progress</span></h2>
+<p>In these runs the watermark was easier to detect in the 2-billion-parameter model than in the 9-billion one. The detection mechanism (<a href="index.html#s3">Section 3 of the explainer</a>) suggests why. A position torn between two options yields nearly a full coin of evidence; torn between forty, it yields no more; near-certain, it yields nothing. So detectability depends on the <em>shape</em> of a model's uncertainty across a text, not the total amount. Broad, moderate uncertainty is ideal; the same total concentrated in a few spikes is mostly wasted. Larger models are confident on facts and keep their uncertainty at phrasing junctions — spikier, and harder to watermark.</p>
+<p>The consequence for policy: watermark strength is a property of the model, not the scheme. Validation on one model version does not transfer to the next. The per-token data to make this a chart is in progress.</p>
+
+<footer>
+  <p>Entity data: local reimplementation of SynthID-Text (Dathathri et al., <em>Nature</em> 2024) on <span class="mono">google/gemma-2-9b-it</span>, n&nbsp;=&nbsp;500 per arm, <i>m</i>&nbsp;=&nbsp;30 layers, <i>H</i>&nbsp;=&nbsp;4. Entities extracted by a pooled gazetteer; prevalence = share of responses mentioning the entity at least once. Comparisons are permutation tests on L1 distance with a Fisher-combined primary test; per-entity shifts are Benjamini–Hochberg corrected (q&nbsp;&lt;&nbsp;0.05).</p>
+</footer>
+</main>
+<script>window.__PILOT__={"source":"watermark-testing/runs/mbp_9b_report_n500.md","model":"google/gemma-2-9b-it","prompt":"berlin_olympics","n_per_arm":500,"diversity":{"unwm_a":{"distinct":58,"mean_per_response":22.88,"entropy_bits":5.33,"effective_entities":40.1},"unwm_b":{"distinct":58,"mean_per_response":23.02,"entropy_bits":5.32,"effective_entities":40.0},"wm_fixed":{"distinct":58,"mean_per_response":23.11,"entropy_bits":5.35,"effective_entities":40.7},"wm_fixed_b":{"distinct":56,"mean_per_response":23.98,"entropy_bits":5.28,"effective_entities":38.7},"wm_rotating":{"distinct":58,"mean_per_response":22.96,"entropy_bits":5.34,"effective_entities":40.4}},"tests":{"unwm_a vs unwm_b":{"L1":0.95,"p":0.4899},"unwm_a vs wm_fixed":{"L1":6.932,"p":0.0},"unwm_a vs wm_fixed_b":{"L1":4.33,"p":0.0},"wm_fixed vs wm_fixed_b":{"L1":9.366,"p":0.0},"unwm_a vs wm_rotating":{"L1":0.93,"p":0.5797}},"entities":[{"entity":"XI Olympiad","unwm":0.71,"keyA":0.032,"dA":-0.678,"dB":0.214,"keyB":0.924},{"entity":"Summer Olympics","unwm":0.178,"keyA":0.7,"dA":0.522,"dB":-0.172,"keyB":0.006},{"entity":"Athletic Triumph \u2014 The","unwm":0.018,"keyA":0.502,"dA":0.484,"dB":-0.018,"keyB":0.0},{"entity":"August","unwm":0.826,"keyA":0.348,"dA":-0.478,"dB":0.138,"keyB":0.964},{"entity":"Olympic","unwm":0.284,"keyA":0.636,"dA":0.352,"dB":0.094,"keyB":0.378},{"entity":"Nazi Germany","unwm":0.838,"keyA":0.506,"dA":-0.332,"dB":0.144,"keyB":0.982},{"entity":"Racial Tensions \u2014 The","unwm":0.016,"keyA":0.294,"dA":0.278,"dB":-0.016,"keyB":0.0},{"entity":"Owens's","unwm":0.132,"keyA":0.352,"dA":0.22,"dB":-0.01,"keyB":0.122},{"entity":"Jesse Owens's","unwm":0.092,"keyA":0.31,"dA":0.218,"dB":-0.01,"keyB":0.082},{"entity":"Jesse Owens' Triumph","unwm":0.416,"keyA":0.21,"dA":-0.206,"dB":0.322,"keyB":0.738},{"entity":"Historic Significance","unwm":0.224,"keyA":0.04,"dA":-0.184,"dB":0.108,"keyB":0.332},{"entity":"Nazi Ideals","unwm":0.058,"keyA":0.23,"dA":0.172,"dB":-0.044,"keyB":0.014},{"entity":"Propaganda Tool","unwm":0.262,"keyA":0.098,"dA":-0.164,"dB":-0.102,"keyB":0.16},{"entity":"Political Manipulation","unwm":0.056,"keyA":0.214,"dA":0.158,"dB":0.026,"keyB":0.082},{"entity":"United States","unwm":0.354,"keyA":0.196,"dA":-0.158,"dB":0.054,"keyB":0.408},{"entity":"International Controversy","unwm":0.184,"keyA":0.028,"dA":-0.156,"dB":0.17,"keyB":0.354},{"entity":"Historical Significance","unwm":0.244,"keyA":0.104,"dA":-0.14,"dB":0.154,"keyB":0.398},{"entity":"Adolf Hitler","unwm":0.328,"keyA":0.446,"dA":0.118,"dB":0.084,"keyB":0.412},{"entity":"Propaganda Triumph","unwm":0.124,"keyA":0.01,"dA":-0.114,"dB":-0.068,"keyB":0.056},{"entity":"Aryan Ideal","unwm":0.136,"keyA":0.244,"dA":0.108,"dB":-0.108,"keyB":0.028},{"entity":"German","unwm":0.358,"keyA":0.464,"dA":0.106,"dB":-0.176,"keyB":0.182},{"entity":"The Olympics","unwm":0.772,"keyA":0.676,"dA":-0.096,"dB":0.118,"keyB":0.89},{"entity":"Aryan Supremacy","unwm":0.728,"keyA":0.824,"dA":0.096,"dB":-0.168,"keyB":0.56},{"entity":"Hitler's","unwm":0.286,"keyA":0.38,"dA":0.094,"dB":-0.024,"keyB":0.262},{"entity":"The Nazis","unwm":0.29,"keyA":0.384,"dA":0.094,"dB":0.042,"keyB":0.332},{"entity":"Nazis","unwm":0.294,"keyA":0.384,"dA":0.09,"dB":0.04,"keyB":0.334},{"entity":"Nazi Ideology","unwm":0.748,"keyA":0.658,"dA":-0.09,"dB":-0.052,"keyB":0.696},{"entity":"Propaganda Machine","unwm":0.238,"keyA":0.154,"dA":-0.084,"dB":-0.044,"keyB":0.194},{"entity":"Jewish","unwm":0.244,"keyA":0.32,"dA":0.076,"dB":-0.032,"keyB":0.212},{"entity":"Olympic Spirit","unwm":0.036,"keyA":0.11,"dA":0.074,"dB":0.19,"keyB":0.226},{"entity":"Germany's","unwm":0.326,"keyA":0.256,"dA":-0.07,"dB":0.186,"keyB":0.512},{"entity":"Nazi Germany's","unwm":0.216,"keyA":0.146,"dA":-0.07,"dB":-0.016,"keyB":0.2},{"entity":"Third Reich","unwm":0.224,"keyA":0.156,"dA":-0.068,"dB":-0.138,"keyB":0.086},{"entity":"Soviet Union","unwm":0.122,"keyA":0.058,"dA":-0.064,"dB":0.016,"keyB":0.138},{"entity":"World War II","unwm":0.064,"keyA":0.022,"dA":-0.042,"dB":0.006,"keyB":0.07},{"entity":"Berlin Olympics","unwm":0.908,"keyA":0.948,"dA":0.04,"dB":0.072,"keyB":0.98},{"entity":"The Games","unwm":0.998,"keyA":0.978,"dA":-0.02,"dB":0.002,"keyB":1.0}]};</script>
+<script>
+(async function () {
+const PILOT = window.__PILOT__ || await (await fetch('pilot_entities.json')).json();
+const KEY_HEX = ['#2a78d6', '#eb6834', '#1baf7a'];
+const $ = id => document.getElementById(id);
+function esc(s) { return s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;'); }
+function pct(x, d = 0) { return (100 * x).toFixed(d) + '%'; }
+// ---------- Section 5 (pilot data) ----------
+function render6() {
+  const t = PILOT.tests; const rows = [
+    ['unwatermarked A vs unwatermarked B', 'control', t['unwm_a vs unwm_b']],
+    ['unwatermarked vs fixed key A', 'primary', t['unwm_a vs wm_fixed']],
+    ['unwatermarked vs fixed key B', '', t['unwm_a vs wm_fixed_b']],
+    ['unwatermarked vs rotating key', '', t['unwm_a vs wm_rotating']],
+    ['fixed key A vs fixed key B', 'headline', t['wm_fixed vs wm_fixed_b']],
+  ];
+  $('s6-tests').innerHTML = `<tr><th>comparison</th><th></th><th class="n">L1 distance</th><th class="n">p</th><th>reading</th></tr>` + rows.map(([a, tag, r]) => `<tr style="${tag === 'headline' ? 'font-weight:600' : ''}"><td>${a}</td><td class="note">${tag}</td><td class="n">${r.L1.toFixed(2)}</td><td class="n">${r.p < 0.0001 ? '< 0.0001' : r.p.toFixed(2)}</td><td>${r.p < 0.01 ? 'different' : 'no difference'}</td></tr>`).join('');
+  const d = PILOT.diversity;
+  $('s6-div').innerHTML = `entropy ${d.unwm_a.entropy_bits} vs ${d.wm_fixed.entropy_bits} bits, effective number of entities ${d.unwm_a.effective_entities} vs ${d.wm_fixed.effective_entities}`;
+  // three panels, top 12 entities by |dA|
+  const ents = PILOT.entities.slice(0, 12);
+  const panel = (title, color, get) => {
+    const W = 220, rowH = 20, left = 100, HH = ents.length * rowH + 4; const sc = (W - left - 36);
+    let s = `<svg viewBox="0 0 ${W} ${HH}" width="100%" style="display:block">`;
+    ents.forEach((e, i) => { const y = i * rowH + 2; const v = get(e);
+      s += `<text x="${left - 6}" y="${y + rowH / 2}" text-anchor="end" dominant-baseline="middle" font-size="10" fill="var(--ink)">${esc(e.entity).slice(0, 18)}</text><rect x="${left}" y="${y + 4}" width="${Math.max(1, v * sc)}" height="${rowH - 9}" rx="2" fill="${color}"/><text x="${left + v * sc + 4}" y="${y + rowH / 2}" dominant-baseline="middle" font-size="10">${pct(v, 0)}</text>`; });
+    return `<div class="panel"><div class="pt"><i style="background:${color}"></i>${title}</div>${s}</svg></div>`;
+  };
+  $('panels-6').innerHTML = panel('No watermark', '#898781', e => e.unwm) + panel('Fixed key A', KEY_HEX[0], e => e.keyA) + panel('Fixed key B', KEY_HEX[1], e => e.keyB);
+  $('legend-6').innerHTML = `<span class="note">Share of 500 responses mentioning each entity or phrase; the 12 with the largest shift under key A. Gemma-2-9b-it, prompt about the 1936 Berlin Olympics.</span>`;
+  // dumbbell
+  const all = PILOT.entities.slice(0, 20); const W = 700, rowH = 22, left = 170, right = 20, HH = all.length * rowH + 30;
+  const xs = v => left + v * (W - left - right);
+  let s = `<svg viewBox="0 0 ${W} ${HH}" width="100%" style="display:block">`;
+  [0, 0.25, 0.5, 0.75, 1].forEach(v => { s += `<line x1="${xs(v)}" x2="${xs(v)}" y1="0" y2="${HH - 26}" stroke="var(--grid)"/><text x="${xs(v)}" y="${HH - 12}" text-anchor="middle" font-size="11">${pct(v)}</text>`; });
+  all.forEach((e, i) => {
+    const y = i * rowH + 12;
+    s += `<text x="${left - 10}" y="${y}" text-anchor="end" dominant-baseline="middle" font-size="12" fill="var(--ink)">${esc(e.entity)}</text>`;
+    s += `<line x1="${xs(e.unwm)}" x2="${xs(e.keyA)}" y1="${y}" y2="${y}" stroke="var(--axis)" stroke-width="2"/>`;
+    s += `<circle cx="${xs(e.keyB)}" cy="${y}" r="4" fill="white" stroke="${KEY_HEX[1]}" stroke-width="2"/>`;
+    s += `<circle cx="${xs(e.unwm)}" cy="${y}" r="5" fill="#898781" stroke="white" stroke-width="1.5"/>`;
+    s += `<circle cx="${xs(e.keyA)}" cy="${y}" r="5" fill="${KEY_HEX[0]}" stroke="white" stroke-width="1.5"/>`;
+  });
+  $('dumbbell').innerHTML = s + '</svg>';
+  $('legend-6c').innerHTML = `<span><i style="background:#898781;border-radius:50%"></i>no watermark</span><span><i style="background:${KEY_HEX[0]};border-radius:50%"></i>fixed key A</span><span><i style="background:white;border:2px solid ${KEY_HEX[1]};border-radius:50%;width:8px;height:8px"></i>fixed key B</span><span class="note">share of responses mentioning the entity</span>`;
+}
+render6();
+})();
+</script>
+</body>
+</html>

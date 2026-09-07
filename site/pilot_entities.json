@@ -1,0 +1,358 @@
+{
+ "source": "watermark-testing/runs/mbp_9b_report_n500.md",
+ "model": "google/gemma-2-9b-it",
+ "prompt": "berlin_olympics",
+ "n_per_arm": 500,
+ "diversity": {
+  "unwm_a": {
+   "distinct": 58,
+   "mean_per_response": 22.88,
+   "entropy_bits": 5.33,
+   "effective_entities": 40.1
+  },
+  "unwm_b": {
+   "distinct": 58,
+   "mean_per_response": 23.02,
+   "entropy_bits": 5.32,
+   "effective_entities": 40.0
+  },
+  "wm_fixed": {
+   "distinct": 58,
+   "mean_per_response": 23.11,
+   "entropy_bits": 5.35,
+   "effective_entities": 40.7
+  },
+  "wm_fixed_b": {
+   "distinct": 56,
+   "mean_per_response": 23.98,
+   "entropy_bits": 5.28,
+   "effective_entities": 38.7
+  },
+  "wm_rotating": {
+   "distinct": 58,
+   "mean_per_response": 22.96,
+   "entropy_bits": 5.34,
+   "effective_entities": 40.4
+  }
+ },
+ "tests": {
+  "unwm_a vs unwm_b": {
+   "L1": 0.95,
+   "p": 0.4899
+  },
+  "unwm_a vs wm_fixed": {
+   "L1": 6.932,
+   "p": 0.0
+  },
+  "unwm_a vs wm_fixed_b": {
+   "L1": 4.33,
+   "p": 0.0
+  },
+  "wm_fixed vs wm_fixed_b": {
+   "L1": 9.366,
+   "p": 0.0
+  },
+  "unwm_a vs wm_rotating": {
+   "L1": 0.93,
+   "p": 0.5797
+  }
+ },
+ "entities": [
+  {
+   "entity": "XI Olympiad",
+   "unwm": 0.71,
+   "keyA": 0.032,
+   "dA": -0.678,
+   "dB": 0.214,
+   "keyB": 0.924
+  },
+  {
+   "entity": "Summer Olympics",
+   "unwm": 0.178,
+   "keyA": 0.7,
+   "dA": 0.522,
+   "dB": -0.172,
+   "keyB": 0.006
+  },
+  {
+   "entity": "Athletic Triumph \u2014 The",
+   "unwm": 0.018,
+   "keyA": 0.502,
+   "dA": 0.484,
+   "dB": -0.018,
+   "keyB": 0.0
+  },
+  {
+   "entity": "August",
+   "unwm": 0.826,
+   "keyA": 0.348,
+   "dA": -0.478,
+   "dB": 0.138,
+   "keyB": 0.964
+  },
+  {
+   "entity": "Olympic",
+   "unwm": 0.284,
+   "keyA": 0.636,
+   "dA": 0.352,
+   "dB": 0.094,
+   "keyB": 0.378
+  },
+  {
+   "entity": "Nazi Germany",
+   "unwm": 0.838,
+   "keyA": 0.506,
+   "dA": -0.332,
+   "dB": 0.144,
+   "keyB": 0.982
+  },
+  {
+   "entity": "Racial Tensions \u2014 The",
+   "unwm": 0.016,
+   "keyA": 0.294,
+   "dA": 0.278,
+   "dB": -0.016,
+   "keyB": 0.0
+  },
+  {
+   "entity": "Owens's",
+   "unwm": 0.132,
+   "keyA": 0.352,
+   "dA": 0.22,
+   "dB": -0.01,
+   "keyB": 0.122
+  },
+  {
+   "entity": "Jesse Owens's",
+   "unwm": 0.092,
+   "keyA": 0.31,
+   "dA": 0.218,
+   "dB": -0.01,
+   "keyB": 0.082
+  },
+  {
+   "entity": "Jesse Owens' Triumph",
+   "unwm": 0.416,
+   "keyA": 0.21,
+   "dA": -0.206,
+   "dB": 0.322,
+   "keyB": 0.738
+  },
+  {
+   "entity": "Historic Significance",
+   "unwm": 0.224,
+   "keyA": 0.04,
+   "dA": -0.184,
+   "dB": 0.108,
+   "keyB": 0.332
+  },
+  {
+   "entity": "Nazi Ideals",
+   "unwm": 0.058,
+   "keyA": 0.23,
+   "dA": 0.172,
+   "dB": -0.044,
+   "keyB": 0.014
+  },
+  {
+   "entity": "Propaganda Tool",
+   "unwm": 0.262,
+   "keyA": 0.098,
+   "dA": -0.164,
+   "dB": -0.102,
+   "keyB": 0.16
+  },
+  {
+   "entity": "Political Manipulation",
+   "unwm": 0.056,
+   "keyA": 0.214,
+   "dA": 0.158,
+   "dB": 0.026,
+   "keyB": 0.082
+  },
+  {
+   "entity": "United States",
+   "unwm": 0.354,
+   "keyA": 0.196,
+   "dA": -0.158,
+   "dB": 0.054,
+   "keyB": 0.408
+  },
+  {
+   "entity": "International Controversy",
+   "unwm": 0.184,
+   "keyA": 0.028,
+   "dA": -0.156,
+   "dB": 0.17,
+   "keyB": 0.354
+  },
+  {
+   "entity": "Historical Significance",
+   "unwm": 0.244,
+   "keyA": 0.104,
+   "dA": -0.14,
+   "dB": 0.154,
+   "keyB": 0.398
+  },
+  {
+   "entity": "Adolf Hitler",
+   "unwm": 0.328,
+   "keyA": 0.446,
+   "dA": 0.118,
+   "dB": 0.084,
+   "keyB": 0.412
+  },
+  {
+   "entity": "Propaganda Triumph",
+   "unwm": 0.124,
+   "keyA": 0.01,
+   "dA": -0.114,
+   "dB": -0.068,
+   "keyB": 0.056
+  },
+  {
+   "entity": "Aryan Ideal",
+   "unwm": 0.136,
+   "keyA": 0.244,
+   "dA": 0.108,
+   "dB": -0.108,
+   "keyB": 0.028
+  },
+  {
+   "entity": "German",
+   "unwm": 0.358,
+   "keyA": 0.464,
+   "dA": 0.106,
+   "dB": -0.176,
+   "keyB": 0.182
+  },
+  {
+   "entity": "The Olympics",
+   "unwm": 0.772,
+   "keyA": 0.676,
+   "dA": -0.096,
+   "dB": 0.118,
+   "keyB": 0.89
+  },
+  {
+   "entity": "Aryan Supremacy",
+   "unwm": 0.728,
+   "keyA": 0.824,
+   "dA": 0.096,
+   "dB": -0.168,
+   "keyB": 0.56
+  },
+  {
+   "entity": "Hitler's",
+   "unwm": 0.286,
+   "keyA": 0.38,
+   "dA": 0.094,
+   "dB": -0.024,
+   "keyB": 0.262
+  },
+  {
+   "entity": "The Nazis",
+   "unwm": 0.29,
+   "keyA": 0.384,
+   "dA": 0.094,
+   "dB": 0.042,
+   "keyB": 0.332
+  },
+  {
+   "entity": "Nazis",
+   "unwm": 0.294,
+   "keyA": 0.384,
+   "dA": 0.09,
+   "dB": 0.04,
+   "keyB": 0.334
+  },
+  {
+   "entity": "Nazi Ideology",
+   "unwm": 0.748,
+   "keyA": 0.658,
+   "dA": -0.09,
+   "dB": -0.052,
+   "keyB": 0.696
+  },
+  {
+   "entity": "Propaganda Machine",
+   "unwm": 0.238,
+   "keyA": 0.154,
+   "dA": -0.084,
+   "dB": -0.044,
+   "keyB": 0.194
+  },
+  {
+   "entity": "Jewish",
+   "unwm": 0.244,
+   "keyA": 0.32,
+   "dA": 0.076,
+   "dB": -0.032,
+   "keyB": 0.212
+  },
+  {
+   "entity": "Olympic Spirit",
+   "unwm": 0.036,
+   "keyA": 0.11,
+   "dA": 0.074,
+   "dB": 0.19,
+   "keyB": 0.226
+  },
+  {
+   "entity": "Germany's",
+   "unwm": 0.326,
+   "keyA": 0.256,
+   "dA": -0.07,
+   "dB": 0.186,
+   "keyB": 0.512
+  },
+  {
+   "entity": "Nazi Germany's",
+   "unwm": 0.216,
+   "keyA": 0.146,
+   "dA": -0.07,
+   "dB": -0.016,
+   "keyB": 0.2
+  },
+  {
+   "entity": "Third Reich",
+   "unwm": 0.224,
+   "keyA": 0.156,
+   "dA": -0.068,
+   "dB": -0.138,
+   "keyB": 0.086
+  },
+  {
+   "entity": "Soviet Union",
+   "unwm": 0.122,
+   "keyA": 0.058,
+   "dA": -0.064,
+   "dB": 0.016,
+   "keyB": 0.138
+  },
+  {
+   "entity": "World War II",
+   "unwm": 0.064,
+   "keyA": 0.022,
+   "dA": -0.042,
+   "dB": 0.006,
+   "keyB": 0.07
+  },
+  {
+   "entity": "Berlin Olympics",
+   "unwm": 0.908,
+   "keyA": 0.948,
+   "dA": 0.04,
+   "dB": 0.072,
+   "keyB": 0.98
+  },
+  {
+   "entity": "The Games",
+   "unwm": 0.998,
+   "keyA": 0.978,
+   "dA": -0.02,
+   "dB": 0.002,
+   "keyB": 1.0
+  }
+ ]
+}

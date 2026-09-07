@@ -1,0 +1,51 @@
+def merge_intervals(intervals):
+    """Merge overlapping [start, end] pairs and return them sorted."""
+    if not intervals:
+        return []
+    intervals = sorted(intervals, key=lambda iv: iv[0])
+    merged = [list(intervals[0])]
+    for start, end in intervals[1:]:
+        last = merged[-1]
+        if start <= last[1]:
+            last[1] = max(last[1], end)
+        else:
+            merged.append([start, end])
+    return merged
+
+
+def read_config(path, defaults=None):
+    """Read key=value lines from a file, ignoring blanks and # comments."""
+    config = dict(defaults or {})
+    with open(path) as fh:
+        for lineno, raw in enumerate(fh, 1):
+            line = raw.strip()
+            if not line or line.startswith("#"):
+                continue
+            if "=" not in line:
+                raise ValueError(f"{path}:{lineno}: expected key=value, got {line!r}")
+            key, value = line.split("=", 1)
+            config[key.strip()] = value.strip()
+    return config
+
+
+class LRUCache:
+    """Least-recently-used cache with a fixed capacity."""
+
+    def __init__(self, capacity):
+        self.capacity = capacity
+        self._data = {}
+
+    def get(self, key):
+        if key not in self._data:
+            return None
+        value = self._data.pop(key)
+        self._data[key] = value
+        return value
+
+    def put(self, key, value):
+        if key in self._data:
+            self._data.pop(key)
+        elif len(self._data) >= self.capacity:
+            oldest = next(iter(self._data))
+            del self._data[oldest]
+        self._data[key] = value

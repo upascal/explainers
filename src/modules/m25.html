@@ -1,0 +1,25 @@
+<div class="module" id="m25">
+  <div class="row">
+    <label class="ctl">Tournament layers <i>m</i> <input type="range" id="m2" min="1" max="4" step="1" value="3"> <b id="m-v3">3</b></label>
+    <span class="note" id="slot-count"></span>
+  </div>
+  <div class="card">
+    <div class="note" style="margin-bottom:10px">This graph shows the model's eight most likely next tokens and their probabilities of being selected. Each draw picks one of them at random, independent of previous draws. The more probability given to a token, the higher the chance that it will be drawn again and again.</div>
+    <div class="dchart"><div class="dband" id="draw-band"></div><div id="draw-rows"></div></div>
+    <div style="margin-top:16px;padding-top:12px;border-top:1px solid #f0efec">
+      <div class="note" id="slot-heading" style="margin-bottom:8px"></div>
+      <div class="dslots"><span id="draw-chips" style="display:contents"></span><span id="draw-empties" style="display:contents"></span></div>
+      <div class="note" id="draw-note" style="margin-top:10px;min-height:1.4em"></div>
+      <p style="margin:8px 0 0" class="glyph-key"></p>
+    </div>
+    <div class="row" style="margin-top:14px">
+      <button class="primary" id="draw-btn"></button>
+      <span class="seg">
+        <button id="draw-back" title="remove the last draw"><svg viewBox="0 0 16 16" width="12" height="12"><polygon points="11,2 11,14 3,8" fill="currentColor"/></svg></button>
+        <button id="draw-fwd" title="one more draw"><svg viewBox="0 0 16 16" width="12" height="12"><polygon points="5,2 5,14 13,8" fill="currentColor"/></svg></button>
+        <button id="draw-skip" title="fill every remaining slot"><svg viewBox="0 0 20 16" width="16" height="12"><polygon points="2,2 2,14 9,8" fill="currentColor"/><polygon points="9,2 9,14 16,8" fill="currentColor"/><rect x="17" y="2" width="2" height="12" fill="currentColor"/></svg></button>
+      </span>
+      <span class="note" id="draw-progress"></span>
+    </div>
+  </div>
+</div>

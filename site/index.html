@@ -1,0 +1,235 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>How AI text watermarking works</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;700&display=swap">
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+
+<div id="statebar"><div class="in" id="statebar-in"></div></div>
+
+<main>
+<h1>How AI text watermarking works</h1>
+<p class="lede">To comply with the EU AI Act — which calls for greater transparency in AI use — Anthropic announced that it will begin watermarking AI generated text. The new watermarking feature is based on a method called SynthID-Text. Initially developed by Google DeepMind, SynthID-Text is already used in Google Gemini and will likely be adopted by other AI companies to satisfy the transparency requirements in Article 50 of the EU Act. This page breaks down how watermarking works into a series of interactive steps.</p>
+<p class="note">The visualizations on this page use precomputed outputs from Gemma-2-2b, an open model developed by Google. Each section builds on the previous. The bar at the top keeps track of the output as it is put together. The buttons allow you to add or remove tokens with the watermarking feature turned on or off.</p>
+<nav class="toc">
+  <a href="#s1">1. The problem</a>
+  <a href="#s2">2. How watermarking works</a>
+  <a href="#s2-1">2.1 Text as numbers</a>
+  <a href="#s2-2">2.2 The next-word distribution</a>
+  <a href="#s2-3">2.3 The key</a>
+  <a href="#s2-4">2.4 Scoring the list of plausible tokens</a>
+  <a href="#s2-5">2.5 A score for every candidate</a>
+  <a href="#s2-6">2.6 Drawing candidates</a>
+  <a href="#s2-7">2.7 The tournament</a>
+  <a href="#s3">3. Detection</a>
+  <a href="#s4">4. Does watermarking degrade quality?</a>
+</nav>
+<h2 id="s1"><span class="num">1</span>The problem</h2>
+<p>Following the precipitous rise of AI generated text in key fields including education, government, social media, and academic research among others, the need to distinguish between human and machine generated text has become more pressing. Common stylistic markers of AI generated text — the repetitive use of keywords and phrases such as “delve” and “not X but Y”, the overreliance on the emdash, hedging phrases, and generalizations without substantive backing — are often only weak and inconclusive signals of AI generated provenance. Tools trained to classify texts as human or AI based on such stylistic cues are notoriously faulty.</p>
+<p>Watermarking promises an alternative. Rather than relying on heuristics to guess if a text is AI generated, watermarking leaves a subtle but detectable trace in the text itself. Large Language Models (LLMs) produce text by choosing possible words and characters (called tokens) from a list of plausible candidates. Given a sequence of text, the model calculates the odds of every word that could follow and selects one from amongst the most likely. If these choices can be systematically nudged ever so slightly — for example by picking the third option instead of the fourth — the accumulation of these constrained choices forms a pattern that can be detected with confidence.</p>
+<p>A well designed watermark should meet at least four criteria. First, a watermark should be <strong>imperceptible</strong> to a reader: a person should not be able to tell if text is watermarked or not. Second, and relatedly, the watermark should <strong>not degrade the quality</strong> of the text, else the benefits of watermarking would be outweighed by the costs. Third, it should be <strong>difficult to remove</strong>. Rearranging sentences and paraphrasing words should not wholly erase the trace. Last, it should be <strong>quickly and readily measurable</strong>.</p>
+<p>While several proposed watermarking systems meet some of these criteria, balancing all four is challenging. Hidden characters, while invisible to the average reader, are far too easy to remove. Watermarks hidden in secret patterns of words (like acrostics) are too brittle and easily broken by swapping one word for a synonym. More robust alternatives to SynthID-Text are too computationally intensive to measure at the scale and volume anticipated by AI companies. SynthID-Text, proposed by Google DeepMind, offers a technique that balances these constraints.</p>
+<h2 id="s2"><span class="num">2</span>How watermarking works</h2>
+<p>In this section we follow the procedure outlined by Google’s paper on SynthID-Text. The watermark is built up from five parts: 1) the numeric IDs assigned to words, 2) the list of likely next words language models can draw from, 3) a secret key, 4) mathematically determined scores assigned to each candidate, and 5) a small tournament that uses those scores to pick the next word from the set of likely candidates. Together these steps produce a largely imperceptible watermark that nonetheless can be used to identify AI generated text.</p>
+<h3 id="s2-1"><span class="num">2.1</span>Text as numbers</h3>
+<p>Language models do not see words as words. Language models process text as sequences of numbers. First, text is broken down into building blocks consisting of characters, words, and pieces of words called <em>tokens</em>. The set of all the tokens a model can use is called its <em>vocabulary</em>. Gemma’s vocabulary consists of roughly 256,000 tokens. Each of these tokens is assigned a number called the Token ID.</p>
+<p>Pick a prompt. Flip the token to see the IDs that the model processes.</p>
+<div class="module" id="m21">
+  <div class="row">
+    <label class="ctl">Prompt <select id="prompt-select"></select></label>
+    <span class="seg" id="tok-toggle"><button class="on" data-v="text">text</button><button data-v="id">token IDs</button></span>
+  </div>
+  <div class="chips" id="prompt-chips"></div>
+  <p class="note" style="margin:12px 0 0">The first token, <code>&lt;bos&gt;</code>, marks the beginning of the sequence. Though this token is not usually displayed to a user it is useful to the model. The leading <span class="mono">·</span> character indicates that the token includes the space before it, which is how most words are stored. Line breaks are tokens too and show as <span class="mono">⏎</span>. Hover any token on this page for a description.</p>
+</div>
+<p>These token IDs are important. By processing text as numbers, watermarking can insert mathematical patterns in the sequence of tokens — as we will shortly see.</p>
+<h3 id="s2-2"><span class="num">2.2</span>The next-word distribution</h3>
+<p>Language models work with probabilities. For any sequence of tokens, the model predicts a plausible next token. To do so, it calculates the likelihood for every token in its vocabulary. For a vocabulary of 256,000 that means assigning each of 256,000 tokens a likelihood. The vast majority will have a near-zero likelihood of following the previous token. However, for any word there is a set of most likely candidates.</p>
+<p>In the following visualization we depict a truncated version of this distribution. Here are the top eight most likely candidates for the current sequence. Click a token to append it to the running sequence and observe how that choice affects the candidates available for the next position in the sentence. For illustration, these options are precomputed using a real language model three steps deep.</p>
+<div class="module" id="m22">
+  <div class="row">
+    <label class="ctl">Temperature <input type="range" id="temp" min="0.3" max="2" step="0.05" value="1"> <b id="temp-v">1.00</b></label>
+    <button id="reset-seq">↺ Back to prompt</button>
+    <span class="note" id="depth-note"></span>
+  </div>
+  <div id="dist-chart"></div>
+  <div class="legend" id="dist-legend"></div>
+  <p class="note" style="margin:10px 0 0" id="pmass-note"></p>
+</div>
+<p class="note">The <em>temperature</em> dial flattens or sharpens the shape of the possible candidates by over- or under-weighting them. At low temperature the model is significantly more likely to pick the top candidate, while at high temperature every token becomes just as likely as any other. In practice, companies set the temperature to 1.00 to balance the need for confidence against the value of multiple options.</p>
+<h3 id="s2-3"><span class="num">2.3</span>The key</h3>
+<p>In cryptography, a key is a secret that can be used to scramble and unscramble data. Such keys are important in watermarking because they allow LLM providers to create patterns that appear random to anyone without the key. The provider creates a list of random numbers — often around 30 — and keeps them hidden. Each number is a key that helps determine the score candidate words are given during the tournament in section 2.7. This same list is used by the provider to imprint text with the watermark and to determine if a watermark was used to generate a given sequence of text.</p>
+<div class="module" id="m23">
+  <div class="row">
+    <button class="primary" id="gen-key">Generate the provider's keys</button>
+    <span id="key-display" class="mono"></span>
+  </div>
+  <div class="row" id="reroll-row" style="display:none">
+    <button id="reroll-key">⟳ What if the provider had chosen differently?</button>
+    <span class="note">Re-rolls the whole list for the rest of the page. Everything downstream recomputes.</span>
+  </div>
+</div>
+<p>Generate a set of keys and take note that they are now pinned to the top of the page. After exploring how watermarking works, try regenerating the keys to observe how different keys affect which tokens carry the watermark.</p>
+<h3 id="s2-4"><span class="num">2.4</span>Scoring the list of plausible tokens</h3>
+<p>To impart a watermark on the text, SynthID-Text nudges certain tokens in the list of plausible candidates higher than others. To achieve this, the technique assigns an arbitrary score to every token: a 1 or a 0. This score is akin to a coin toss. If heads, assign the token a 1; if tails, assign it a 0. However, to make the score measurable, the coin toss is rigged. The documentation for SynthID-Text explains that an LLM provider must keep a long list of 0s and 1s, in a random order. To assign a token a score of 1 or 0, SynthID-Text uses a mathematical formula to associate tokens with a position in this long list.</p>
+<p>This formula takes six numbers: the token IDs of the four tokens within the sliding window, the candidate token’s own ID, and a key from the list of secret keys. Combine these numbers together mathematically by adding each to the previous and, every time, multiplying the result by a very large number, before dividing the final sum by 65,536 and taking the remainder.</p>
+<p>The number produced by this process has interesting properties. Though it depends on the four tokens in the window, the resulting number is so shuffled and scrambled that, mathematically, the relationship this number has to the input would appear to an outside observer to be completely arbitrary. This number is used to select the score from the long list of 1s and 0s. By following this procedure, every token in any context can be given a seemingly random score that can only be computed by those with the secret key. In other words, to any observer the score appears to be a fair coin flip when in reality the outcome is completely rigged.</p>
+<p>Press ▶ to see it worked out.</p>
+<div class="module" id="m24">
+  <div class="inputs" id="coin-inputs"></div>
+  <div class="row">
+    <label class="ctl">candidate <select id="hash-cand"></select></label>
+    <label class="ctl">layer <select id="hash-layer"></select></label>
+    <button id="reroll-key-2">⟳ re-roll key</button>
+  </div>
+  <div id="hash-viz"></div>
+</div>
+<p>Rerun the process with different keys or at different positions in the sentence. Notice how, given the same key and same position, the outcome is the same every time. With a different key, with a different window of previous tokens, or with a different candidate token, the final outcome can change. Given a token you cannot consistently guess its score, but if you have the key you can always calculate it.</p>
+<h3 id="s2-5"><span class="num">2.5</span>A score for every candidate</h3>
+<p>Apply the same procedure to all eight candidate tokens at once. In unwatermarked text, the only thing that determines which token will be selected is the probability the language model associated with it. In watermarked text, the score of 0 or 1 nudges certain plausible candidates higher and others lower. To find the winning candidate, the watermark passes each plausible candidate token through a bracket.</p>
+<div class="module" id="m25c">
+  <div class="row">
+    <label class="ctl">Tournament layers <i>m</i> <input type="range" id="m" min="1" max="4" step="1" value="3"> <b id="m-v">3</b></label>
+    <button id="reroll-key-4">⟳ re-roll key</button>
+  </div>
+  <div id="coin-table"></div>
+  <p class="note" style="margin:12px 0 0">Blue = 1, grey = 0 — the paper's main configuration fills the table with fair 0/1 flips, though it also explores tables of values drawn anywhere in the range 0 to 1, where no two candidates ever read the same thing. Click any cell to watch it worked out in 2.4. Re-rolling the keys sends every candidate to a different row and so rewrites every cell; the candidates and their probabilities do not change. Appending a token (2.2) shifts the window and also rewrites every cell.</p>
+</div>
+<h3 id="s2-6"><span class="num">2.6</span>Drawing candidates</h3>
+<p>First, the language model draws a small handful of plausible candidates. This step is done before consulting the score: all plausible tokens are considered for the tournament. The process draws two candidates for every matchup in the tournament, so 2<sup>m</sup> in all — eight slots when <i>m</i> = 3, sixteen when <i>m</i> = 4. Each draw is independent, meaning it is possible (and often likely) that the same token will be drawn several times. For illustration we only depict the top 8 plausible candidates. In practice any token in the model's vocabulary could be considered. However, a token with high likelihood of being next will fill the majority of the slots in the tournament, while an unlikely one will usually fill none but occasionally it might snag one.</p>
+<div class="module" id="m25">
+  <div class="row">
+    <label class="ctl">Tournament layers <i>m</i> <input type="range" id="m2" min="1" max="4" step="1" value="3"> <b id="m-v3">3</b></label>
+    <span class="note" id="slot-count"></span>
+  </div>
+  <div class="card">
+    <div class="note" style="margin-bottom:10px">This graph shows the model's eight most likely next tokens and their probabilities of being selected. Each draw picks one of them at random, independent of previous draws. The more probability given to a token, the higher the chance that it will be drawn again and again.</div>
+    <div class="dchart"><div class="dband" id="draw-band"></div><div id="draw-rows"></div></div>
+    <div style="margin-top:16px;padding-top:12px;border-top:1px solid #f0efec">
+      <div class="note" id="slot-heading" style="margin-bottom:8px"></div>
+      <div class="dslots"><span id="draw-chips" style="display:contents"></span><span id="draw-empties" style="display:contents"></span></div>
+      <div class="note" id="draw-note" style="margin-top:10px;min-height:1.4em"></div>
+      <p style="margin:8px 0 0" class="glyph-key"></p>
+    </div>
+    <div class="row" style="margin-top:14px">
+      <button class="primary" id="draw-btn"></button>
+      <span class="seg">
+        <button id="draw-back" title="remove the last draw"><svg viewBox="0 0 16 16" width="12" height="12"><polygon points="11,2 11,14 3,8" fill="currentColor"/></svg></button>
+        <button id="draw-fwd" title="one more draw"><svg viewBox="0 0 16 16" width="12" height="12"><polygon points="5,2 5,14 13,8" fill="currentColor"/></svg></button>
+        <button id="draw-skip" title="fill every remaining slot"><svg viewBox="0 0 20 16" width="16" height="12"><polygon points="2,2 2,14 9,8" fill="currentColor"/><polygon points="9,2 9,14 16,8" fill="currentColor"/><rect x="17" y="2" width="2" height="12" fill="currentColor"/></svg></button>
+      </span>
+      <span class="note" id="draw-progress"></span>
+    </div>
+  </div>
+</div>
+<p>This step is crucial. It means that the watermark is applied only to tokens that the model would have considered plausible to begin with. The process does not force the model to pick unlikely tokens.</p>
+<h3 id="s2-7"><span class="num">2.7</span>The tournament</h3>
+<p>The next word is finally chosen after it survives a tournament against the other candidates. Each candidate is matched with another. The tournament considers the arbitrary score assigned to each token — that 0 or 1 from before. If the token is assigned a 1, it survives that round. If the scores are equal, the winner is picked at random. The next round uses another key, so the score assigned to each surviving token is subject to change. This process is repeated until a single token remains.</p>
+<p>Observe how winners advance along the blue line to the next layer until one token remains. That final token is selected as the model's output.</p>
+<div class="module" id="m26">
+  <div class="row">
+    <button class="primary" id="run-btn">Run tournament</button>
+    <label class="ctl">layers <i>m</i> <b id="m-v2">3</b></label>
+    <label class="ctl">temperature <b id="temp-v2">1.00</b></label>
+    <button id="reroll-key-3">⟳ re-roll key</button>
+    <span class="note" id="run-note"></span>
+  </div>
+  <div class="bracket" id="bracket"></div>
+  <p class="note" id="tie-note" style="margin:8px 0 0"></p>
+  <h4 style="margin-top:16px">The average score under this key</h4>
+  <div class="scores" id="score-strip"></div>
+  <p class="note" style="margin:10px 0 0">A token carries the most evidence of watermarking if it wins every round of the tournament with a score of 1. Tokens that are promoted in the bracket by a tie carry no trace of watermarking, because they have equal chances of winning or losing. We can quantify watermarking evidence, then, in terms of the share of tournaments won with a score of 1.</p>
+  <p style="margin:6px 0 0" class="glyph-key"></p>
+</div>
+<div class="module" id="m26b">
+  <div id="dist-chart-27"></div>
+  <div class="legend" id="dist-legend-27"></div>
+</div>
+<p>The tournament decides a winner from among the candidate tokens. In the chart, the winning candidate is coloured blue, the losing candidates are coloured orange, and the remaining candidates which were not selected for the tournament are coloured grey.</p>
+<div class="callout" id="fox-callout">
+  <div class="t">Try the first prompt</div>
+  With “The quick brown fox”, the bracket fills up with copies of the same token. The watermark lacks options to choose between. With only one or two distinct tokens in the bracket, most matches are ties. Under these conditions the amount of evidence the watermarking technique can provide is low. Switch to a different prompt and observe how, with more options, there is more watermarking evidence.
+</div>
+<h2 id="s3"><span class="num">3</span>Detection</h2>
+<p>If the text is generated by a watermarked language model, then every token in a document has a chance to hold a small trace of the mechanism described above. Watermark detection works by calculating whether the tokens in a text will score a 1 or a 0 under the constraints described above. On average, unwatermarked text will score right in the middle: 0.5. Documents written by human hand and text generated by an unwatermarked machine lack the ability to systematically select tokens associated with 1s. Remember, these scores appear to be completely random to anyone without the key. Watermarked text, in contrast, systematically nudges tokens associated with scores of 1 higher than tokens with scores of 0. The result is that watermarked text will have an average score sitting just above 0.5.</p>
+<div class="module" id="m4">
+  <div id="det-current"></div>
+  <hr style="margin:14px 0">
+  <div class="row">
+    <label class="ctl">Document length <input type="range" id="doclen" min="10" max="1000" step="10" value="100"> <b id="doclen-v">100</b> <span class="note">tokens</span></label>
+    <span class="seg" id="len-presets"><button data-n="20">sentence</button><button data-n="100" class="on">paragraph</button><button data-n="800">article</button></span>
+  </div>
+  <div id="det-chart"></div>
+  <div class="row" style="margin-top:6px">
+    <label class="ctl">Threshold <input type="range" id="thr" min="0.5" max="0.75" step="0.005" value="0.56"> <b id="thr-v">0.560</b></label>
+  </div>
+  <div class="stat" id="det-stats"></div>
+  <p class="note" id="det-note"></p>
+</div>
+<p>Three things to take from the chart.</p>
+<ul>
+<li><strong>More tokens, more evidence.</strong> Scores of 1 or 0 on a single token could be explained by pure chance. However, the longer the document, the more evidence the detector has to work with. A sentence’s worth of evidence is inconclusive. A paragraph might have faint traces.</li>
+<li><strong>False positives are unavoidable.</strong> For highly predictable text, like letterhead, boilerplate, templates, and formulaic code, SynthID-Text is unable to imprint a watermark, because watermarking requires choosing between alternatives. If no alternatives are available, there is no watermark. Furthermore, although it is unlikely, it is possible for a human to unknowingly pick the same tokens an AI would.</li>
+<li><strong>Detection needs the key.</strong> To calculate the appropriate values, a detector needs access to the key that produced the watermark. Under the current watermarking system described here, LLM providers will be unwilling to share the key publicly because doing so would enable malicious actors to create systems that counteract the watermark. Until another method is developed, this means that only LLM providers or trusted third parties will have the ability to detect watermarks.</li>
+</ul>
+<p>Here is the detector on real text. Four public-domain passages of different predictability — a speech, a novel, a statute, some code — sit next to Gemma-2-2b writing in the same four registers, once with the watermark off and once with it on under a fixed <em>demo key</em> that is shipped with this page. Switch to your own key from 2.3 to see what a detector without the right key sees. You can also paste text of your own.</p>
+<div class="module" id="m4s">
+  <h4>Try it on real text</h4>
+  <div class="row">
+    <label class="ctl">Sample <select id="smp-select"></select></label>
+    <span class="seg" id="smp-key"><button class="on" data-v="demo">demo key</button><button data-v="yours">your key (2.3)</button></span>
+    <span class="note">scored with <i>m</i> = 4 layers, independent of the slider above</span>
+  </div>
+  <div class="stat" id="smp-stats"></div>
+  <div id="smp-table"></div>
+  <div class="scores" id="smp-strip"></div>
+  <p class="note" id="smp-note" style="margin:10px 0 0"></p>
+  <details id="smp-paste" style="margin-top:12px">
+    <summary>Score your own text</summary>
+    <textarea id="smp-text" rows="6" placeholder="Paste any text. It is tokenised in your browser with Gemma's tokenizer and scored under the selected key; nothing is uploaded."></textarea>
+    <div class="row" style="margin-top:8px"><button class="primary" id="smp-go">Tokenize and score</button><span class="note" id="smp-tokstatus"></span></div>
+  </details>
+</div>
+<p class="note">In practice, the detectors that are used in production are more sophisticated than a simple average. More robust methods implement a Bayesian detector trained on watermarked and unwatermarked data in order to more accurately classify uncertain cases or flag them as such.</p>
+<h2 id="s4"><span class="num">4</span>Does watermarking degrade quality?</h2>
+<p>One worry users might have is: if the watermark nudges less likely tokens to the top, does that suggest watermarked text is more likely to contain errors? A central claim of SynthID-Text is that watermarking does not degrade the quality of text.</p>
+<p>The first and most important guard that watermarking has against distortion is that it does not affect what a large language model samples. As discussed earlier, language models sample tokens from a distribution. Watermarked text samples from the very same distribution. Therefore, the tokens used to watermark text are tokens that a language model could have sampled anyway.</p>
+<p>In principle, this means that watermarking cannot introduce any errors that a language model was not capable of making in the first place.</p>
+<p>A shrewd reader might still be worried. Language models are capable of making errors. They hallucinate. They make mistakes. Does watermarking then affect the rate at which errors are made? Can watermarking turn a rare, sporadic error into a systematic one?</p>
+<p>The capital of Australia is Canberra. This fact is reflected in the top result for the prompt “The capital of Australia is”. The model associates “Canberra” with a probability of 32.2%. Other plausible candidates for the next token in the sentence include “the”, “located”, “known” and “one”. However, in addition to “Canberra”, the model also predicts “Sydney” with a probability of 10.5%. This error perhaps reflects the model’s training data, which may retain human mistakes.</p>
+<p>Watermarking does not add “Sydney” to the list of plausible candidates, but does watermarking change how often “Sydney” is selected? The answer to this question depends on a number of factors. First, for “Sydney” to enter into the tournament, it must be drawn. The likelihood of being selected rises with the number of layers the tournament has, because the more slots available, the more chances there are to select the token. Second, whether or not “Sydney” wins the tournament is arbitrary — it depends entirely on the random set of keys. Under some keys “Sydney” will be more likely to be given a score of 1, while under others it will receive a 0.</p>
+<div class="module" id="m3">
+  <div id="s3-body"></div>
+</div>
+<p>The effect a key has on what tokens are sampled is measurable but arbitrary. In the chart above you observe how, under your current key, the rate at which “Sydney” is selected will change. With certain sets of keys “Sydney” will become far more likely. With others, it will become even less likely than in the unwatermarked case. If we were to average across several sets of keys, the effect would vanish.</p>
+<p>To see this, compare the two rows for “under the current keys” against “averaged over 300 keys”. As you can observe, the average equals the unwatermarked rate. This equivalence is what SynthID-Text promises.</p>
+<p>In practice an LLM provider must use a small set of fixed keys. To understand the implication of using fixed keys, it is helpful to observe which tokens are selected under different keys.</p>
+<p>Given the current position in the sequence, different sets of keys tend to select different tokens. This is shown in the barcharts below. For each, the tournament runs 600 times. Each time, chance enters into the picture when the language model samples from the distribution and when tokens with the same score need a random tie breaker. Nevertheless, the different keys tend to make some tokens more or less likely than what the language model would predict. In the plots below the coloured bars aggregate the number of times the token was selected by the watermark and the grey outlines are the model's own predicted probabilities.</p>
+<div class="module" id="m27">
+  <div class="row">
+    <button id="rerun-27">↻ Run again</button>
+    <label class="ctl"><input type="checkbox" id="proof-toggle"> show the many-key average (what the proof says)</label>
+    <span class="note">Uses the current position, <i>m</i> and temperature.</span>
+  </div>
+  <div class="panels" id="panels-27"></div>
+  <div class="legend" id="legend-27"></div>
+</div>
+<p>Try different prompts and observe the outcomes. Each key promotes certain tokens more than others. With some prompts, where the options are relatively fixed, this effect is small. In others, where there are many plausible candidates to choose from, the effect is more pronounced. What is crucial to keep in mind is that even in cases where top tokens are suppressed and alternatives are elevated, the choice is completely arbitrary. In the long run, this means that there is no fixed bias that favours certain terms over others.</p>
+<footer>
+  <p>Scheme: Dathathri et al., “Scalable watermarking for identifying large language model outputs”, <em>Nature</em> 634, 818–823 (2024). Window length <i>H</i>&nbsp;=&nbsp;4, binary values with random tie-breaks, and the Bayesian detector as default are all from that paper; production uses <i>m</i>&nbsp;=&nbsp;30 layers. The 3Blue1Brown video <a href="https://www.youtube.com/watch?v=9-Jl0dxWQs8">“How might LLMs store facts”</a> uses the Michael Jordan example to discuss where facts live inside a model.</p>
+  <p>Next-token distributions: <span class="mono">google/gemma-2-2b</span> (base), top-8 to depth 3 per prompt. The lookup on this page is the one in Google's open-source release of the scheme (the <span class="mono">transformers</span> implementation), down to the multiplier and the 65,536-row table. Google notes in that source that it is <em>not</em> the hashing used in the Gemini app, and that detectors built on it will not transfer to Gemini's output.</p>
+</footer>
+
+</main>
+
+<script id="data-inline" type="application/json"></script>
+<script id="samples-inline" type="application/json"></script>
+<script src="app.js"></script>
+</body>
+</html>
