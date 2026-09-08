@@ -13,7 +13,7 @@ rowFor, coin, runBracket, tokenScore), so the page's tokenScore() scores these s
 way the Python here does. transformers' own SynthID processor is *not* used: it seeds its
 table differently and the page could not read its watermark.
 """
-import argparse, json, pathlib, random, shutil, sys
+import argparse, json, pathlib, random, sys
 
 ROOT = pathlib.Path(__file__).resolve().parent.parent
 TEXTS = ROOT / "precompute" / "texts"
@@ -191,15 +191,6 @@ def main():
     pathlib.Path(args.out).write_text(json.dumps(out, ensure_ascii=False, separators=(",", ":")))
     print(f"wrote {args.out}", file=sys.stderr)
 
-    # tokenizer files for in-browser tokenisation (transformers.js), copied from the HF snapshot
-    from huggingface_hub import hf_hub_download
-    dst = ROOT / "site" / "tokenizer" / "gemma-2-2b"; dst.mkdir(parents=True, exist_ok=True)
-    for f in ("tokenizer.json", "tokenizer_config.json"):
-        shutil.copy(hf_hub_download(MODEL, f), dst / f)
-    (dst / "NOTICE").write_text(
-        "tokenizer.json and tokenizer_config.json are from google/gemma-2-2b and are redistributed under the\n"
-        "Gemma Terms of Use: https://ai.google.dev/gemma/terms\n")
-    print(f"copied tokenizer to {dst}", file=sys.stderr)
     sys.exit(0 if ok else 1)
 
 

@@ -27,7 +27,7 @@ const S = {
   tokView: 'text',
   docLen: 100,
   thr: 0.56,
-  smp: { id: null, keyMode: 'demo', view: 'text', custom: null },   // 3: real-text detector
+  smp: { id: null, keyMode: 'demo', view: 'text' },   // 3: real-text detector
 };
 
 // ---------- maths ----------
@@ -824,12 +824,11 @@ function evidence(pv) {
   return { lab, line, pct: pv < 0.001 ? '<0.1%' : pct(pv, 1) };
 }
 
-// ---------- Section 3: real text (precomputed samples + in-browser tokenizer) ----------
+// ---------- Section 3: real text (precomputed samples) ----------
 const KINDS = [['human', 'Human, public domain'], ['gemma-plain', 'Gemma-2-2b, unwatermarked'], ['gemma-wm', 'Gemma-2-2b, watermarked under the demo key']];
 const REGS = [['oratory', 'oratory'], ['prose', 'fiction'], ['law', 'law'], ['code', 'code']];
-let TOKP = null;           // tokenizer promise, created on first use
 let smpCache = { sig: null, rows: null };
-function smpList() { const l = SAMPLES ? SAMPLES.samples.slice() : []; if (S.smp.custom) l.push(S.smp.custom); return l; }
+function smpList() { return SAMPLES ? SAMPLES.samples.slice() : []; }
 function smpCurrent() { const l = smpList(); return l.find(x => x.id === S.smp.id) || l[0]; }
 function smpKeys() { return S.smp.keyMode === 'demo' ? SAMPLES.demo_key : S.keys; }
 function scoreSample(sm, keys, m = SAMPLES.m) {
@@ -850,8 +849,7 @@ function render4s() {
   if (!SAMPLES) { $('smp-stats').innerHTML = `<p class="note">samples.json is missing — run <span class="mono">precompute/samples.py</span>.</p>`; return; }
   const sel = $('smp-select'); const list = smpList();
   if (sel.options.length !== list.length) {
-    sel.innerHTML = KINDS.map(([k, lab]) => `<optgroup label="${lab}">${list.filter(x => x.kind === k).map(x => `<option value="${x.id}">${esc(x.label)}</option>`).join('')}</optgroup>`).join('')
-      + (S.smp.custom ? `<optgroup label="Pasted"><option value="custom">${esc(S.smp.custom.label)}</option></optgroup>` : '');
+    sel.innerHTML = KINDS.map(([k, lab]) => `<optgroup label="${lab}">${list.filter(x => x.kind === k).map(x => `<option value="${x.id}">${esc(x.label)}</option>`).join('')}</optgroup>`).join('');
   }
   const sm = smpCurrent(); S.smp.id = sm.id; sel.value = sm.id;
   $('smp-key').querySelectorAll('button').forEach(b => b.classList.toggle('on', b.dataset.v === S.smp.keyMode));
@@ -887,34 +885,11 @@ function render4s() {
   }
   $('smp-strip').className = S.smp.view === 'text' ? `passage${sm.register === 'code' ? ' code' : ''}` : 'scores';
   $('smp-strip').innerHTML = html;
-  const bodyLab = sm.kind === 'human' ? 'human text' : sm.kind === 'custom' ? 'your text' : 'Gemma-2-2b response';
+  const bodyLab = sm.kind === 'human' ? 'human text' : 'Gemma-2-2b response';
   $('smp-note').innerHTML = S.smp.view === 'text'
     ? `${sm.prompt_ntok > 1 ? '<span class="lg pr">prompt</span> &nbsp; ' : ''}<span class="lg md">${bodyLab}</span>`
     : `<span class="lg" style="background:${smpShade(1)}"></span> more 1s &nbsp; <span class="lg" style="background:${smpShade(0)}"></span> more 0s &nbsp; <span class="lg pr">not scored</span> &nbsp; <i>m</i> = 4`;
 }
-async function loadTokenizer() {
-  if (location.protocol === 'file:') throw new Error('needs http');
-  return TOKP ??= (async () => {
-    const { AutoTokenizer, env } = await import('https://cdn.jsdelivr.net/npm/@huggingface/transformers@3.7.5/dist/transformers.min.js');
-    env.allowRemoteModels = false; env.allowLocalModels = true;
-    env.localModelPath = new URL('tokenizer/', document.baseURI).href;   // tokenizer/gemma-2-2b/{tokenizer.json,tokenizer_config.json}
-    return AutoTokenizer.from_pretrained('gemma-2-2b');
-  })();
-}
-async function scorePasted() {
-  const text = $('smp-text').value; if (!text.trim()) return;
-  $('smp-go').disabled = true; $('smp-tokstatus').textContent = 'loading tokenizer (17 MB, once)…';
-  try {
-    const tok = await loadTokenizer();
-    const ids = Array.from(tok.encode(text), Number);          // adds the leading <bos>, as data.json does
-    S.smp.custom = { id: 'custom', label: 'Your text', kind: 'custom', register: '', source: 'pasted', prompt_ntok: 1, ids, toks: ids.map(i => tok.decode([i])) };
-    S.smp.id = 'custom'; $('smp-tokstatus').textContent = `${ids.length - 1} tokens`; $('smp-go').disabled = false; render4s();
-  } catch (e) {
-    TOKP = null; console.warn(e);
-    $('smp-tokstatus').textContent = 'Tokenizer unavailable: this needs the page served over HTTP with the tokenizer/ folder next to it.';
-  }
-}
-
 function renderAll() {
   $('temp-v').textContent = S.temp.toFixed(2); $('m-v').textContent = S.m;
   renderStatebar(); render21(); render22(); render23(); render24(); render25(); render26(); if (S.keys) render27(); else $('panels-27').innerHTML = `<p class="note">Generate the key in 2.3 first.</p>`;
@@ -1010,7 +985,6 @@ if ($('smp-select')) {
   $('smp-select').addEventListener('change', e => { S.smp.id = e.target.value; render4s(); });
   $('smp-key').querySelectorAll('button').forEach(b => b.addEventListener('click', () => { S.smp.keyMode = b.dataset.v; render4s(); }));
   $('smp-view').querySelectorAll('button').forEach(b => b.addEventListener('click', () => { S.smp.view = b.dataset.v; render4s(); }));
-  if ($('smp-go')) $('smp-go').addEventListener('click', scorePasted);
 }
 document.querySelectorAll('.glyph-key').forEach(el => el.innerHTML = GLYPH_KEY);
 $('seq-reset').innerHTML = TRI_START; $('seq-prev').innerHTML = TRI_L; $('seq-fwd').innerHTML = TRI_R; $('seq-end').innerHTML = TRI_END;

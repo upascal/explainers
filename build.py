@@ -78,5 +78,3 @@ write(SITE / "findings.html", findings(inline=False))
 shutil.copy(SRC / "style.css", SITE / "style.css"); shutil.copy(SRC / "app.js", SITE / "app.js")
 write(DIST / "index.html", page(content, title, inline=True))
 write(DIST / "findings.html", findings(inline=True))
-if (SITE / "tokenizer").exists():
-    shutil.copytree(SITE / "tokenizer", DIST / "tokenizer", dirs_exist_ok=True)
