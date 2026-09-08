@@ -220,6 +220,11 @@ table.data td.n { text-align: right; font-variant-numeric: tabular-nums; }
 .toc a:hover { color: var(--blue); }
 .v2 { display: inline-block; font-family: var(--sans); font-size: 0.7rem; background: #efeeea; color: var(--ink-2); padding: 1px 6px; border-radius: 4px; vertical-align: middle; margin-left: 8px; letter-spacing: 0.04em; }
 footer { margin-top: 100px; font-family: var(--sans); font-size: 0.85rem; color: var(--ink-2); border-top: 1px solid var(--grid); padding-top: 20px; }
+footer .fn-h { margin: 0 0 14px; font-size: 0.78rem; text-transform: uppercase; letter-spacing: 0.08em; color: var(--muted); font-weight: 600; }
+footer ol.fn { margin: 0; padding-left: 1.6em; }
+footer ol.fn li { margin-bottom: 10px; line-height: 1.55; padding-left: 4px; }
+footer ol.fn li:last-child { margin-bottom: 0; }
+footer ol.fn li::marker { color: var(--muted); font-variant-numeric: tabular-nums; }
 
 /* 2.4 long-form arithmetic */
 .card { background: white; border: 1px solid var(--grid); border-radius: 8px; padding: 14px 16px 12px; }

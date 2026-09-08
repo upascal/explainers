@@ -51,7 +51,12 @@
 <p>The consequence for policy: watermark strength is a property of the model, not the scheme. Validation on one model version does not transfer to the next. The per-token data to make this a chart is in progress.</p>
 
 <footer>
-  <p>Entity data: local reimplementation of SynthID-Text (Dathathri et al., <em>Nature</em> 2024) on <span class="mono">google/gemma-2-9b-it</span>, n&nbsp;=&nbsp;500 per arm, <i>m</i>&nbsp;=&nbsp;30 layers, <i>H</i>&nbsp;=&nbsp;4. Entities extracted by a pooled gazetteer; prevalence = share of responses mentioning the entity at least once. Comparisons are permutation tests on L1 distance with a Fisher-combined primary test; per-entity shifts are Benjamini–Hochberg corrected (q&nbsp;&lt;&nbsp;0.05).</p>
+  <h4 class="fn-h">Footnotes</h4>
+  <ol class="fn">
+    <li>Entity data: local reimplementation of SynthID-Text (<a href="https://www.nature.com/articles/s41586-024-08025-4">Dathathri et al., <em>Nature</em> 2024</a>) on <a href="https://huggingface.co/google/gemma-2-9b-it"><span class="mono">google/gemma-2-9b-it</span></a>, n&nbsp;=&nbsp;500 per arm, <i>m</i>&nbsp;=&nbsp;30 layers, <i>H</i>&nbsp;=&nbsp;4.</li>
+    <li>Entities extracted by a pooled gazetteer; prevalence = share of responses mentioning the entity at least once.</li>
+    <li>Comparisons are permutation tests on L1 distance with a Fisher-combined primary test; per-entity shifts are Benjamini–Hochberg corrected (q&nbsp;&lt;&nbsp;0.05).</li>
+  </ol>
 </footer>
 </main>
 <script>

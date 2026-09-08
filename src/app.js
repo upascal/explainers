@@ -252,7 +252,7 @@ function renderDist(chartId, legendId, opts) {
          : drawn.size ? `<span><i style="background:var(--blue-250)"></i>drawn as a candidate (2.6)</span><span class="note">Run the tournament to see which one wins.</span>`
          : `<span class="note">Run the tournament above to colour the outcome in here.</span>`)
     : st ? `<span><i style="background:var(--blue);outline:2px solid var(--ink)"></i>chosen at this position ${st.how === 'manual' ? 'by you' : 'by plain sampling, no watermark'}. Click another bar to branch here.</span>`
-    : `<span>Click a bar to append that token, or use ▶ in the bar at the top.</span>`;
+    : `<span>Click a bar to append that token, or use the forward control in the bar at the top.</span>`;
   $(legendId).innerHTML += `<span style="flex-basis:100%">${GLYPH_KEY}</span>`;
 }
 
@@ -371,7 +371,7 @@ function renderTableau(full) {
   });
   const sc = $('tableau-scroll'); if (sc) sc.scrollTop = sc.scrollHeight;
   let folded = 0; for (let i = 0; i < k; i++) if (all[i].kind === 'res' && all[i].bold) folded++;
-  $('t-play').textContent = done ? '↻ replay' : HA.playing ? '… working' : '▶ work it out';
+  $('t-play').textContent = done ? 'replay' : HA.playing ? '… working' : 'work it out';
   renderTableauControls();
   $('t-progress').textContent = done || k <= 1 ? '' : `number ${Math.min(folded + 1, ingredients().length)} of ${ingredients().length}`;
 }
@@ -400,7 +400,7 @@ function lookRows(target) {
 }
 function renderLookChrome(target) {
   const l = HA.look;
-  $('look-btn').textContent = l === 2 ? '↻ look it up again' : l === 1 ? '… scanning the table' : `Is row ${commas(target)} a 0 or a 1?`;
+  $('look-btn').textContent = l === 2 ? 'look it up again' : l === 1 ? '… scanning the table' : `Is row ${commas(target)} a 0 or a 1?`;
   $('look-note').innerHTML = l === 2
     ? `row ${commas(target)} holds a <b>${TABLE[target]}</b> — that is the value for “${esc(fmtTok(node().cand[HA.cand].s))}” at layer ${HA.layer + 1}`
     : l === 1 ? '' : `${commas(TABLE_SIZE)} rows; the arithmetic above chose one`;

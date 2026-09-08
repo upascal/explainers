@@ -1,6 +1,6 @@
 # How AI text watermarking works
 
-<p class="lede">To comply with the EU AI Act — which calls for greater transparency in AI use — Anthropic announced that it will begin watermarking AI generated text. The new watermarking feature is based on a method called SynthID-Text. Initially developed by Google DeepMind, SynthID-Text is already used in Google Gemini and will likely be adopted by other AI companies to satisfy the transparency requirements in Article 50 of the EU Act. This page breaks down how watermarking works into a series of interactive steps.</p>
+<p class="lede">To comply with the <a href="https://artificialintelligenceact.eu/article/50/">EU AI Act</a> — which calls for greater transparency in AI use — <a href="https://www.anthropic.com/news/claude-text-watermark">Anthropic announced</a> that it will begin watermarking AI generated text. The new watermarking feature is based on a method called <a href="https://www.nature.com/articles/s41586-024-08025-4">SynthID-Text</a>. Initially developed by Google DeepMind, SynthID-Text is already used in Google Gemini and will likely be adopted by other AI companies to satisfy the transparency requirements in <a href="https://artificialintelligenceact.eu/article/50/">Article 50</a> of the EU Act. This page breaks down how watermarking works into a series of interactive steps.</p>
 
 <p class="note">The visualizations on this page use precomputed outputs from Gemma-2-2b, an open model developed by Google. Each section builds on the previous. The bar at the top keeps track of the output as it is put together. The buttons allow you to add or remove tokens with the watermarking feature turned on or off.</p>
 
@@ -55,8 +55,6 @@ To impart a watermark on the text, SynthID-Text nudges certain tokens in the lis
 This formula takes six numbers: the token IDs of the four tokens within the sliding window, the candidate token’s own ID, and a key from the list of secret keys. Combine these numbers together mathematically by adding each to the previous and, every time, multiplying the result by a very large number, before dividing the final sum by 65,536 and taking the remainder.
 
 The number produced by this process has interesting properties. Though it depends on the four tokens in the window, the resulting number is so shuffled and scrambled that, mathematically, the relationship this number has to the input would appear to an outside observer to be completely arbitrary. This number is used to select the score from the long list of 1s and 0s. By following this procedure, every token in any context can be given a seemingly random score that can only be computed by those with the secret key. In other words, to any observer the score appears to be a fair coin flip when in reality the outcome is completely rigged.
-
-Press ▶ to see it worked out.
 
 <!-- module: m24 -->
 
@@ -140,6 +138,12 @@ Given the current position in the sequence, different sets of keys tend to selec
 Try different prompts and observe the outcomes. Each key promotes certain tokens more than others. With some prompts, where the options are relatively fixed, this effect is small. In others, where there are many plausible candidates to choose from, the effect is more pronounced. What is crucial to keep in mind is that even in cases where top tokens are suppressed and alternatives are elevated, the choice is completely arbitrary. In the long run, this means that there is no fixed bias that favours certain terms over others.
 
 <footer>
-  <p>Scheme: Dathathri et al., “Scalable watermarking for identifying large language model outputs”, <em>Nature</em> 634, 818–823 (2024). Window length <i>H</i>&nbsp;=&nbsp;4, binary values with random tie-breaks, and the Bayesian detector as default are all from that paper; production uses <i>m</i>&nbsp;=&nbsp;30 layers. The 3Blue1Brown video <a href="https://www.youtube.com/watch?v=9-Jl0dxWQs8">“How might LLMs store facts”</a> uses the Michael Jordan example to discuss where facts live inside a model.</p>
-  <p>Next-token distributions: <span class="mono">google/gemma-2-2b</span> (base), top-8 to depth 3 per prompt. The lookup on this page is the one in Google's open-source release of the scheme (the <span class="mono">transformers</span> implementation), down to the multiplier and the 65,536-row table. Google notes in that source that it is <em>not</em> the hashing used in the Gemini app, and that detectors built on it will not transfer to Gemini's output.</p>
+  <h4 class="fn-h">Footnotes</h4>
+  <ol class="fn">
+    <li>Scheme: <a href="https://www.nature.com/articles/s41586-024-08025-4">Dathathri et al., “Scalable watermarking for identifying large language model outputs”, <em>Nature</em> 634, 818–823 (2024)</a>. Window length <i>H</i>&nbsp;=&nbsp;4, binary values with random tie-breaks, and the Bayesian detector as default are all from that paper; production uses <i>m</i>&nbsp;=&nbsp;30 layers.</li>
+    <li>Next-token distributions: <a href="https://huggingface.co/google/gemma-2-2b"><span class="mono">google/gemma-2-2b</span></a> (base), top-8 to depth 3 per prompt.</li>
+    <li>The watermarking on this page is a browser-based port of <a href="https://github.com/huggingface/transformers/blob/v4.57.0/src/transformers/generation/logits_process.py#L2571">Google's open-source release of the scheme (the <span class="mono">transformers</span> implementation)</a>.</li>
+    <li>Google notes in that source that it is <em>not</em> the hashing used in the Gemini app, and that detectors built on it will not transfer to Gemini's output.</li>
+    <li>The 3Blue1Brown video <a href="https://www.youtube.com/watch?v=9-Jl0dxWQs8">“How might LLMs store facts”</a> uses the Michael Jordan example to discuss where facts live inside a model.</li>
+  </ol>
 </footer>
