@@ -105,7 +105,7 @@ Three things to take from the chart.
 - **False positives are unavoidable.** For highly predictable text, like letterhead, boilerplate, templates, and formulaic code, SynthID-Text is unable to imprint a watermark, because watermarking requires choosing between alternatives. If no alternatives are available, there is no watermark. Furthermore, although it is unlikely, it is possible for a human to unknowingly pick the same tokens an AI would.
 - **Detection needs the key.** To calculate the appropriate values, a detector needs access to the key that produced the watermark. Under the current watermarking system described here, LLM providers will be unwilling to share the key publicly because doing so would enable malicious actors to create systems that counteract the watermark. Until another method is developed, this means that only LLM providers or trusted third parties will have the ability to detect watermarks.
 
-Here is the detector on real text. Four public-domain passages of different predictability — a speech, a novel, a statute, some code — sit next to Gemma-2-2b writing in the same four registers, once with the watermark off and once with it on under a fixed *demo key* that is shipped with this page. Switch to your own key from 2.3 to see what a detector without the right key sees. You can also paste text of your own.
+Here is the detector on real text. Four public-domain passages of different predictability — a speech, a novel, a statute, some code — sit next to Gemma-2-2b writing in the same four registers, once with the watermark off and once with it on under a fixed *demo key* that is shipped with this page. Switch to your own key from 2.3 to see what a detector without the right key sees.
 
 <!-- module: m4s -->
 

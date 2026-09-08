@@ -27,7 +27,7 @@ const S = {
   tokView: 'text',
   docLen: 100,
   thr: 0.56,
-  smp: { id: null, keyMode: 'demo', custom: null },   // 3: real-text detector
+  smp: { id: null, keyMode: 'demo', view: 'text', custom: null },   // 3: real-text detector
 };
 
 // ---------- maths ----------
@@ -164,6 +164,8 @@ const HOW = { bos: 'beginning-of-sequence token', prompt: 'prompt token', emit: 
 const SB = { cur: null, step: null };   // what the bar showed last time, so arrivals can animate
 const TRI_L = '<svg viewBox="0 0 16 16" width="10" height="10" aria-hidden="true"><polygon points="11,2 11,14 3,8" fill="currentColor"/></svg>';
 const TRI_R = '<svg viewBox="0 0 16 16" width="10" height="10" aria-hidden="true"><polygon points="5,2 5,14 13,8" fill="currentColor"/></svg>';
+const TRI_START = '<svg viewBox="0 0 20 16" width="13" height="10" aria-hidden="true"><rect x="1" y="2" width="2" height="12" fill="currentColor"/><polygon points="11,2 11,14 4,8" fill="currentColor"/><polygon points="18,2 18,14 11,8" fill="currentColor"/></svg>';
+const TRI_END = '<svg viewBox="0 0 20 16" width="13" height="10" aria-hidden="true"><polygon points="2,2 2,14 9,8" fill="currentColor"/><polygon points="9,2 9,14 16,8" fill="currentColor"/><rect x="17" y="2" width="2" height="12" fill="currentColor"/></svg>';
 function sbChip(t, extra = '') {
   const how = t.s === '<bos>' ? 'bos' : t.how;
   const cls = (how === 'prompt' ? '' : how) + (S.tokView === 'id' ? ' id' : '') + extra;
@@ -185,6 +187,7 @@ function renderStatebar() {
   const fwdTitle = st ? 'next position' : ends ? 'the tree ends here' : wm ? 'generate the next token with the watermark' : 'generate the next token without the watermark';
   const pair = `<span class="sb-pair"><button data-act="prev" title="previous position" ${S.cur === 0 ? 'disabled' : ''}>${TRI_L}</button><button data-act="fwd" title="${fwdTitle}" ${ends ? 'disabled' : ''}>${TRI_R}</button></span>`;
   const toggle = `<span class="sb-wm${wm ? ' on' : ''}${S.keys ? '' : ' nokeys'}" data-act="wm" role="switch" aria-checked="${!!wm}" title="${S.keys ? 'generate the next token with or without the watermark' : 'needs the provider\'s keys — generate them in 2.3'}"><span class="sb-track"><span class="sb-knob"></span></span>Add Watermark</span>`;
+  const promptSel = `<select class="sb-prompt" data-act="prompt" title="the prompt the sentence starts from — same list as 2.1">${ORDER.map((id, i) => `<option value="${id}"${id === S.pid ? ' selected' : ''}>${i + 1}. ${esc(P[id].text)}</option>`).join('')}</select>`;
   const keys = S.keys
     ? `<a class="sb-key" href="#s2-3" title="the provider's keys — set in 2.3">${S.keys.slice(0, 3).map(commas).join(' · ')} …</a>`
     : `<a class="sb-genkeys" href="#s2-3" title="the provider has not generated keys yet — generate them in 2.3">Generate Keys</a>`;
@@ -199,11 +202,11 @@ function renderStatebar() {
     </div>
     <span class="sb-hr"></span>
     <div class="sb-row">
+      ${promptSel}
       <div class="sb-lead">${lead}</div>
       <div class="sb-cluster">
         ${split > winStart ? `<span class="sb-win"><span class="sb-winbox">${win}</span><span class="sb-winlbl">token window</span></span>` : ''}
-        <span class="sb-slot${ends ? ' ends' : ''}"><span class="sb-blank" title="the next token goes here"><i class="t"></i><i class="l"></i><i class="t"></i>${st ? `<span class="sb-land">${sbChip(toks[split], landed ? ' pop' : '')}</span>` : ''}</span></span>
-        ${pair}
+        <span class="sb-end"><span class="sb-slot${ends ? ' ends' : ''}"><span class="sb-blank" title="the next token goes here"><i class="t"></i><i class="l"></i><i class="t"></i>${st ? `<span class="sb-land">${sbChip(toks[split], landed ? ' pop' : '')}</span>` : ''}</span><span class="sb-slotlbl">next token</span></span>${pair}</span>
       </div>
     </div>
     <div class="sb-narrow">${toggle}${pair}</div>`;
@@ -255,6 +258,10 @@ function renderDist(chartId, legendId, opts) {
 
 function render22() {
   const n = node(); const ids = ctxIds(); const atDepth = atEnd();
+  $('seq-reset').disabled = S.steps.length === 0 && S.cur === 0;
+  $('seq-prev').disabled = S.cur === 0;
+  $('seq-fwd').disabled = atDepth;
+  $('seq-end').disabled = atDepth;
   renderDist('dist-chart', 'dist-legend', { outcome: false, clickable: true });
   renderDist('dist-chart-27', 'dist-legend-27', { outcome: true, clickable: false });
   $('pmass-note').innerHTML = `In SynthID-Text the model always draws from the complete distribution over the entire vocabulary; the top eight shown here merely illustrate how the choice operates. For the given sentence these eight tokens cover <b>${pct(n.pmass8, 0)}</b> of the model's probability at this position (full-vocabulary entropy ${n.entropy.toFixed(1)} bits). Window of the last ${H} token IDs used by the watermark: <span class="mono">${win(ids).join(', ')}</span>.`;
@@ -304,6 +311,14 @@ function units() {
   }
   block('÷', `remainder after dividing by ${commas(TABLE_SIZE)}`, T, [h, T], 'the row to read', h % T, true);
   return u;
+}
+function renderTableauControls() {
+  if (!$('t-reset')) return;
+  const last = units().length;
+  $('t-reset').disabled = HA.step <= 1;
+  $('t-back').disabled = HA.step <= 1;
+  $('t-fwd').disabled = HA.step >= last;
+  $('t-skip').disabled = HA.step >= last;
 }
 function stepDelay(u) {
   if (!u) return 400;
@@ -357,6 +372,7 @@ function renderTableau(full) {
   const sc = $('tableau-scroll'); if (sc) sc.scrollTop = sc.scrollHeight;
   let folded = 0; for (let i = 0; i < k; i++) if (all[i].kind === 'res' && all[i].bold) folded++;
   $('t-play').textContent = done ? '↻ replay' : HA.playing ? '… working' : '▶ work it out';
+  renderTableauControls();
   $('t-progress').textContent = done || k <= 1 ? '' : `number ${Math.min(folded + 1, ingredients().length)} of ${ingredients().length}`;
 }
 function tickTableau() {
@@ -370,6 +386,7 @@ function stepTableau(d) {
   clearTimeout(HA.timer); HA.playing = false;
   const prev = HA.step; HA.step = Math.max(1, Math.min(units().length, HA.step + d));
   renderTableau(HA.step < prev);
+  renderTableauControls();
 }
 function targetRow() { const n = node(); return rowFor(S.keys, win(ctxIds()), n.cand[HA.cand].id, HA.layer); }
 function lookRows(target) {
@@ -418,7 +435,13 @@ function renderHash() {
       <div class="note" style="margin-bottom:12px">Worked as long-form arithmetic. Six numbers go in, one line at a time — the four window tokens, the candidate, and this layer's secret key. Each one is added under the running total, the bar closes, and the sum is multiplied by <span class="mono2">M = ${commas(MULT)}</span> and bumped by one. Multiplying by an eighteen-digit number six times is what makes the result unguessable.</div>
       <div id="tableau-scroll" class="tableau"><div class="tgrid" id="t-grid"></div></div>
       <div class="row" style="margin-top:14px">
-        <button id="t-play"></button><button id="t-back">◀</button><button id="t-fwd">▶</button>
+        <button id="t-play"></button>
+        <span class="seg transport">
+          <button id="t-reset" title="back to the first line"></button>
+          <button id="t-back" title="previous line"></button>
+          <button id="t-fwd" title="next line"></button>
+          <button id="t-skip" title="show the whole calculation"></button>
+        </span>
         <span class="note" id="t-progress"></span>
         <label class="ctl" style="margin-left:auto"><input type="checkbox" id="t-expand" ${HA.expand ? 'checked' : ''}> show the multiplication in full</label>
       </div>
@@ -433,9 +456,12 @@ function renderHash() {
       <div class="row" style="margin-top:14px"><button id="look-btn"></button><span class="note" id="look-note"></span></div>
     </div>`;
   HA.step = 1; HA.els = []; HA.drawn = 0; renderTableau(true); renderLookChrome(target);
+  $('t-reset').innerHTML = TRI_START; $('t-back').innerHTML = TRI_L; $('t-fwd').innerHTML = TRI_R; $('t-skip').innerHTML = TRI_END;
   $('t-play').addEventListener('click', playHash);
+  $('t-reset').addEventListener('click', () => stepTableau(-Infinity));
   $('t-back').addEventListener('click', () => stepTableau(-1));
   $('t-fwd').addEventListener('click', () => stepTableau(1));
+  $('t-skip').addEventListener('click', () => stepTableau(Infinity));
   $('t-expand').addEventListener('change', e => { HA.expand = e.target.checked; HA.step = 1; renderTableau(true); });
   $('look-btn').addEventListener('click', doLook);
 }
@@ -522,7 +548,7 @@ function renderDrawSlots(full) {
   $('draw-progress').textContent = DA.running ? `draw ${Math.min(slots.length + 1, total)} of ${total}`
     : slots.length ? `${slots.length} of ${total} drawn` : '';
   const fresh = !DA.running && slots.length === 0;
-  $('draw-btn').innerHTML = fresh ? `Draw 2<sup>${S.m}</sup> = ${total} candidates` : '↻ reset';
+  $('draw-btn').innerHTML = fresh ? `${TRI_R} Draw 2<sup>${S.m}</sup> = ${total} candidates` : `${TRI_START} reset`;
   $('draw-btn').disabled = atEnd();
   $('draw-back').disabled = DA.running || slots.length === 0;
   $('draw-fwd').disabled = DA.running || slots.length >= total || atEnd();
@@ -748,11 +774,11 @@ function render4() {
   if (k === 0) $('det-current').innerHTML = `<p class="note"><b>Your document:</b> nothing emitted yet. Run the tournament in 2.7 a few times.</p>`;
   else {
     let sum = 0; for (let i = np; i < ids.length; i++) sum += tokenScore(ids, i, S.keys, S.m);
-    const nCoins = k * S.m; const pv = binomTail(nCoins, Math.round(sum * S.m));
+    const nCoins = k * S.m; const pv = binomTail(nCoins, Math.round(sum * S.m)); const ev = evidence(pv);
     $('det-current').innerHTML = `<div class="stat">
       <div class="s"><div class="l">Your document</div><div class="v">${k} <small>tokens</small></div></div>
       <div class="s"><div class="l">Mean score</div><div class="v">${(sum / k).toFixed(3)}</div></div>
-      <div class="s"><div class="l">Chance of ≥ this if unwatermarked</div><div class="v">${pv < 0.001 ? '<0.1%' : pct(pv, 1)}</div></div></div>
+      <div class="s" title="${ev.line} (one-sided p-value ${ev.pct} at a mean score of ${(sum / k).toFixed(3)})"><div class="l">Evidence of a watermark</div><div class="v">${ev.lab}</div></div></div>
       <p class="note">${k} token${k > 1 ? 's' : ''} can't tell you much: even a perfect 1.000 has a ${pct(Math.pow(0.5, k * S.m), 1)} chance of happening by luck. Length is everything — below.</p>`;
   }
   // chart: null vs watermarked score distributions for docLen
@@ -788,6 +814,16 @@ function render4() {
   $('det-note').innerHTML = `Watermarked-document curve: positions sampled from the model's own continuations of the current prompt (${Object.keys(prompt().nodes).length} positions), your key, <i>m</i> = ${S.m}, temperature ${S.temp.toFixed(2)}; expected per-token score ${mu.toFixed(3)}. Unwatermarked curve: exact — fair coins, ${N} × ${S.m} of them. Change the prompt to see how a text's openness sets the separation.`;
 }
 
+function evidence(pv) {
+  // A p-value is hard to read off a card. Say how strong the evidence is, and restate it as
+  // a natural frequency ("about 1 in 4"), which people parse far more reliably than "24.6%".
+  const lab = pv > 0.05 ? 'None' : pv > 0.01 ? 'Weak' : pv > 0.001 ? 'Moderate' : 'Strong';
+  const many = pv >= 0.4 ? 'Most' : pv >= 0.25 ? 'Many' : `About 1 in ${commas(Math.round(1 / pv))}`;
+  const line = pv < 0.001 ? 'Fewer than 1 in 1,000 texts this long score this high without the watermark.'
+    : `${many} text${pv >= 0.25 ? 's' : 's'} this long score this high without the watermark${pv >= 0.25 ? ', so this is just what chance looks like' : ''}.`;
+  return { lab, line, pct: pv < 0.001 ? '<0.1%' : pct(pv, 1) };
+}
+
 // ---------- Section 3: real text (precomputed samples + in-browser tokenizer) ----------
 const KINDS = [['human', 'Human, public domain'], ['gemma-plain', 'Gemma-2-2b, unwatermarked'], ['gemma-wm', 'Gemma-2-2b, watermarked under the demo key']];
 const REGS = [['oratory', 'oratory'], ['prose', 'fiction'], ['law', 'law'], ['code', 'code']];
@@ -819,33 +855,42 @@ function render4s() {
   }
   const sm = smpCurrent(); S.smp.id = sm.id; sel.value = sm.id;
   $('smp-key').querySelectorAll('button').forEach(b => b.classList.toggle('on', b.dataset.v === S.smp.keyMode));
+  $('smp-view').querySelectorAll('button').forEach(b => b.classList.toggle('on', b.dataset.v === S.smp.view));
   const keys = smpKeys();
   if (!keys) {
     $('smp-stats').innerHTML = `<p class="note">Generate the key in 2.3 to score these under your own key — or switch back to the demo key, the one these Gemma samples were actually watermarked with.</p>`;
     $('smp-table').innerHTML = ''; $('smp-strip').innerHTML = ''; $('smp-note').innerHTML = ''; return;
   }
-  const r = scoreSample(sm, keys);
+  const r = scoreSample(sm, keys); const ev = evidence(r.pv);
   $('smp-stats').innerHTML = `
-    <div class="s"><div class="l">${esc(sm.label)}</div><div class="v">${r.n} <small>tokens scored${r.skipped ? `, ${r.skipped} repeated contexts skipped` : ''}</small></div></div>
+    <div class="s"><div class="l">${esc(sm.label)}</div><div class="v">${r.n} <small>tokens</small></div></div>
     <div class="s"><div class="l">Mean score</div><div class="v">${r.mean.toFixed(3)}</div></div>
-    <div class="s"><div class="l">Chance of ≥ this if unwatermarked</div><div class="v">${r.pv < 0.001 ? '<0.1%' : pct(r.pv, 1)}</div></div>`;
+    <div class="s" title="${ev.line} (one-sided p-value ${ev.pct} at a mean score of ${r.mean.toFixed(3)})"><div class="l">Evidence of a watermark</div><div class="v">${ev.lab}</div></div>`;
   // overview: every sample under this key, so the entropy story is visible at a glance
   const sig = S.smp.keyMode + '|' + keys.join(',');
   if (smpCache.sig !== sig) { const rows = {}; SAMPLES.samples.forEach(x => rows[x.id] = scoreSample(x, keys).mean); smpCache = { sig, rows }; }
   const cell = id => { const x = SAMPLES.samples.find(y => y.id === id); if (!x) return '<td></td>'; const v = smpCache.rows[id]; return `<td class="n${sm.id === id ? ' cur' : ''}" style="background:${smpShade(Math.max(0, Math.min(1, (v - 0.4) / 0.4)))};cursor:pointer" data-id="${id}">${v.toFixed(3)}</td>`; };
-  $('smp-table').innerHTML = `<table class="data"><tr><th>mean score under ${S.smp.keyMode === 'demo' ? 'the demo key' : 'your key'}</th>${KINDS.map(([, lab]) => `<th class="n">${lab.split(',')[0]}${lab.includes('watermarked under') ? ', watermarked' : lab.includes('unwatermarked') ? ', unwatermarked' : ''}</th>`).join('')}</tr>
-    ${REGS.map(([reg, lab]) => `<tr><td>${lab}</td>${cell(SAMPLES.samples.find(x => x.register === reg && x.kind === 'human')?.id)}${cell(`${reg}-plain`)}${cell(`${reg}-wm`)}</tr>`).join('')}</table>`;
+  const shortKind = { 'human': 'Human, public domain', 'gemma-plain': 'Gemma-2-2b, unwatermarked', 'gemma-wm': 'Gemma-2-2b, watermarked' };
+  const idFor = (reg, kind) => kind === 'human' ? SAMPLES.samples.find(x => x.register === reg && x.kind === 'human')?.id : `${reg}-${kind === 'gemma-wm' ? 'wm' : 'plain'}`;
+  $('smp-table').innerHTML = `<table class="data"><tr><th rowspan="2">Source</th><th class="n grp" colspan="${REGS.length}">Mean score under ${S.smp.keyMode === 'demo' ? 'the demo key' : 'your key'}</th></tr><tr>${REGS.map(([, lab]) => `<th class="n">${lab}</th>`).join('')}</tr>
+    ${KINDS.map(([kind]) => `<tr><td>${shortKind[kind]}</td>${REGS.map(([reg]) => cell(idFor(reg, kind))).join('')}</tr>`).join('')}</table>`;
   $('smp-table').querySelectorAll('td[data-id]').forEach(td => td.addEventListener('click', () => { S.smp.id = td.dataset.id; render4s(); }));
-  // the passage itself, one chip per token, shaded by score
+    // the passage itself: readable prose, or one chip per token shaded by score
   let html = '';
-  for (let i = 0; i < sm.prompt_ntok; i++) html += `<span class="sc pr" title="${esc(tokDesc(sm.toks[i]))} — prompt, not scored"><span class="tk">${esc(fmtTok(sm.toks[i]))}</span><span class="v">prompt</span></span>`;
-  r.scores.forEach((v, j) => { const t = sm.toks[sm.prompt_ntok + j];
-    html += v == null ? `<span class="sc pr" title="${esc(tokDesc(t))} — its 4-token context already occurred earlier, so it is not fresh evidence"><span class="tk">${esc(fmtTok(t))}</span><span class="v">repeat</span></span>`
-      : `<span class="sc${v >= 0.75 ? ' hi' : ''}" style="background:${smpShade(v)}" title="${esc(tokDesc(t))} — score ${v.toFixed(2)}"><span class="tk">${esc(fmtTok(t))}</span><span class="v">${v.toFixed(2)}</span></span>`; });
+  if (S.smp.view === 'text') {
+    html = `<span class="pr">${esc(sm.toks.slice(1, sm.prompt_ntok).join(''))}</span><span class="md">${esc(sm.toks.slice(sm.prompt_ntok).join(''))}</span>`;
+  } else {
+    for (let i = 0; i < sm.prompt_ntok; i++) html += `<span class="sc pr" title="${esc(tokDesc(sm.toks[i]))} — prompt, not scored"><span class="tk">${esc(fmtTok(sm.toks[i]))}</span><span class="v">prompt</span></span>`;
+    r.scores.forEach((v, j) => { const t = sm.toks[sm.prompt_ntok + j];
+      html += v == null ? `<span class="sc pr" title="${esc(tokDesc(t))} — its 4-token context already occurred earlier, so it is not fresh evidence"><span class="tk">${esc(fmtTok(t))}</span><span class="v">repeat</span></span>`
+        : `<span class="sc${v >= 0.75 ? ' hi' : ''}" style="background:${smpShade(v)}" title="${esc(tokDesc(t))} — score ${v.toFixed(2)}"><span class="tk">${esc(fmtTok(t))}</span><span class="v">${v.toFixed(2)}</span></span>`; });
+  }
+  $('smp-strip').className = S.smp.view === 'text' ? `passage${sm.register === 'code' ? ' code' : ''}` : 'scores';
   $('smp-strip').innerHTML = html;
-  const who = sm.kind === 'gemma-wm' ? 'This passage <b>was</b> watermarked under the demo key.' : sm.kind === 'gemma-plain' ? 'This passage was sampled from Gemma with the watermark <b>off</b>.' : sm.kind === 'human' ? `Human text (${esc(sm.source)}).` : 'Your pasted text.';
-  const keyNote = S.smp.keyMode === 'demo' ? '' : ' Under your key even the watermarked samples fall back to ≈0.5: the mark is there, but only the key that wrote it can read it.';
-  $('smp-note').innerHTML = `${who} A score is the share of a token's 4 coins that read 1; darker chips read more 1s; grey “repeat” chips sit in a context already seen earlier in the text and are skipped, as the real detector does. Unwatermarked text averages ≈0.5, watermarked text sits above it — by less in low-entropy registers like code, where the tournament rarely has a real choice.${keyNote} ${GLYPH_KEY}`;
+  const bodyLab = sm.kind === 'human' ? 'human text' : sm.kind === 'custom' ? 'your text' : 'Gemma-2-2b response';
+  $('smp-note').innerHTML = S.smp.view === 'text'
+    ? `${sm.prompt_ntok > 1 ? '<span class="lg pr">prompt</span> &nbsp; ' : ''}<span class="lg md">${bodyLab}</span>`
+    : `<span class="lg" style="background:${smpShade(1)}"></span> more 1s &nbsp; <span class="lg" style="background:${smpShade(0)}"></span> more 0s &nbsp; <span class="lg pr">not scored</span> &nbsp; <i>m</i> = 4`;
 }
 async function loadTokenizer() {
   if (location.protocol === 'file:') throw new Error('needs http');
@@ -881,9 +926,22 @@ function renderAll() {
 function setStep(step) { if (animating) return; S.steps = S.steps.slice(0, S.cur); S.steps.push(step); S.draw = null; }
 function chooseManual(slot) { if (atEnd()) return; setStep({ slot, how: 'manual' }); S.cur++; renderAll(); }
 function plainSample() { if (atEnd()) return; setStep({ slot: sample(candProbs()), how: 'plain' }); renderAll(); }
-function stepNext() { if (animating) return; if (curStep()) { S.cur++; S.draw = null; renderAll(); } else if (!atEnd()) { if (S.wm && S.keys) runTournament(); else plainSample(); } }
+function stepNext() { if (animating) return; if (curStep()) { S.cur++; S.draw = null; renderAll(); } else if (!atEnd()) { if (S.wm && S.keys) runTournament(ROUND_MS_FAST); else plainSample(); } }
 function stepPrev() { if (animating || S.cur === 0) return; S.cur--; S.draw = null; renderAll(); }
 function resetSeq() { S.steps = []; S.cur = 0; S.draw = null; renderAll(); }
+// ⏩ : fill in every position left in the tree at once (no bracket animation)
+function stepToEnd() {
+  if (animating) return;
+  while (!atEnd()) {
+    if (curStep()) { S.cur++; S.draw = null; continue; }
+    if (S.wm && S.keys) { const n = node(), probs = candProbs(), w = win(ctxIds()), coins = coinsFor(n, w, S.keys, S.m);
+      const draw = Array.from({ length: 2 ** S.m }, () => sample(probs)); const b = runBracket(draw, coins, S.m);
+      setStep({ slot: b.winner, how: 'emit', bracket: b, draw }); }
+    else setStep({ slot: sample(candProbs()), how: 'plain' });
+    S.cur++;
+  }
+  S.cur = Math.min(S.cur, S.steps.length); renderAll();
+}
 function setKey(k) {
   const first = !S.keys; S.keys = k; S.draw = null;
   S.steps.forEach(st => { delete st.bracket; delete st.draw; });   // coins changed: old brackets no longer apply
@@ -892,7 +950,11 @@ function setKey(k) {
 }
 function doDraw() { if (animating) return; daSkip(); render26(); }
 let animating = false;
-function runTournament() {
+// 2.7's Run button walks the bracket at reading pace, because watching it resolve is the point
+// there. Stepping the sentence along runs the same animation much faster: you still see the
+// rounds, but you are not kept waiting for a token.
+const ROUND_MS = 620, ROUND_MS_FAST = 130;
+function runTournament(ms = ROUND_MS) {
   if (!S.keys || animating || atEnd()) return;
   if (!S.draw || S.draw.length !== 2 ** S.m) doDraw();
   const n = node(); const coins = coinsFor(n, win(ctxIds()), S.keys, S.m);
@@ -902,10 +964,10 @@ function runTournament() {
   $('bracket').innerHTML = bracketHTML(b, n, 0);   // show the draw before any round is judged
   const tick = () => {
     r++; $('bracket').innerHTML = bracketHTML(b, n, r);
-    if (r <= S.m) setTimeout(tick, 620);
+    if (r <= S.m) setTimeout(tick, ms);
     else { animating = false; setStep({ slot: b.winner, how: 'emit', bracket: b, draw }); renderAll(); }
   };
-  setTimeout(tick, 620);
+  setTimeout(tick, ms);
 }
 
 // ---------- wiring ----------
@@ -920,12 +982,13 @@ $('coin-inputs').addEventListener('click', e => { const b = e.target.closest('#t
 $('temp').addEventListener('input', e => { S.temp = +e.target.value; S.draw = null; renderAll(); });
 $('statebar-in').addEventListener('click', e => {
   const el = e.target.closest('[data-act]'); if (!el || el.disabled) return;
+  if (el.dataset.act === 'prompt') return;                                       // handled on 'change', not 'click'
   if (el.dataset.act === 'prev') stepPrev();
   else if (el.dataset.act === 'fwd') stepNext();
   else if (el.dataset.act === 'wm' && S.keys) { S.wm = !S.wm; renderStatebar(); }   // no keys: the toggle is inert until 2.3
 });
+$('statebar-in').addEventListener('change', e => { const el = e.target.closest('[data-act="prompt"]'); if (el) { S.pid = el.value; resetSeq(); } });
 if (window.ResizeObserver) new ResizeObserver(sbNarrow).observe($('statebar-in'));
-$('reset-seq').addEventListener('click', resetSeq);
 $('gen-key').addEventListener('click', () => { setKey(randKey()); window.scrollTo({ top: $('m23').offsetTop - 80 }); });
 ['reroll-key', 'reroll-key-2', 'reroll-key-3', 'reroll-key-4'].forEach(id => $(id).addEventListener('click', () => { if (S.keys) setKey(randKey()); }));
 $('m').addEventListener('input', e => { S.m = +e.target.value; S.draw = null; renderAll(); });
@@ -936,7 +999,7 @@ $('draw-skip').addEventListener('click', daSkip);
 $('m2').addEventListener('input', e => { $('m').value = e.target.value; $('m').dispatchEvent(new Event('input')); });
 $('hash-cand').addEventListener('change', e => hashSelect(+e.target.value, HA.layer, false));
 $('hash-layer').addEventListener('change', e => hashSelect(HA.cand, +e.target.value, false));
-$('run-btn').addEventListener('click', runTournament);
+$('run-btn').addEventListener('click', () => runTournament());
 $('rerun-27').addEventListener('click', () => { if (S.keys) render27(); });
 $('proof-toggle').addEventListener('change', () => { if (S.keys) render27(); });
 $('doclen').addEventListener('input', e => { S.docLen = +e.target.value; $('doclen-v').textContent = S.docLen; $('len-presets').querySelectorAll('button').forEach(b => b.classList.toggle('on', +b.dataset.n === S.docLen)); render4(); });
@@ -946,8 +1009,16 @@ $('thr').addEventListener('input', e => { S.thr = +e.target.value; $('thr-v').te
 if ($('smp-select')) {
   $('smp-select').addEventListener('change', e => { S.smp.id = e.target.value; render4s(); });
   $('smp-key').querySelectorAll('button').forEach(b => b.addEventListener('click', () => { S.smp.keyMode = b.dataset.v; render4s(); }));
-  $('smp-go').addEventListener('click', scorePasted);
+  $('smp-view').querySelectorAll('button').forEach(b => b.addEventListener('click', () => { S.smp.view = b.dataset.v; render4s(); }));
+  if ($('smp-go')) $('smp-go').addEventListener('click', scorePasted);
 }
 document.querySelectorAll('.glyph-key').forEach(el => el.innerHTML = GLYPH_KEY);
+$('seq-reset').innerHTML = TRI_START; $('seq-prev').innerHTML = TRI_L; $('seq-fwd').innerHTML = TRI_R; $('seq-end').innerHTML = TRI_END;
+$('seq-reset').addEventListener('click', resetSeq);
+$('seq-prev').addEventListener('click', stepPrev);
+$('seq-fwd').addEventListener('click', stepNext);
+$('seq-end').addEventListener('click', stepToEnd);
+$('draw-back').innerHTML = TRI_L; $('draw-fwd').innerHTML = TRI_R; $('draw-skip').innerHTML = TRI_END;
+$('run-btn').querySelector('.ico').innerHTML = TRI_R; $('rerun-27').querySelector('.ico').innerHTML = TRI_START;
 renderAll();
 })();

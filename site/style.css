@@ -99,6 +99,17 @@ input[type=range] { width: 160px; accent-color: var(--blue); }
 #statebar .sb-wm.on .sb-knob { transform: translateX(11px); }
 /* the sentence: earlier tokens feed off to the left and clip; the window, the blank and the pair hold still */
 #statebar .sb-row { display: flex; flex-wrap: nowrap; justify-content: flex-end; align-items: center; padding-bottom: 19px; overflow: hidden; }
+/* the prompt picker holds the left edge of the sentence line; on a narrow bar the sentence drops beneath it */
+#statebar .sb-prompt { flex: 0 1 auto; min-width: 0; max-width: 240px; margin-right: 14px; padding: 3px 6px; border: 1px solid var(--axis); border-radius: 5px; background: white; font-family: var(--sans); font-size: 0.78rem; color: var(--ink-2); text-overflow: ellipsis; }
+#statebar.narrow .sb-row { flex-wrap: wrap; }
+/* the sentence keeps one line, and the window is never cut: only the lead clips */
+#statebar.narrow .sb-cluster { flex-wrap: nowrap; flex: 0 0 auto; }
+#statebar.narrow .sb-winbox { flex: 0 0 auto; overflow: visible; }
+#statebar.narrow .sb-lead { flex: 1 1 0; min-width: 0; }
+/* the slot sits at the right edge here, so its label hangs left of it rather than off-screen */
+#statebar.narrow .sb-slotlbl { left: auto; right: 0; text-align: right; }
+#statebar.narrow .sb-prompt { flex: 1 1 100%; max-width: none; margin: 0 0 8px; }
+#statebar.narrow .sb-row .sb-lead { flex: 1 1 0; }
 /* basis 0: the window cluster is laid out first and the lead takes whatever is left, clipping mid-token rather than wrapping */
 #statebar .sb-lead { display: flex; gap: 3px; align-items: center; justify-content: flex-end; flex: 1 1 0; min-width: 0; overflow: hidden; flex-wrap: nowrap; margin-right: 3px; }
 /* only when the whole window cannot sit beside the blank does the cluster break — to the left of the blank, keeping the window whole */
@@ -106,8 +117,11 @@ input[type=range] { width: 160px; accent-color: var(--blue); }
 #statebar .sb-win { position: relative; display: flex; align-items: center; flex: 0 1 auto; min-width: 0; }
 #statebar .sb-winbox { display: flex; gap: 3px; padding: 3px; border: 1px dotted var(--violet); border-radius: 6px; flex: 0 1 auto; min-width: 0; overflow: hidden; justify-content: flex-end; }
 #statebar .sb-winlbl { position: absolute; top: 100%; left: 0; right: 0; margin-top: 2px; text-align: center; font-size: 0.62rem; letter-spacing: 0.05em; text-transform: uppercase; color: var(--violet); white-space: nowrap; }
+#statebar .sb-slotlbl { position: absolute; top: 100%; left: 0; right: 0; margin-top: 2px; text-align: center; font-size: 0.62rem; letter-spacing: 0.05em; text-transform: uppercase; color: var(--violet); white-space: nowrap; }
 #statebar .chip { flex: 0 0 auto; padding: 2px 7px; border-radius: 5px; font-family: "JetBrains Mono", var(--mono); font-size: 0.8rem; }
 #statebar .chip.slide { animation: tokSlide .3s ease both; }
+/* the empty slot and its stepper are one unit: they never break onto separate lines */
+#statebar .sb-end { display: inline-flex; flex: 0 0 auto; flex-wrap: nowrap; align-items: center; }
 #statebar .sb-slot { position: relative; display: inline-flex; flex: 0 0 auto; align-items: center; gap: 5px; margin-left: 5px; }
 #statebar .sb-slot.ends { opacity: 0.3; }
 #statebar .sb-blank { position: relative; display: inline-flex; align-items: flex-end; height: 20px; margin-top: 10px; }
@@ -259,7 +273,7 @@ table.coins td.sel:hover .coin { transform: scale(1.15); }
 @media (max-width: 700px) { .toc { columns: 1; } }
 
 /* 3 · real-text detector */
-#smp-strip { max-height: 280px; overflow: auto; padding: 8px; border: 1px solid var(--grid); border-radius: 8px; background: #fbfbf9; align-content: flex-start; }
+#smp-strip.scores { max-height: 280px; overflow: auto; padding: 8px; border: 1px solid var(--grid); border-radius: 8px; background: #fbfbf9; align-content: flex-start; }
 #smp-strip .sc.pr { background: #eeede8; border-color: transparent; color: var(--muted); }
 #smp-strip .sc.pr .v { font-weight: 400; font-size: 0.7rem; }
 #smp-strip .sc.hi { color: white; }
@@ -268,3 +282,16 @@ table.coins td.sel:hover .coin { transform: scale(1.15); }
 textarea { width: 100%; box-sizing: border-box; font: inherit; font-size: 0.9rem; padding: 8px 10px; border: 1px solid var(--axis); border-radius: 6px; background: white; resize: vertical; }
 details summary { cursor: pointer; font-weight: 600; font-size: 0.9rem; }
 details[open] summary { margin-bottom: 8px; }
+#smp-table table.data th.grp { text-align: center; border-bottom: 1px solid var(--axis); }
+#smp-table table.data th.n, #smp-table table.data td.n { text-align: center; }
+#smp-strip.passage { max-height: 280px; overflow: auto; padding: 14px 16px; border: 1px solid var(--grid); border-radius: 8px; background: var(--page); white-space: pre-wrap; font-family: var(--serif); font-size: 0.95rem; line-height: 1.6; }
+#smp-strip.passage.code { font-family: var(--mono); font-size: 0.82rem; line-height: 1.5; }
+#smp-strip.passage .pr { background: #f2e3bb; -webkit-box-decoration-break: clone; box-decoration-break: clone; }
+#smp-note .lg { display: inline-block; min-width: 12px; height: 12px; border-radius: 3px; vertical-align: -1px; margin-right: 2px; border: 1px solid var(--axis); }
+#smp-note .lg.pr { background: #f2e3bb; padding: 0 6px; height: auto; color: var(--ink-2); }
+#smp-strip.passage .md { background: white; -webkit-box-decoration-break: clone; box-decoration-break: clone; }
+#smp-note .lg.md { background: white; padding: 0 6px; height: auto; color: var(--ink-2); }
+
+/* transport controls: ⏮ ◀ ▶ ⏩, the same everywhere they appear */
+.transport button { display: inline-flex; align-items: center; justify-content: center; min-width: 30px; }
+button .ico { display: inline-flex; align-items: center; margin-right: 7px; }
