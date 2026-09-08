@@ -44,3 +44,22 @@ python precompute/samples.py                           # ~10 min; --selftest pri
 
 The `site/` pages must be served over HTTP for their dev fetches to work; the
 `dist/` pages open from disk with no server at all.
+
+## Publishing
+
+The page is served at [ulyssespascal.com/apps/synthid](https://ulyssespascal.com/apps/synthid).
+The site repo (`upascal/ulyssespascal-com`) does not carry a copy: its
+`external-apps.json` names this repo and a tag, and `scripts/fetch-apps.mjs`
+downloads that tag's `dist/` into `public/apps/synthid/` at build time.
+
+`dist/` is committed here, so a release is *build, commit, then tag* — tagging
+without rebuilding ships a stale page:
+
+```bash
+python build.py
+git commit -am "..."            # must include the dist/ changes
+git tag -a v1.1.0 -m "..." && git push --follow-tags
+```
+
+Then bump `ref` for the `synthid` app in the site's `external-apps.json` and
+push that; Vercel redeploys and picks up the new tag.
