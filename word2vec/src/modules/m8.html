@@ -1,0 +1,24 @@
+<div class="module" id="m8">
+  <div class="row">
+    <span id="m8-bar"></span>
+    <label class="ctl">pairs per frame <span class="seg" id="m8-speed"><button data-v="1">1</button><button data-v="10">10</button><button data-v="100" class="on">100</button><button data-v="1000">1,000</button></span></label>
+    <label class="ctl"><input type="checkbox" id="m8-out"> show output vectors v′</label>
+  </div>
+  <div class="stat" id="m8-stats"></div>
+  <div class="split8">
+    <div>
+      <h4>Input vectors, projected to 2D (PCA, approximate)</h4>
+      <div id="m8-scatter"></div>
+    </div>
+    <div>
+      <h4>Nearest neighbours</h4>
+      <label class="ctl" style="margin-bottom:8px">of <select id="m8-word"></select></label>
+      <div id="m8-nn"></div>
+      <p class="note">by cosine similarity, in all 5 dimensions</p>
+    </div>
+  </div>
+  <div class="cols2" style="margin-top:12px">
+    <div><h4>Loss per pair</h4><div id="m8-loss"></div></div>
+    <div><h4>Learning rate <span style="text-transform:none">α</span></h4><div id="m8-alpha"></div></div>
+  </div>
+</div>

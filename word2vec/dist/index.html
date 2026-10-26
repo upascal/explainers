@@ -1,0 +1,1256 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>How word2vec learns</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;700&display=swap">
+<style>
+:root {
+  color-scheme: light;
+  --page: #f9f9f7;
+  --surface: #fcfcfb;
+  --ink: #0b0b0b;
+  --ink-2: #52514e;
+  --muted: #898781;
+  --grid: #e1e0d9;
+  --axis: #c3c2b7;
+  --border: rgba(11,11,11,0.10);
+  --blue: #2a78d6;
+  --blue-100: #cde2fb;
+  --blue-250: #86b6ef;
+  --orange: #eb6834;
+  --aqua: #1baf7a;
+  --red: #e34948;
+  --violet: #4a3aa7;
+  --serif: "Iowan Old Style", "Palatino Linotype", Palatino, Georgia, serif;
+  --sans: system-ui, -apple-system, "Segoe UI", sans-serif;
+  --mono: ui-monospace, "SF Mono", Menlo, Consolas, monospace;
+}
+* { box-sizing: border-box; }
+html { scroll-behavior: smooth; }
+body { margin: 0; background: var(--page); color: var(--ink); font-family: var(--serif); font-size: 18px; line-height: 1.55; }
+main { max-width: 760px; margin: 0 auto; padding: 0 20px 120px; }
+h1 { font-size: 2.4rem; line-height: 1.1; margin: 64px 0 12px; font-weight: 600; letter-spacing: -0.01em; }
+h2 { font-size: 1.7rem; margin: 96px 0 8px; font-weight: 600; letter-spacing: -0.01em; }
+h3 { font-size: 1.2rem; margin: 48px 0 8px; font-weight: 600; }
+h2 .num, h3 .num { color: var(--muted); font-weight: 400; margin-right: 10px; font-family: var(--sans); font-size: 0.85em; }
+p { margin: 0 0 1em; }
+.lede { font-size: 1.25rem; color: var(--ink-2); line-height: 1.45; }
+a { color: var(--blue); }
+small, .small { font-size: 0.85rem; color: var(--ink-2); }
+.sans { font-family: var(--sans); }
+.mono { font-family: var(--mono); font-size: 0.9em; }
+code { font-family: var(--mono); font-size: 0.88em; background: #f0efec; padding: 1px 5px; border-radius: 4px; }
+hr { border: 0; border-top: 1px solid var(--grid); margin: 48px 0; }
+ul { padding-left: 1.2em; }
+li { margin-bottom: 0.4em; }
+blockquote { margin: 1.5em 0; padding-left: 1em; border-left: 3px solid var(--axis); color: var(--ink-2); }
+.callout { background: var(--surface); border: 1px solid var(--border); border-left: 3px solid var(--blue); padding: 14px 18px; margin: 1.5em 0; font-family: var(--sans); font-size: 0.95rem; }
+.callout.warn { border-left-color: var(--orange); }
+.callout .t { font-weight: 600; margin-bottom: 4px; }
+.note { font-family: var(--sans); font-size: 0.85rem; color: var(--ink-2); }
+
+/* controls */
+.module { background: var(--surface); border: 1px solid var(--border); border-radius: 10px; padding: 18px 20px; margin: 1.4em 0 2em; font-family: var(--sans); font-size: 0.95rem; }
+.module h4 { margin: 0 0 12px; font-size: 0.8rem; text-transform: uppercase; letter-spacing: 0.08em; color: var(--muted); font-weight: 600; }
+.row { display: flex; flex-wrap: wrap; gap: 10px 18px; align-items: center; margin-bottom: 12px; }
+label.ctl { display: inline-flex; align-items: center; gap: 8px; font-size: 0.9rem; color: var(--ink-2); }
+label.ctl b { color: var(--ink); font-weight: 600; min-width: 2.2em; text-align: right; font-variant-numeric: tabular-nums; }
+select, button { font: inherit; font-family: var(--sans); }
+select { padding: 6px 10px; border: 1px solid var(--axis); border-radius: 6px; background: white; max-width: 100%; }
+button { padding: 7px 14px; border: 1px solid var(--axis); border-radius: 6px; background: white; cursor: pointer; }
+button:hover { border-color: var(--ink-2); }
+button.primary { background: var(--blue); border-color: var(--blue); color: white; }
+button.primary:hover { background: #256abf; }
+button:disabled { opacity: 0.45; cursor: default; }
+input[type=range] { width: 160px; accent-color: var(--blue); }
+.seg { display: inline-flex; border: 1px solid var(--axis); border-radius: 6px; overflow: hidden; }
+.seg button { border: 0; border-radius: 0; padding: 5px 11px; background: white; }
+.seg button + button { border-left: 1px solid var(--axis); }
+.seg button.on { background: var(--ink); color: white; }
+
+/* tokens */
+.chips { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; }
+.chip { display: inline-block; padding: 3px 9px; border-radius: 6px; background: #eeede8; font-family: var(--mono); font-size: 0.9rem; white-space: pre; border: 1px solid transparent; }
+
+/* sticky state bar */
+#statebar { position: sticky; top: 0; z-index: 20; background: rgba(249,249,247,0.94); backdrop-filter: blur(6px); border-bottom: 1px solid var(--grid); padding: 10px 16px; font-family: var(--sans); }
+#statebar .in { max-width: 760px; margin: 0 auto; display: grid; gap: 9px; }
+#statebar .sb-set { display: flex; flex-wrap: wrap; justify-content: flex-start; gap: 8px 24px; align-items: center; }
+#statebar .sb-vals { display: inline-flex; gap: 16px; align-items: center; flex: 0 0 auto; font-size: 0.8rem; font-variant-caps: all-small-caps; letter-spacing: 0.06em; color: var(--muted); white-space: nowrap; }
+#statebar .sb-vals a { color: var(--muted); text-decoration: none; }
+#statebar .sb-vals a:hover { color: var(--ink); }
+#statebar .sb-vals b { color: var(--ink); font-variant-caps: normal; font-weight: 600; letter-spacing: 0; }
+#statebar .sb-hr { height: 1px; background: #eceae4; }
+
+/* shared */
+svg text { font-family: var(--sans); }
+svg text:not([fill]) { fill: var(--ink-2); }
+.lc { text-transform: none; }
+.legend { display: flex; flex-wrap: wrap; gap: 6px 16px; font-size: 0.8rem; color: var(--ink-2); margin-top: 8px; }
+.legend i { display: inline-block; width: 10px; height: 10px; border-radius: 2px; margin-right: 6px; vertical-align: -1px; }
+.stat { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 12px; margin: 12px 0; }
+.stat .s { background: white; border: 1px solid var(--grid); border-radius: 8px; padding: 10px 12px; }
+.stat .s .l { font-size: 0.75rem; color: var(--muted); text-transform: uppercase; letter-spacing: 0.06em; }
+.stat .s .v { font-size: 1.5rem; font-weight: 600; font-variant-numeric: tabular-nums; line-height: 1.2; margin-top: 2px; }
+.stat .s .v small { font-size: 0.8rem; color: var(--ink-2); font-weight: 400; }
+table.data { border-collapse: collapse; font-family: var(--sans); font-size: 0.88rem; width: 100%; margin: 12px 0; }
+table.data th, table.data td { text-align: left; padding: 6px 8px; border-bottom: 1px solid var(--grid); }
+table.data th { font-size: 0.78rem; color: var(--ink-2); font-weight: 600; }
+table.data td.n { text-align: right; font-variant-numeric: tabular-nums; }
+.toc { font-family: var(--sans); font-size: 0.9rem; columns: 2; column-gap: 30px; margin: 1.5em 0; }
+.toc a { display: block; text-decoration: none; color: var(--ink-2); padding: 2px 0; }
+.toc a:hover { color: var(--blue); }
+footer { margin-top: 100px; font-family: var(--sans); font-size: 0.85rem; color: var(--ink-2); border-top: 1px solid var(--grid); padding-top: 20px; }
+footer .fn-h { margin: 0 0 14px; font-size: 0.78rem; text-transform: uppercase; letter-spacing: 0.08em; color: var(--muted); font-weight: 600; }
+footer ol.fn { margin: 0; padding-left: 1.6em; }
+footer ol.fn li { margin-bottom: 10px; line-height: 1.55; padding-left: 4px; }
+footer ol.fn li:last-child { margin-bottom: 0; }
+footer ol.fn li::marker { color: var(--muted); font-variant-numeric: tabular-nums; }
+@media (max-width: 700px) { .toc { columns: 1; } }
+.transport button { display: inline-flex; align-items: center; justify-content: center; min-width: 30px; }
+
+/* this page: input vectors v are violet, output vectors v′ aqua; real pairs blue, noise orange */
+:root { --violet-100: #e4e1f5; --aqua-100: #d3f1e5; --orange-100: #fbe2d6; }
+.chip.v { background: var(--violet-100); color: var(--violet); border-color: #c4bdea; }
+.chip.vo { background: var(--aqua-100); color: #0e7a53; border-color: #a6e2c9; }
+.chip.neg { background: var(--orange-100); color: #8a3a1a; border-color: #f6c3ad; }
+.chip.skip { background: #f3f2ee; color: var(--muted); text-decoration: line-through; }
+.chip.drop { color: #b6b4ad; background: #f3f2ee; text-decoration: line-through; }
+.badge { display: inline-block; font-size: 0.68rem; text-transform: uppercase; letter-spacing: 0.06em; padding: 1px 6px; border-radius: 4px; margin-left: 6px; vertical-align: 1px; }
+.badge.pos { background: var(--blue-100); color: #1f5ea8; }
+.badge.neg { background: var(--orange-100); color: #8a3a1a; }
+.formula { font-size: 1.15rem; text-align: center; margin: 1em 0 1.1em; }
+table { font-variant-numeric: tabular-nums; }
+main > table { border-collapse: collapse; font-family: var(--sans); font-size: 0.85rem; width: 100%; margin: 1.2em 0 1.6em; }
+main > table th, main > table td { text-align: left; padding: 6px 8px; border-bottom: 1px solid var(--grid); vertical-align: top; }
+main > table th { font-size: 0.78rem; color: var(--ink-2); border-bottom-color: var(--axis); }
+main > table td:first-child { color: var(--ink-2); white-space: nowrap; }
+
+/* sticky bar */
+#statebar .sb-row { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 16px; font-size: 0.78rem; color: var(--muted); }
+#statebar .sb-pair { display: inline-flex; align-items: center; gap: 6px; white-space: nowrap; }
+#statebar .sb-sent { display: inline-flex; flex-wrap: wrap; gap: 3px; }
+#statebar .chip { padding: 1px 6px; border-radius: 5px; font-family: "JetBrains Mono", var(--mono); font-size: 0.76rem; }
+
+/* layout helpers */
+.cols2 { display: grid; grid-template-columns: 1fr 1fr; gap: 18px; }
+.split { display: grid; grid-template-columns: minmax(0, 1fr) 300px; gap: 18px; align-items: start; }
+.split8 { display: grid; grid-template-columns: minmax(0, 1fr) 200px; gap: 18px; align-items: start; }
+.tscroll { overflow-x: auto; min-width: 0; }
+@media (max-width: 760px) { .split, .split8 { grid-template-columns: minmax(0, 1fr); } }
+@media (max-width: 600px) { .cols2 { grid-template-columns: minmax(0, 1fr); } }
+.note b { color: var(--ink); }
+
+/* the shared play bar */
+.playbar button { width: 38px; height: 32px; padding: 0; color: var(--ink); }
+.playbar button:disabled { opacity: 0.35; cursor: default; }
+.playbar button.on { background: var(--ink); color: white; }
+
+/* 1 */
+.sline { font-family: var(--mono); font-size: 0.84rem; line-height: 1.75; color: var(--ink-2); }
+.sline .hl { color: var(--violet); }
+.sh { background: var(--aqua-100); color: #0e7a53; border-radius: 3px; padding: 0 3px; }
+
+/* 2 */
+.corpus { max-height: 330px; overflow-y: auto; padding: 8px 10px; border: 1px solid var(--grid); border-radius: 8px; background: white; }
+.corpus .w { cursor: pointer; border-radius: 3px; padding: 0 1px; }
+.corpus .w:hover { background: #eeede8; }
+.corpus .w.on { background: var(--violet-100); color: var(--violet); }
+.vocabwrap { max-height: 330px; overflow-y: auto; border: 1px solid var(--grid); border-radius: 8px; background: white; }
+table.vocab { margin: 0; font-size: 0.82rem; }
+table.vocab td { padding: 3px 8px; cursor: pointer; }
+table.vocab tr:hover td { background: #f6f5f1; }
+table.vocab tr.on td { background: var(--violet-100); }
+table.vocab td.rk { color: var(--muted); width: 2em; }
+td.bar { width: 40%; }
+td.bar i { display: block; height: 8px; border-radius: 2px; background: var(--axis); }
+#m8-nn td.bar i { background: var(--violet); opacity: 0.6; }
+#m8-nn tr { cursor: pointer; }
+
+/* vector tables */
+table.vec { margin: 0; font-size: 0.84rem; }
+table.vec th { white-space: nowrap; }
+table.vec td.n { font-family: "JetBrains Mono", var(--mono); font-size: 0.8rem; min-width: 64px; }
+table.vec td.dim { color: #c9c7c0; }
+table.vec tr.r-v th:first-child { color: var(--violet); }
+table.vec tr.r-vo th:first-child { color: #0e7a53; }
+table.vec tr.r-v td.n { color: var(--violet); }
+table.vec tr.r-vo td.n { color: #0e7a53; }
+table.vec tr.r-pend th, table.vec tr.r-pend td.n { color: var(--violet); }
+table.vec tr.r-pend { background: #f6f5fc; }
+table.vec td.score { font-weight: 700; }
+table.vec td.scal { font-family: "JetBrains Mono", var(--mono); font-size: 0.8rem; }
+table.vec tr.wait { opacity: 0.55; }
+table.vec tr.tot th { font-weight: 700; }
+table.vec input { width: 70px; padding: 3px 4px; border: 1px solid var(--grid); border-radius: 4px; font-family: "JetBrains Mono", var(--mono); font-size: 0.8rem; text-align: right; color: inherit; background: white; }
+table.vec input:focus { outline: 2px solid var(--blue-250); border-color: var(--blue); }
+table.upd th .chip { margin-right: 2px; }
+table.upd td.n { min-width: 58px; }
+.new, .pop { animation: popIn .45s ease both; animation-delay: calc(var(--d, 0) * 90ms); }
+.newrow { background: #fff7f2; }
+@keyframes popIn { from { opacity: 0; transform: translateY(-5px); background: #fff3c4; } 60% { opacity: 1; background: #fff3c4; } to { transform: none; } }
+td.merge input { animation: mergeIn .5s ease; }
+@keyframes mergeIn { 50% { transform: translateY(5px); box-shadow: 0 0 0 3px var(--blue-100); } }
+.sumline { font-family: "JetBrains Mono", var(--mono); font-size: 0.82rem; margin: 12px 0 0; color: var(--ink-2); }
+.sumline b { color: var(--ink); }
+.pairhead { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 8px; margin-bottom: 10px; }
+.pairhead .note { margin-left: auto; }
+
+/* the pair plane */
+.pplane { background: white; border: 1px solid var(--grid); border-radius: 8px; padding: 8px 10px; }
+.pp-title { font-size: 0.78rem; color: var(--ink-2); margin-bottom: 2px; }
+.pp-a { color: var(--violet); }
+.pp-b { color: var(--aqua); }
+.pp-a2 { color: #8a7fd0; }
+svg .pp-lab { font-family: "JetBrains Mono", var(--mono); font-size: 11px; fill: currentColor; }
+svg .pp-ang { font-size: 10px; fill: var(--muted); }
+
+/* 3 */
+.sentwalk { display: flex; flex-wrap: wrap; gap: 26px 5px; align-items: center; padding: 14px 4px 26px; }
+.winbox { position: relative; display: inline-flex; gap: 5px; padding: 3px; border: 1px dotted var(--violet); border-radius: 7px; }
+.winlbl { position: absolute; top: 100%; left: 0; right: 0; margin-top: 3px; text-align: center; font-size: 0.66rem; letter-spacing: 0.05em; text-transform: uppercase; color: var(--violet); white-space: nowrap; }
+.pairs { display: flex; flex-wrap: wrap; gap: 8px; }
+.pairchip { display: inline-flex; gap: 2px; padding: 2px; border: 1px solid var(--blue-250); border-radius: 8px; background: white; }
+.pairchip .chip { font-size: 0.8rem; padding: 2px 7px; }
+
+/* 7 */
+.draws { display: inline-flex; flex-wrap: wrap; gap: 6px; align-items: center; }
+.dempty { display: inline-block; width: 58px; height: 26px; border-radius: 6px; border: 1px dashed var(--axis); }
+tr.skipped { opacity: 0.6; }
+
+/* 8 */
+#scatter .pt circle { fill: var(--ink-2); }
+#scatter .pt text { font-family: "JetBrains Mono", var(--mono); font-size: 11px; fill: var(--ink-2); }
+#scatter .pt { cursor: pointer; }
+#scatter .pt.sel circle { fill: var(--violet); }
+#scatter .pt.sel text { fill: var(--violet); font-weight: 700; }
+#scatter .pt.nb circle { fill: #8a7fd0; }
+#scatter .pt.nb text { fill: var(--violet); }
+#scatter .pt.out circle { fill: var(--aqua); }
+#scatter .pt.out text { fill: #0e7a53; font-style: italic; font-size: 10px; }
+#m8-scatter { background: white; border: 1px solid var(--grid); border-radius: 8px; }
+
+/* 9, 10 diagrams */
+svg .dg rect, svg .dg circle { fill: white; stroke: var(--axis); }
+svg .dg text { font-family: "JetBrains Mono", var(--mono); font-size: 12px; fill: var(--ink); }
+svg .dg.v rect { fill: var(--violet-100); stroke: #c4bdea; }
+svg .dg.v text { fill: var(--violet); }
+svg .dg.vo rect { fill: var(--aqua-100); stroke: #a6e2c9; }
+svg .dg.vo text { fill: #0e7a53; }
+svg .dg.avg circle { fill: #f6f5fc; stroke: #c4bdea; }
+svg .dg.avg text { font-family: var(--sans); font-size: 10px; fill: var(--violet); }
+svg .dg-t { font-size: 13px; font-weight: 600; fill: var(--ink); }
+svg .dg-n { font-size: 11px; fill: var(--ink-2); }
+svg .dg-s { font-family: var(--serif); font-size: 14px; fill: var(--ink); }
+.below { display: grid; grid-template-columns: 300px minmax(0, 1fr); gap: 18px; align-items: start; margin-top: 14px; }
+.below > .note, .below p.note { margin: 0; }
+@media (max-width: 640px) { .below { grid-template-columns: minmax(0, 1fr); } }
+@media (max-width: 600px) { #statebar .sb-sent { display: none; } #statebar .sb-vals { gap: 10px; } }
+@media (max-width: 600px) { .stat { grid-template-columns: repeat(2, minmax(0, 1fr)); } .stat .s .v { font-size: 1.25rem; } }
+</style>
+</head>
+<body>
+
+<div id="statebar"><div class="in" id="statebar-in"></div></div>
+
+<main>
+<h1>How word2vec learns</h1>
+<p class="lede">In 2013 a team at Google released <a href="https://code.google.com/archive/p/word2vec/">word2vec</a>, a small program that reads a lot of text and gives every word a list of numbers. Words used in similar ways end up with similar lists. The idea underlies much of modern language technology, including the first layer of every large language model. This page takes the training procedure apart one step at a time.</p>
+<p class="note">Everything on this page is computed live in your browser. A tiny model with 5 dimensions trains on a hand-written corpus of 30 sentences, so the numbers on screen are the real numbers. Each section builds on the last, and they all share one model: the vectors created in section 2 are the ones multiplied in 4 and nudged in 6 and 7. The bar at the top tracks the training pair currently in progress. Every interactive has the same controls: reset, play, step, and skip to end. The keyboard drives the one you used last: → steps, space plays or pauses, shift + → skips to the end, and shift + ← resets.</p>
+<nav class="toc">
+  <a href="#s1">1. The problem</a>
+  <a href="#s2">2. The vocabulary and two tables</a>
+  <a href="#s3">3. The window</a>
+  <a href="#s4">4. The dot product</a>
+  <a href="#s5">5. The sigmoid</a>
+  <a href="#s6">6. One positive update</a>
+  <a href="#s7">7. Negative samples</a>
+  <a href="#s8">8. Training at scale</a>
+  <a href="#s9">9. Aside: CBOW</a>
+  <a href="#s10">10. The bridge to LLMs</a>
+</nav>
+<h2 id="s1"><span class="num">1</span>The problem</h2>
+<p>Computers handle numbers, not meanings. To do anything useful with language, a program needs some numeric description of a word that captures what the word means. The simplest approach gives each word an arbitrary ID: “coffee” is 17, “tea” is 18. But the IDs say nothing about meaning. 17 is no closer to 18 than it is to 9,000.</p>
+<p>word2vec starts from an old observation in linguistics, the <em>distributional hypothesis</em>: words that appear in similar contexts tend to have similar meanings. As the linguist J.R. Firth put it, “you shall know a word by the company it keeps.” You may never have seen “coffee” and “tea” in the same sentence, but you have seen both next to “hot”, “cup” and “drink”. Their shared company is the clue.</p>
+<p>The toy corpus on this page is written to make that clue easy to see. Here are all of its sentences about coffee and tea.</p>
+<div class="module" id="m1">
+  <div id="m1-body"></div>
+</div>
+<p>By the end of the page, the model will have placed “coffee” and “tea” close together, without ever seeing them side by side. It gets there through shared neighbours alone.</p>
+<p>The settings below compare the toy model with the real thing. They are small enough to train in under a second, and the training procedure is the same one the real program uses.</p>
+<table>
+<thead>
+<tr>
+<th>Setting</th>
+<th>This page</th>
+<th>word2vec (paper / code)</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Vocabulary</td>
+<td>36 words</td>
+<td>692K words (paper); 3M words and phrases (Google News vectors)</td>
+</tr>
+<tr>
+<td>Corpus</td>
+<td>30 sentences, 156 words</td>
+<td>about 1B words (paper); about 100B (Google News vectors)</td>
+</tr>
+<tr>
+<td>Dimensions</td>
+<td>5</td>
+<td>300 (paper, Google News vectors); the code defaults to 100</td>
+</tr>
+<tr>
+<td>Window</td>
+<td>up to 5, randomly shrunk</td>
+<td>up to 5, randomly shrunk</td>
+</tr>
+<tr>
+<td>Negative samples <em>k</em></td>
+<td>5</td>
+<td>5 by default; the paper suggests 5–20 for small data, 2–5 for large</td>
+</tr>
+<tr>
+<td>Learning rate</td>
+<td>0.025, decaying linearly</td>
+<td>0.025 for skip-gram, 0.05 for CBOW</td>
+</tr>
+<tr>
+<td>Subsampling threshold <em>t</em></td>
+<td>0.01</td>
+<td>10⁻⁵ (paper’s formula); 10⁻³ (code’s formula and default)</td>
+</tr>
+<tr>
+<td>Minimum count</td>
+<td>1</td>
+<td>5</td>
+</tr>
+<tr>
+<td>Passes over the corpus</td>
+<td>200</td>
+<td>5 by default</td>
+</tr>
+</tbody>
+</table>
+<h2 id="s2"><span class="num">2</span>The vocabulary and two tables</h2>
+<p>Training begins with bookkeeping. The program splits the corpus into words, counts each one, and builds the <em>vocabulary</em>: the list of every distinct word. The real program drops words that appear fewer than five times. The toy corpus keeps them all.</p>
+<p>Then every word gets <strong>two</strong> vectors, each a row of numbers, one per dimension:</p>
+<ul>
+<li>The <strong>input vector <em>v</em></strong> describes the word when it is the center of attention. It starts out random, with each number drawn uniformly from the range ±0.5/<em>d</em>, where <em>d</em> is the number of dimensions. That is ±0.1 here, and ±0.0017 at 300 dimensions.</li>
+<li>The <strong>output vector <em>v</em>′</strong> describes the word when it appears as someone else’s context. It starts out as all zeros.</li>
+</ul>
+<p>All the input vectors together form one table, and all the output vectors form another. Training adjusts both tables. At the end, the input table is usually the one people keep and call “the word embeddings.”</p>
+<div class="module" id="m2">
+  <div class="row">
+    <span class="note" id="m2-stats"></span>
+  </div>
+  <div class="cols2 m2grid">
+    <div><h4>Corpus</h4><div class="corpus" id="m2-corpus"></div></div>
+    <div><h4>Vocabulary, by count</h4><div class="vocabwrap" id="m2-vocab"></div></div>
+  </div>
+  <h4 style="margin-top:18px">The selected word's two rows</h4>
+  <div id="m2-vecs"></div>
+  <div class="row" style="margin:12px 0 0">
+    <button id="reroll">Re-roll initialization</button>
+    <span class="note" id="m2-seed"></span>
+  </div>
+  <p class="note" style="margin:6px 0 0">Click any word to see its rows. Re-rolling draws new random input vectors and restarts training for the rest of the page.</p>
+</div>
+<div class="callout">
+  <div class="t">Why two tables?</div>
+  With a single table, a word would be scored against itself using the same vector twice. The score would be |<i>v</i>|², a squared length, which is never negative, so the probability of section 5 would never drop below 0.5. Every word would be predicted to sit next to itself. Two tables also change what “close” means. A word’s input vector is pulled toward the output vectors of its neighbours. So two words end up with similar input vectors when they share neighbours, not when they sit side by side.
+</div>
+<h2 id="s3"><span class="num">3</span>The window</h2>
+<p>Training walks through the text <strong>in order</strong>, word by word, and each word takes a turn as the <em>center</em>. The words around it are its <em>context</em>. word2vec looks up to five words to either side. But for each center word, it first shrinks the window at random to somewhere between 1 and 5. A word right next to the center is inside the window every time; a word five places away only one time in five. So nearer words count more.</p>
+<p>Before the window is placed, very frequent words are randomly dropped. Words like “the” and “a” appear next to everything and say little about any particular word. Dropping some of their occurrences speeds up training and gives the rarer, more informative words more room in each window. In the paper, a word that makes up a fraction <em>f</em> of the corpus is dropped with probability 1 − √(<em>t</em>/<em>f</em>), with <em>t</em> around 10⁻⁵. The released code uses a slightly different formula, with a default <em>t</em> of 10⁻³. This page uses the code’s formula, with <em>t</em> raised to 0.01 so that it has an effect on so small a corpus.</p>
+<p>Each (center, context) pair inside the window becomes one training example.</p>
+<div class="module" id="m3">
+  <div class="row">
+    <span id="m3-bar"></span>
+    <label class="ctl">Max window <input type="range" id="win" min="1" max="5" step="1" value="5"> <b id="win-v">5</b></label>
+    <span class="note">changing it restarts training</span>
+  </div>
+  <div class="sentwalk" id="m3-sent"></div>
+  <h4 style="margin-top:22px">Training pairs from this center word</h4>
+  <div class="pairs" id="m3-pairs"></div>
+  <p class="note" id="m3-note" style="margin:12px 0 0"></p>
+</div>
+<p>Greyed-out words were dropped by subsampling for this pass. Hover a word to see the probability that it is kept. Drops and window sizes are drawn fresh on every pass, so the same sentence yields different pairs each time.</p>
+<h2 id="s4"><span class="num">4</span>The dot product</h2>
+<p>For each pair, the model needs a score: a single number saying how strongly it believes the two words belong together. word2vec uses the simplest score there is, the <em>dot product</em>. Multiply the center word’s input vector and the context word’s output vector dimension by dimension, then add up the results.</p>
+<div class="module" id="m4">
+  <div class="row">
+    <span id="m4-bar"></span>
+    <span class="seg" id="m4-presets"><button data-v="start" class="on">start of training</button><button data-v="similar">similar words</button><button data-v="unrelated">unrelated words</button></span>
+  </div>
+  <div class="tscroll" id="m4-table"></div>
+  <div class="below">
+    <div id="m4-plane"></div>
+    <div><p class="sumline" id="m4-sum"></p><p class="note" style="margin:10px 0 0">Every number is editable. Type over one to change the vectors.</p></div>
+  </div>
+</div>
+<p>When the two vectors point the same way, most of the products are positive and the score is large. When they point in opposite directions, the score is negative. When they are unrelated, the positive and negative products cancel out and the score is near zero. At the start of training every output vector is zero, so every score is exactly zero.</p>
+<p>The diagram beside the table is not a projection. Any two vectors, in 5 dimensions or 300, lie together in one flat plane, so they can be drawn at their true lengths with the true angle between them. The dot product equals length × length × the cosine of that angle.</p>
+<h2 id="s5"><span class="num">5</span>The sigmoid</h2>
+<p>A score can be any number. To read it as a probability, word2vec passes it through the <em>sigmoid</em> function, σ(<em>x</em>) = 1 / (1 + e<sup>−<em>x</em></sup>). It is a smooth step. Large negative scores go to almost 0, large positive scores go to almost 1, and a score of 0 goes to exactly 0.5.</p>
+<p>The result is the model’s probability that this pair really appeared together in the text. For a real pair, the right answer is 1, so the <strong>error</strong> is 1 − σ(score).</p>
+<div class="module" id="m5">
+  <div class="row">
+    <span id="m5-bar"></span>
+    <label class="ctl">Score <input type="range" id="m5-x" min="-8" max="8" step="0.05" value="0"> <b id="m5-xv">0</b></label>
+    <span class="note" id="m5-src"></span>
+  </div>
+  <div id="m5-chart"></div>
+  <div class="stat" id="m5-stats"></div>
+</div>
+<p>At the start of training every score is 0, so σ is 0.5 and the first error is exactly 0.5: the model is a coin toss.</p>
+<div class="callout">
+  <div class="t">Why not ask about every word at once?</div>
+  The natural question is “which word, out of the whole vocabulary, is the context?” That calls for a <em>softmax</em>, which scores every word in the vocabulary, millions of them, for every training pair. The first word2vec paper avoided that cost with <em>hierarchical softmax</em>, a chain of sigmoids down a binary tree of the vocabulary. The second paper replaced it with <em>negative sampling</em>, the approach on this page: one sigmoid for the real word and one for each of a handful of randomly drawn ones.
+</div>
+<h2 id="s6"><span class="num">6</span>One positive update</h2>
+<p>Now the model learns from its error. The update has a single scaling factor:</p>
+<p class="formula"><i>g</i> = (label − σ) × α</p>
+<p>The label is 1 for a real pair. α is the <em>learning rate</em>, which sets the size of each step. It starts at 0.025 and shrinks linearly to almost zero over the course of training, so early steps are large and late steps are fine adjustments.</p>
+<p>Both vectors then move:</p>
+<ul>
+<li>The output vector moves toward the input vector: <strong><em>v</em>′ ← <em>v</em>′ + <em>g</em> · <em>v</em></strong>. This is applied right away.</li>
+<li>The input vector should move toward the output vector by <em>g</em> · <em>v</em>′, using <em>v</em>′ as it was before the update. But this change is <strong>not applied yet</strong>. It goes into a pending row, for reasons that section 7 makes clear.</li>
+</ul>
+<div class="module" id="m6">
+  <div class="row"><span id="m6-bar"></span><span class="note">one step per stage of the update</span></div>
+  <div id="m6-head"></div>
+  <div class="tscroll" id="m6-table"></div>
+  <div class="below">
+    <div id="m6-plane"></div>
+    <p class="note" id="m6-note"></p>
+  </div>
+</div>
+<p>On the first pair, <em>v</em>′ is all zeros, so the pending change to <em>v</em> is zero too. Only <em>v</em>′ moves, and it moves exactly in <em>v</em>’s direction: in the diagram, <em>v</em>′ grows straight along <em>v</em>. This step uses the model’s real current state. After training in section 8, pause partway and come back here to see a pair from the middle of training.</p>
+<h2 id="s7"><span class="num">7</span>Negative samples</h2>
+<p>A positive update alone would be useless. The easiest way to score every pair high is to make every vector point the same way, and then the vectors carry no information. The model also needs examples of words that do <em>not</em> belong together.</p>
+<p>Negative sampling makes them up. For each real pair, word2vec draws <em>k</em> = 5 “noise” words at random and treats each as a fake pair with the center word. A word’s chance of being drawn is its frequency raised to the power 0.75. This flattens the distribution: common words are still drawn most often, but rare words get more of a chance than their raw frequency would give them. If a draw happens to be the real context word, it is skipped.</p>
+<p>For a fake pair the label is 0, so <em>g</em> = (0 − σ) × α is negative, and the same update rule pushes the two vectors apart. Each noise word’s output vector moves at once, and each adds its share to the center word’s pending row. Only after the real pair and all the noise words is <strong>the accumulated pending change applied to the input vector, once</strong>. Every target in a pair is scored against the same, unchanged <em>v</em>.</p>
+<div class="module" id="m7">
+  <h4>How often each word is drawn as noise</h4>
+  <div id="m7-chart"></div>
+  <div class="legend"><span><i style="background:var(--axis)"></i>share of the corpus (raw frequency)</span><span><i style="background:#f6c3ad"></i>share of noise draws (frequency<sup>0.75</sup>)</span><span><i style="background:var(--orange)"></i>drawn for this pair</span></div>
+  <div class="row" style="margin:16px 0 10px">
+    <span id="m7-bar"></span>
+    <span class="draws" id="m7-draws"></span>
+  </div>
+  <div class="tscroll" id="m7-table"></div>
+  <div class="below">
+    <div id="m7-plane"></div>
+    <p class="note" id="m7-note"></p>
+  </div>
+</div>
+<p>This is the whole of training. Every pair, in every pass, gets one positive update and up to five negative ones.</p>
+<h2 id="s8"><span class="num">8</span>Training at scale</h2>
+<p>Now run the same loop over the whole corpus, 200 times. The chart below projects the 5-dimensional input vectors down to 2 dimensions with PCA (principal component analysis), which keeps the two directions in which the vectors spread out most. Unlike the pair plane in section 4, this picture is approximate. Distances on it are only roughly right, and the neighbour list beside it is computed in all 5 dimensions.</p>
+<div class="module" id="m8">
+  <div class="row">
+    <span id="m8-bar"></span>
+    <label class="ctl">pairs per frame <span class="seg" id="m8-speed"><button data-v="1">1</button><button data-v="10">10</button><button data-v="100" class="on">100</button><button data-v="1000">1,000</button></span></label>
+    <label class="ctl"><input type="checkbox" id="m8-out"> show output vectors v′</label>
+  </div>
+  <div class="stat" id="m8-stats"></div>
+  <div class="split8">
+    <div>
+      <h4>Input vectors, projected to 2D (PCA, approximate)</h4>
+      <div id="m8-scatter"></div>
+    </div>
+    <div>
+      <h4>Nearest neighbours</h4>
+      <label class="ctl" style="margin-bottom:8px">of <select id="m8-word"></select></label>
+      <div id="m8-nn"></div>
+      <p class="note">by cosine similarity, in all 5 dimensions</p>
+    </div>
+  </div>
+  <div class="cols2" style="margin-top:12px">
+    <div><h4>Loss per pair</h4><div id="m8-loss"></div></div>
+    <div><h4>Learning rate <span style="text-transform:none">α</span></h4><div id="m8-alpha"></div></div>
+  </div>
+</div>
+<p>The loss is the error measured as the model sees it, summed over the real word and its noise words: −log σ(score) for the real word and −log(1 − σ(score)) for each noise word. It starts at about 6 × log 2 ≈ 4.2, one coin toss for each of the six targets, and falls as the vectors arrange themselves.</p>
+<p>Watch “coffee” and “tea”. They never appear in the same sentence, yet they end up nearly on top of each other. Their input vectors were both pulled toward the same output vectors, those of “hot”, “cup”, “drink” and “milk”. Most of the time the same happens to “dog” and “cat”. Turn on the output vectors to see those context anchors that the input vectors arrange themselves around.</p>
+<h2 id="s9"><span class="num">9</span>Aside: CBOW</h2>
+<p>The first word2vec paper proposed a second model, <em>continuous bag-of-words</em> (CBOW), and it is the default in the released code. It flips the question around. Instead of using the center word to predict each context word, CBOW averages the input vectors of all the context words and uses that average to predict the center word.</p>
+<div class="module" id="m9">
+  <div id="m9-body"></div>
+</div>
+<p>That makes one update per center word instead of one per pair, so CBOW trains faster. The cost is that every context word receives the same nudge, whatever its distance or role. The machinery is otherwise identical: the same sigmoid, the same negative samples, the same pending row. The fill-in-the-blank framing makes CBOW a distant ancestor of the masked language modelling later used to train BERT.</p>
+<h2 id="s10"><span class="num">10</span>The bridge to LLMs</h2>
+<p>The first layer of a large language model is the same kind of object as word2vec’s input table: a lookup table with one vector per token, started at random and learned by gradient descent. Three things differ.</p>
+<ul>
+<li><strong>Tokens, not words.</strong> LLMs split text into subword pieces, so rare and new words are built from parts instead of being dropped.</li>
+<li><strong>A different training signal.</strong> The table is trained end to end on next-token prediction, through many layers, not directly on which words appear near which.</li>
+<li><strong>Messier geometry.</strong> LLM embeddings tend to crowd into a narrow cone (<em>anisotropy</em>), and word frequency distorts their distances, so nearest neighbours are less clean than in word2vec.</li>
+</ul>
+<p>One thing is the same. The table is <strong>static</strong>: a word gets one vector, whatever sentence it is in. “Bank” comes out of the table with the same numbers in “the river bank” and in “she paid it into the bank”. Meaning in context is built by the transformer layers that follow.</p>
+<div class="module" id="m10">
+  <div id="m10-body"></div>
+</div>
+<footer>
+  <h4 class="fn-h">Footnotes</h4>
+  <ol class="fn">
+    <li>Mikolov, Sutskever, Chen, Corrado and Dean, <a href="https://arxiv.org/abs/1310.4546">“Distributed Representations of Words and Phrases and their Compositionality”</a>, NeurIPS (2013). Skip-gram with negative sampling, subsampling of frequent words, and phrases.</li>
+    <li>Mikolov, Chen, Corrado and Dean, <a href="https://arxiv.org/abs/1301.3781">“Efficient Estimation of Word Representations in Vector Space”</a> (2013). Skip-gram and CBOW, trained with hierarchical softmax.</li>
+    <li>The released code (<a href="https://code.google.com/archive/p/word2vec/"><span class="mono">word2vec.c</span></a>) differs from the papers in a few details. In skip-gram it flips the roles: the context word’s input vector predicts the center word, which comes to the same thing on average, since a pair inside a window also appears the other way round. Its subsampling formula keeps a word with probability (√(<i>f</i>/<i>t</i>) + 1) · <i>t</i>/<i>f</i>, with a default <i>t</i> of 10⁻³. CBOW is the default model. σ comes from a precomputed table and is clipped at ±6. This page follows the code’s update order, window shrinking, initialization, learning-rate decay and subsampling formula, but uses the papers’ center-predicts-context framing and an exact σ.</li>
+    <li>The 3-million-word Google News vectors, trained on about 100 billion words, come from the word2vec project’s release, not from either paper.</li>
+    <li>The toy corpus, the seeds and the 200 passes are this page’s own. Re-rolling the initialization changes the final picture. Across 100 initialization seeds, “coffee” and “tea” ended up as each other’s nearest neighbours every time, and “dog” and “cat” 87 times.</li>
+  </ol>
+</footer>
+
+</main>
+
+<script>
+// ---------- the toy model ----------
+// Skip-gram with negative sampling, following the update order of Mikolov's word2vec.c
+// (the center word's input vector predicts each context word's output vector; the paper's
+// framing). Everything here is deterministic given the two seeds, so reset is honest.
+
+const CORPUS = `
+i drink hot coffee every morning
+i drink hot tea every morning
+pour the coffee into a cup
+pour the tea into my cup
+a cup of hot coffee with milk
+a cup of hot tea with sugar
+i drink my coffee with sugar
+i drink my tea with milk
+the coffee is hot
+the tea is hot
+pour milk into the coffee
+pour sugar into the tea
+a hot drink every morning
+i like coffee
+i like tea
+the dog has soft fur
+the cat has soft fur
+i feed my dog every morning
+i feed my cat every morning
+i walk the dog
+the dog likes to play
+the cat likes to sleep
+the dog can bark
+the cat can purr
+my pet dog is soft
+my pet cat is soft
+a dog is a good pet
+a cat is a good pet
+i play with my dog
+the cat and the dog sleep
+`.trim().split('\n').map(l => l.trim().split(/\s+/));
+
+const CFG = {
+  D: 5,            // dimensions (300 in the paper)
+  WINDOW: 5,       // max window; each center word draws b in 1..WINDOW
+  K: 5,            // negative samples per pair
+  ALPHA0: 0.025,   // starting learning rate (skip-gram default)
+  EPOCHS: 200,     // passes over the corpus (the toy corpus is tiny; the code's default is 5)
+  SAMPLE: 0.01,    // subsampling threshold t (the code's default is 1e-3; raised so it bites on a 156-word corpus)
+  POW: 0.75,       // noise distribution exponent
+};
+
+// mulberry32: small seeded PRNG, so a seed reproduces every draw
+function rng(seed) {
+  let a = seed >>> 0;
+  return () => {
+    a = a + 0x6D2B79F5 | 0;
+    let t = Math.imul(a ^ a >>> 15, 1 | a);
+    t = t + Math.imul(t ^ t >>> 7, 61 | t) ^ t;
+    return ((t ^ t >>> 14) >>> 0) / 4294967296;
+  };
+}
+
+function buildVocab(corpus) {
+  const counts = new Map();
+  corpus.flat().forEach(w => counts.set(w, (counts.get(w) || 0) + 1));
+  const words = [...counts.keys()].sort((a, b) => counts.get(b) - counts.get(a) || a.localeCompare(b));
+  const index = new Map(words.map((w, i) => [w, i]));
+  const count = words.map(w => counts.get(w));
+  const total = count.reduce((a, b) => a + b, 0);
+  // unigram^0.75 noise distribution, as a cumulative table
+  const pw = count.map(c => Math.pow(c, CFG.POW)); const z = pw.reduce((a, b) => a + b, 0);
+  const noise = pw.map(p => p / z), raw = count.map(c => c / total);
+  const cum = []; noise.reduce((a, p, i) => (cum[i] = a + p), 0);
+  // word2vec.c keep probability: (sqrt(f / (t·N)) + 1) · (t·N) / f
+  const tn = CFG.SAMPLE * total;
+  const keep = count.map(c => Math.min(1, (Math.sqrt(c / tn) + 1) * tn / c));
+  const sents = corpus.map(s => s.map(w => index.get(w)));
+  return { words, index, count, total, raw, noise, cum, keep, sents };
+}
+
+const V = buildVocab(CORPUS);
+
+function drawNoise(r) {
+  const x = r(); let lo = 0, hi = V.cum.length - 1;
+  while (lo < hi) { const mid = (lo + hi) >> 1; if (V.cum[mid] < x) lo = mid + 1; else hi = mid; }
+  return lo;
+}
+
+const sigmoid = x => 1 / (1 + Math.exp(-x));
+const dot = (a, b) => a.reduce((s, x, i) => s + x * b[i], 0);
+
+// The training stream: every (center, context, negatives) pair in order, with the window
+// shrink, subsampling and noise draws decided by one seeded generator. Built in full up front
+// (about 66,000 pairs) into typed arrays, so any pair can be revisited and the total is known.
+function makeStream(seed) {
+  const r = rng(seed), K = CFG.K;
+  const cap = CFG.EPOCHS * V.total * 2 * CFG.WINDOW;
+  const center = new Int16Array(cap), ctx = new Int16Array(cap), negs = new Int16Array(cap * K);
+  const epochA = new Int16Array(cap), sentA = new Int16Array(cap), posA = new Int8Array(cap), ctxPosA = new Int8Array(cap);
+  const bA = new Int8Array(cap), ciA = new Int32Array(cap), wordsA = new Int32Array(cap);
+  const centers = [];      // first pass only, for the window walker: {sent, pos, b, kept, first, n}
+  let n = 0, wordsDone = 0, nc = 0;
+  for (let epoch = 0; epoch < CFG.EPOCHS; epoch++) {
+    V.sents.forEach((s, sent) => {
+      const kept = s.map(w => r() < V.keep[w]);
+      const live = s.map((w, i) => i).filter(i => kept[i]);
+      live.forEach((pos, li) => {
+        const b = 1 + Math.floor(r() * CFG.WINDOW);
+        const first = n;
+        for (let j = li - b; j <= li + b; j++) {
+          if (j < 0 || j >= live.length || j === li) continue;
+          center[n] = s[pos]; ctx[n] = s[live[j]]; epochA[n] = epoch; sentA[n] = sent; posA[n] = pos; ctxPosA[n] = live[j];
+          bA[n] = b; ciA[n] = nc; wordsA[n] = wordsDone;
+          for (let k = 0; k < K; k++) negs[n * K + k] = drawNoise(r);
+          n++;
+        }
+        if (epoch === 0) centers.push({ sent, pos, b, kept, first, n: n - first });
+        nc++;
+      });
+      wordsDone += s.length;
+    });
+  }
+  return {
+    total: n, centers,
+    get(i) {
+      if (i < 0 || i >= n) return null;
+      const ng = Array.from(negs.subarray(i * K, i * K + K));
+      return { i, epoch: epochA[i], sent: sentA[i], pos: posA[i], ctxPos: ctxPosA[i], b: bA[i], center: center[i], ctx: ctx[i],
+        negs: ng.map(w => ({ w, skip: w === ctx[i] })), wordsDone: wordsA[i] };
+    },
+  };
+}
+const TRAIN_WORDS = CFG.EPOCHS * V.total;
+// linear decay over all training words, floored at 1e-4 of the start, as in word2vec.c
+function alphaAt(wordsDone) { return Math.max(CFG.ALPHA0 * 1e-4, CFG.ALPHA0 * (1 - wordsDone / (TRAIN_WORDS + 1))); }
+
+function initModel(seed) {
+  const r = rng(seed);
+  const Win = V.words.map(() => Array.from({ length: CFG.D }, () => (r() - 0.5) / CFG.D));
+  const Wout = V.words.map(() => new Array(CFG.D).fill(0));
+  return { Win, Wout };
+}
+function cloneModel(m) { return { Win: m.Win.map(r => r.slice()), Wout: m.Wout.map(r => r.slice()) }; }
+
+// One full pair update. Returns the loss before the update.
+function trainPair(m, p, alpha) {
+  const v = m.Win[p.center]; const pend = new Array(CFG.D).fill(0); let loss = 0;
+  const targets = [{ w: p.ctx, label: 1 }].concat(p.negs.filter(n => !n.skip).map(n => ({ w: n.w, label: 0 })));
+  for (const t of targets) {
+    const vo = m.Wout[t.w]; const f = dot(v, vo); const s = sigmoid(f);
+    loss -= Math.log(t.label ? Math.max(s, 1e-12) : Math.max(1 - s, 1e-12));
+    const g = (t.label - s) * alpha;
+    for (let d = 0; d < CFG.D; d++) pend[d] += g * vo[d];
+    for (let d = 0; d < CFG.D; d++) vo[d] += g * v[d];
+  }
+  for (let d = 0; d < CFG.D; d++) v[d] += pend[d];
+  return loss;
+}
+
+function cosine(a, b) { const na = Math.hypot(...a), nb = Math.hypot(...b); return na && nb ? dot(a, b) / (na * nb) : 0; }
+function neighbors(M, w, n = 5) {
+  return M.map((row, i) => ({ i, c: cosine(M[w], row) })).filter(x => x.i !== w).sort((a, b) => b.c - a.c).slice(0, n);
+}
+
+// top-2 principal components of the rows of M, by power iteration on the covariance
+function pca2(M, prev) {
+  const n = M.length, d = M[0].length;
+  const mean = Array.from({ length: d }, (_, j) => M.reduce((s, r) => s + r[j], 0) / n);
+  const X = M.map(r => r.map((x, j) => x - mean[j]));
+  const C = Array.from({ length: d }, (_, i) => Array.from({ length: d }, (_, j) => X.reduce((s, r) => s + r[i] * r[j], 0) / n));
+  const comps = [];
+  for (let c = 0; c < 2; c++) {
+    let v = prev ? prev[c].slice() : Array.from({ length: d }, (_, j) => j === c ? 1 : 0.3);
+    for (let it = 0; it < 60; it++) {
+      let w = C.map(row => dot(row, v));
+      comps.forEach(u => { const p = dot(w, u); w = w.map((x, j) => x - p * u[j]); });
+      const nw = Math.hypot(...w) || 1; v = w.map(x => x / nw);
+    }
+    if (prev && dot(v, prev[c]) < 0) v = v.map(x => -x);   // keep the axes from flipping between frames
+    comps.push(v);
+  }
+  return { mean, comps, project: r => comps.map(u => dot(r.map((x, j) => x - mean[j]), u)) };
+}
+
+if (typeof module !== 'undefined') module.exports = { CORPUS, CFG, V, rng, makeStream, alphaAt, initModel, cloneModel, trainPair, neighbors, cosine, pca2, sigmoid, dot, TRAIN_WORDS };
+
+(function () {
+// model.js is concatenated ahead of this file by build.py (CORPUS, CFG, V, makeStream, trainPair, …)
+const $ = id => document.getElementById(id);
+const D = CFG.D, W = V.words;
+const esc = s => String(s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+const commas = v => String(v).replace(/\B(?=(\d{3})+(?!\d))/g, ',');
+// a number with a real minus sign, and no sign on a value that rounds to zero
+function num(x, n = 3) { const s = Math.abs(x).toFixed(n); return (x < 0 && +s !== 0 ? '−' : '') + s; }
+const zeros = () => new Array(D).fill(0);
+const norm = a => Math.hypot(...a);
+
+// transport icons, drawn the same way as on the SynthID page
+const I_RESET = '<svg viewBox="0 0 20 16" width="13" height="10" aria-hidden="true"><rect x="1" y="2" width="2" height="12" fill="currentColor"/><polygon points="11,2 11,14 4,8" fill="currentColor"/><polygon points="18,2 18,14 11,8" fill="currentColor"/></svg>';
+const I_PLAY = '<svg viewBox="0 0 16 16" width="10" height="10" aria-hidden="true"><polygon points="4,2 4,14 13,8" fill="currentColor"/></svg>';
+const I_PAUSE = '<svg viewBox="0 0 16 16" width="10" height="10" aria-hidden="true"><rect x="3" y="2" width="3.5" height="12" fill="currentColor"/><rect x="9.5" y="2" width="3.5" height="12" fill="currentColor"/></svg>';
+const I_STEP = '<svg viewBox="0 0 18 16" width="12" height="10" aria-hidden="true"><polygon points="2,2 2,14 11,8" fill="currentColor"/><rect x="12" y="2" width="2.5" height="12" fill="currentColor"/></svg>';
+const I_END = '<svg viewBox="0 0 20 16" width="13" height="10" aria-hidden="true"><polygon points="2,2 2,14 9,8" fill="currentColor"/><polygon points="9,2 9,14 16,8" fill="currentColor"/><rect x="17" y="2" width="2" height="12" fill="currentColor"/></svg>';
+
+// ---------- shared model state ----------
+// One model for the whole page. 2 initialises it, 6–7 train it one pair at a time, 8 trains
+// it in bulk, and every section reads from it.
+const G = {
+  seed: 1,                 // initialisation seed (re-rolled in 2)
+  streamSeed: 2013,        // seed for window shrink, subsampling and negative draws
+  stream: null, init: null, model: null, snap: null,
+  step: 0,                 // index of the pair in progress
+  pair: null, PL: null,    // that pair and its list of phases
+  phase: 0,                // how far into the pair (see phaseList)
+  R: null,                 // the pair's numbers at the current phase (replay())
+  lossSum: null, lossN: null, bucket: 1,
+  pca: null, rad: null,
+};
+const NB = 150;            // loss-curve buckets
+
+// The phases of one pair update. 0–5 belong to 6 (the positive), the rest to 7.
+const POS_END = 5;
+function phaseList(p) {
+  const L = ['start', 'score', 'sigma', 'g', 'out', 'pend'].map(k => ({ k }));
+  p.negs.forEach((n, j) => { L.push({ k: 'draw', j }); if (!n.skip) L.push({ k: 'neg', j }); });
+  L.push({ k: 'apply' });
+  return L;
+}
+const END = () => G.PL.length - 1;
+
+// Every number shown in 6 and 7, recomputed from the model as it stood before the pair.
+// Updates are applied in word2vec.c's order: each target's v′ moves at once, while the
+// change to v collects in a pending row that is added at the very end.
+function replay(upto = G.phase) {
+  const p = G.pair, PL = G.PL, m = cloneModel(G.snap), alpha = alphaAt(p.wordsDone);
+  const v = m.Win[p.center], pend = zeros(); let loss = 0;
+  const T = [{ w: p.ctx, label: 1, skip: false, drawAt: 0, outAt: 4, pendAt: 5 }];
+  p.negs.forEach((n, j) => {
+    const di = PL.findIndex(q => q.k === 'draw' && q.j === j);
+    T.push({ w: n.w, label: 0, skip: n.skip, j, drawAt: di, outAt: n.skip ? Infinity : di + 1, pendAt: n.skip ? Infinity : di + 1 });
+  });
+  for (const t of T) {
+    if (t.skip) continue;
+    const vo = m.Wout[t.w]; t.vo0 = vo.slice(); t.f = dot(v, vo); t.s = sigmoid(t.f); t.g = (t.label - t.s) * alpha;
+    t.dvo = v.map(x => t.g * x); t.contrib = t.vo0.map(x => t.g * x);
+    loss -= Math.log(Math.max(t.label ? t.s : 1 - t.s, 1e-12));
+    if (upto >= t.outAt) for (let d = 0; d < D; d++) vo[d] += t.dvo[d];
+    if (upto >= t.pendAt) for (let d = 0; d < D; d++) pend[d] += t.contrib[d];
+    t.vo1 = vo.slice();
+  }
+  const v0 = v.slice(), applied = upto >= PL.length - 1;
+  if (applied) for (let d = 0; d < D; d++) v[d] += pend[d];
+  return { m, T, pend, v0, v1: v.slice(), alpha, loss, applied };
+}
+
+function loadPair() {
+  G.pair = G.stream.get(G.step);
+  G.PL = G.pair ? phaseList(G.pair) : null; G.phase = 0;
+  G.R = G.pair ? replay(0) : null;
+}
+function logLoss(i, l) { const b = Math.floor(i / G.bucket); G.lossSum[b] += l; G.lossN[b]++; }
+function resetTraining() {
+  G.init = initModel(G.seed); G.model = cloneModel(G.init); G.snap = cloneModel(G.init); G.step = 0;
+  G.bucket = Math.ceil(G.stream.total / NB); G.lossSum = new Float64Array(NB + 1); G.lossN = new Uint32Array(NB + 1);
+  G.pca = null; G.rad = null; loadPair();
+}
+function setPhase(ph) { G.phase = ph; G.R = replay(); G.model = G.R.m; }
+function commit() {                      // finish the pair in progress and move to the next
+  const r = replay(END()); G.model = r.m; logLoss(G.step, r.loss);
+  G.step++; G.snap = cloneModel(G.model); loadPair();
+}
+function trainN(n) {
+  if (!G.pair) return;
+  if (G.phase > 0) { commit(); n--; }
+  const m = G.model;
+  for (; n > 0 && G.step < G.stream.total; n--, G.step++) {
+    const p = G.stream.get(G.step); logLoss(G.step, trainPair(m, p, alphaAt(p.wordsDone)));
+  }
+  G.snap = cloneModel(m); loadPair();
+}
+
+// ---------- the shared play bar ----------
+// reset · play/pause · step · skip to end, the same in every section. The keyboard drives the
+// bar you last used, or else the one nearest the middle of the screen.
+const BARS = []; let ACTIVE = null;
+function PlayBar(host, o) {
+  const bar = { o, host, playing: false, timer: null };
+  host.classList.add('seg', 'transport', 'playbar');
+  host.innerHTML = `<button data-a="reset" title="reset (shift + ←)">${I_RESET}</button><button data-a="play" title="play / pause (space)">${I_PLAY}</button><button data-a="step" title="step (→)">${I_STEP}</button><button data-a="end" title="skip to end (shift + →)">${I_END}</button>`;
+  const ms = () => typeof o.ms === 'function' ? o.ms() : o.ms;
+  const tick = () => {
+    if (!bar.playing) return;
+    if (!o.canStep()) { bar.stop(); return; }
+    o.step(); refreshBars();
+    if (!o.canStep()) { bar.stop(); return; }
+    bar.timer = setTimeout(tick, ms());
+  };
+  bar.stop = () => { bar.playing = false; clearTimeout(bar.timer); bar.refresh(); };
+  bar.act = a => {
+    ACTIVE = bar;
+    BARS.forEach(b => { if (b !== bar && b.playing) b.stop(); });
+    if (a === 'play') { if (bar.playing) bar.stop(); else if (o.canStep()) { bar.playing = true; tick(); } }
+    else { bar.stop(); if (a === 'step' && o.canStep()) o.step(); else if (a === 'end' && o.canStep()) o.end(); else if (a === 'reset' && (!o.canReset || o.canReset())) o.reset(); }
+    refreshBars();
+  };
+  bar.refresh = () => {
+    const can = o.canStep(), b = k => host.querySelector(`[data-a="${k}"]`);
+    b('step').disabled = !can || bar.playing; b('end').disabled = !can; b('play').disabled = !can && !bar.playing;
+    b('reset').disabled = o.canReset ? !o.canReset() : false;
+    b('play').innerHTML = bar.playing ? I_PAUSE : I_PLAY;
+    b('play').classList.toggle('on', bar.playing);
+  };
+  host.addEventListener('click', e => { const b = e.target.closest('button'); if (b && !b.disabled) bar.act(b.dataset.a); });
+  BARS.push(bar); return bar;
+}
+function refreshBars() { BARS.forEach(b => b.refresh()); }
+function pickBar() {
+  const vis = BARS.filter(b => { const r = b.host.closest('.module').getBoundingClientRect(); return r.bottom > 0 && r.top < innerHeight; });
+  if (ACTIVE && vis.includes(ACTIVE)) return ACTIVE;
+  const mid = innerHeight / 2, dist = b => { const r = b.host.closest('.module').getBoundingClientRect(); return r.top <= mid && r.bottom >= mid ? 0 : Math.min(Math.abs(r.top - mid), Math.abs(r.bottom - mid)); };
+  return vis.sort((a, b) => dist(a) - dist(b))[0] || null;
+}
+document.addEventListener('keydown', e => {
+  if (e.metaKey || e.ctrlKey || e.altKey || e.target.closest('input:not([type=checkbox]), select, textarea')) return;
+  if (e.target.closest('button') && (e.key === ' ' || e.key === 'Enter')) return;
+  let a = null;
+  if (e.key === ' ') a = 'play';
+  else if (e.key === 'ArrowRight') a = e.shiftKey ? 'end' : 'step';
+  else if (e.key === 'ArrowLeft' && e.shiftKey) a = 'reset';
+  const bar = a && pickBar(); if (!bar) return;
+  e.preventDefault(); bar.act(a);
+});
+
+// ---------- small render helpers ----------
+const wchip = (w, cls = '') => `<span class="chip ${cls}" data-w="${esc(w)}">${esc(w)}</span>`;
+function vecCells(a, cls = '', n = 3) { return a.map((x, d) => `<td class="n ${cls}" style="--d:${d}">${num(x, n)}</td>`).join(''); }
+const blankCells = () => Array.from({ length: D }, () => '<td class="n dim">·</td>').join('');
+const dimHead = () => Array.from({ length: D }, (_, d) => `<th class="n">d${d + 1}</th>`).join('');
+let svgUid = 0;
+
+// Two vectors always lie in one flat plane, so they can be drawn at their true lengths and
+// true angle however many dimensions they have. `ghost` is an earlier position of b; an
+// update Δv′ = g·v keeps v′ in the plane of v and the old v′, so all three are exact here.
+function pairPlane(a, b, o = {}) {
+  const ghost = o.ghost || null, id = 'pp' + (svgUid++), bc = o.bCls || 'b';
+  const W0 = 300, H0 = 172, ox = W0 / 2, oy = H0 - 22, Rpx = 120;
+  const ref = ghost && norm(ghost) > 1e-12 ? ghost : b;
+  let e1, e2;
+  const na = norm(a);
+  if (na > 1e-12) e1 = a.map(x => x / na); else if (norm(ref) > 1e-12) e1 = ref.map(x => x / norm(ref));
+  if (e1) {
+    const pr = dot(ref, e1), perp = ref.map((x, i) => x - pr * e1[i]), np = norm(perp);
+    e2 = np > 1e-9 * Math.max(1, norm(ref)) ? perp.map(x => x / np) : null;
+    if (!e2) { const r2 = (norm(b) > 1e-12 ? b : ref).map((x, i) => x - dot(b, e1) * e1[i]); const n2 = norm(r2); e2 = n2 > 1e-9 ? r2.map(x => x / n2) : null; }
+  }
+  const xy = u => !e1 ? [0, 0] : [dot(u, e1), e2 ? dot(u, e2) : 0];
+  const pts = [a, b].concat(ghost ? [ghost] : []).map(xy);
+  const R = Math.max(1e-9, ...pts.map(([x, y]) => Math.hypot(x, y)));
+  const k = Rpx / R, P = ([x, y]) => [ox + x * k, oy - y * k];
+  const labs = [];
+  const arrow = (u, cls, label, dash) => {
+    const [x, y] = P(xy(u)), len = Math.hypot(x - ox, y - oy);
+    if (len < 2) return `<circle cx="${ox}" cy="${oy}" r="4" class="pp-${cls}" fill="currentColor"/>${label ? `<text x="${ox + 8}" y="${oy - 10}" class="pp-lab pp-${cls}">${label} ${norm(u) < 1e-12 ? '= 0' : '(tiny)'}</text>` : ''}`;
+    let tx = x + (x - ox) / len * 12, ty = y + (y - oy) / len * 12;
+    if (label && labs.some(([lx, ly]) => Math.hypot(lx - tx, ly - ty) < 16)) ty -= 15;   // two tips close together: lift this label clear
+    let anc = 'middle'; if (tx > W0 - 34) { anc = 'end'; tx = W0 - 2; ty = Math.min(ty, y - 10); }   // keep labels at the right edge inside the box
+    if (label) labs.push([tx, ty]);
+    return `<line x1="${ox}" y1="${oy}" x2="${x}" y2="${y}" class="pp-${cls}" stroke="currentColor" stroke-width="${dash ? 1.5 : 2.5}" ${dash ? 'stroke-dasharray="4 3"' : ''} marker-end="url(#${id}-${cls}${dash ? 'g' : ''})"/>` +
+      (label ? `<text x="${tx}" y="${ty}" text-anchor="${anc}" dominant-baseline="middle" class="pp-lab pp-${cls}">${label}</text>` : '');
+  };
+  const mk = (cls, g) => `<marker id="${id}-${cls}${g ? 'g' : ''}" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="${g ? 5 : 6}" markerHeight="${g ? 5 : 6}" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" class="pp-${cls}" fill="currentColor"/></marker>`;
+  const nb = norm(b), cos = na > 1e-12 && nb > 1e-12 ? dot(a, b) / (na * nb) : null;
+  const ang = cos === null ? null : Math.acos(Math.max(-1, Math.min(1, cos)));
+  let arc = '';
+  if (ang !== null && Math.min(na, nb) * k > 14 && ang > 0.12) {
+    const r = 26, [bx, by] = xy(b), t = Math.atan2(by, bx);
+    const x2 = ox + r * Math.cos(t), y2 = oy - r * Math.sin(t);
+    arc = `<path d="M${ox + r},${oy} A${r},${r} 0 0 0 ${x2},${y2}" fill="none" stroke="var(--muted)"/>` +
+      `<text x="${ox + (r + 12) * Math.cos(t / 2)}" y="${oy - (r + 12) * Math.sin(t / 2)}" class="pp-ang" text-anchor="middle" dominant-baseline="middle">${Math.round(ang * 180 / Math.PI)}°</text>`;
+  }
+  const svg = `<svg viewBox="0 0 ${W0} ${H0}" width="100%" style="display:block;max-width:${W0}px">
+    <defs>${mk('a')}${mk(bc)}${mk(bc, true)}</defs>
+    <line x1="10" y1="${oy}" x2="${W0 - 10}" y2="${oy}" stroke="var(--grid)"/>
+    <path d="M${ox - Rpx},${oy} A${Rpx},${Rpx} 0 0 1 ${ox + Rpx},${oy}" fill="none" stroke="var(--grid)" stroke-dasharray="2 4"/>
+    ${arc}${ghost ? arrow(ghost, bc, '', true) : ''}${arrow(b, bc, o.bLabel || 'v′')}${arrow(a, 'a', o.aLabel || 'v')}
+  </svg>`;
+  const cap = cos === null
+    ? `<span class="note">${na <= 1e-12 ? (o.aLabel || 'v') : (o.bLabel || 'v′')} is all zeros, so there is no angle and the dot product is 0.</span>`
+    : `<span class="note">|${o.aLabel || 'v'}| = ${num(na)} · |${o.bLabel || 'v′'}| = ${num(nb, nb < 0.01 ? 4 : 3)} · angle ${Math.round(ang * 180 / Math.PI)}°<br>${num(na)} × ${num(nb, nb < 0.01 ? 4 : 3)} × cos ${Math.round(ang * 180 / Math.PI)}° = <b>${num(dot(a, b), 4)}</b></span>`;
+  return `<div class="pplane">${o.title ? `<div class="pp-title">${o.title}</div>` : ''}${svg}${cap}${ghost ? '<div class="note">dashed: v′ before this update</div>' : ''}</div>`;
+}
+
+// ---------- sticky status bar ----------
+function renderStatebar() {
+  const p = G.pair, sb = $('statebar-in');
+  if (!p) { sb.innerHTML = `<div class="sb-set"><span class="sb-vals"><span>training finished · <b>${commas(G.stream.total)}</b> pairs</span><a href="#s2">seed <b>${G.seed}</b></a></span></div>`; return; }
+  const s = V.sents[p.sent];
+  const sent = s.map((w, i) => wchip(W[w], i === p.pos ? 'v' : i === p.ctxPos ? 'vo' : '')).join('');
+  sb.innerHTML = `
+    <div class="sb-set"><span class="sb-vals">
+      <span>pair <b>${commas(G.step + 1)}</b> / ${commas(G.stream.total)}</span>
+      <span>pass <b>${p.epoch + 1}</b> / ${CFG.EPOCHS}</span>
+      <a href="#s6" title="learning rate α — decays linearly over training (6)">α <b>${alphaAt(p.wordsDone).toFixed(4)}</b></a>
+      <a href="#s2" title="initialisation seed — re-roll it in 2">seed <b>${G.seed}</b></a>
+    </span></div>
+    <span class="sb-hr"></span>
+    <div class="sb-row"><span class="sb-pair">center ${wchip(W[p.center], 'v')} context ${wchip(W[p.ctx], 'vo')}</span><span class="sb-sent">${sent}</span></div>`;
+}
+
+// ---------- 1 the problem ----------
+function render1() {
+  const ci = V.index.get('coffee'), ti = V.index.get('tea');
+  const near = w => new Set(V.sents.filter(s => s.includes(w)).flat().filter(x => x !== w));
+  const STOP = new Set(['the', 'a', 'i', 'my', 'is', 'of', 'into', 'with', 'to', 'and', 'can', 'has'].map(w => V.index.get(w)));
+  const nc = near(ci), nt = near(ti), shared = new Set([...nc].filter(x => nt.has(x) && !STOP.has(x)));
+  const together = V.sents.some(s => s.includes(ci) && s.includes(ti));
+  const col = w => V.sents.filter(s => s.includes(w)).map(s => `<div class="sline">${s.map(x => x === w ? `<b class="hl">${W[x]}</b>` : shared.has(x) ? `<span class="sh">${W[x]}</span>` : W[x]).join(' ')}</div>`).join('');
+  $('m1-body').innerHTML = `<div class="cols2"><div><h4>sentences with “coffee”</h4>${col(ci)}</div><div><h4>sentences with “tea”</h4>${col(ti)}</div></div>
+    <p class="note" style="margin:12px 0 0">${together ? '' : '“coffee” and “tea” never appear in the same sentence. '}Besides small words like “the” and “my”, they share ${shared.size} neighbours, shaded: ${[...shared].sort((a, b) => V.count[b] - V.count[a]).map(x => `<span class="sh">${W[x]}</span>`).join(' ')}.</p>`;
+}
+
+// ---------- 2 vocabulary and the two tables ----------
+const S2 = { sel: 'coffee' };
+function render2() {
+  const sel = V.index.get(S2.sel), maxc = Math.max(...V.count);
+  $('m2-corpus').innerHTML = V.sents.map(s => `<div class="sline">${s.map(w => `<span class="w${w === sel ? ' on' : ''}" data-w="${W[w]}">${W[w]}</span>`).join(' ')}</div>`).join('');
+  $('m2-vocab').innerHTML = `<table class="data vocab"><tbody>${W.map((w, i) => `<tr class="${i === sel ? 'on' : ''}" data-w="${w}"><td class="n rk">${i + 1}</td><td class="mono">${w}</td><td class="n">${V.count[i]}</td><td class="bar"><i style="width:${100 * V.count[i] / maxc}%"></i></td></tr>`).join('')}</tbody></table>`;
+  const vi = G.model.Win[sel], vo = G.model.Wout[sel];
+  $('m2-vecs').innerHTML = `<div class="tscroll"><table class="data vec"><thead><tr><th>${esc(S2.sel)}</th>${dimHead()}</tr></thead><tbody>
+    <tr class="r-v"><th>input v</th>${vecCells(vi)}</tr><tr class="r-vo"><th>output v′</th>${vecCells(vo)}</tr></tbody></table></div>`;
+  $('m2-stats').textContent = `${W.length} words in the vocabulary · ${V.total} words of running text · ${V.sents.length} sentences`;
+  $('m2-seed').textContent = G.step === 0 && G.phase === 0 ? `seed ${G.seed}, untrained` : `seed ${G.seed}, after ${commas(G.step)} pair updates`;
+}
+function selWord2(w) { if (w && V.index.has(w)) { S2.sel = w; render2(); } }
+['m2-corpus', 'm2-vocab'].forEach(id => $(id).addEventListener('click', e => { const el = e.target.closest('[data-w]'); if (el) selWord2(el.dataset.w); }));
+$('reroll').addEventListener('click', () => { stopAll(); G.seed = 1 + Math.floor(Math.random() * 9999); resetTraining(); restart4(); renderAll(); });
+
+// ---------- 3 the window ----------
+const S3 = { ci: 0 };
+function render3() {
+  const C = G.stream.centers, c = C[S3.ci], s = V.sents[c.sent];
+  const live = s.map((w, i) => i).filter(i => c.kept[i]), li = live.indexOf(c.pos);
+  const inWin = new Set(live.filter((_, j) => j !== li && Math.abs(j - li) <= c.b));
+  const lo = live[Math.max(0, li - c.b)], hi = live[Math.min(live.length - 1, li + c.b)];
+  let html = '';
+  s.forEach((w, i) => {
+    if (i === lo) html += '<span class="winbox">';
+    const cls = i === c.pos ? 'v' : !c.kept[i] ? 'drop' : inWin.has(i) ? 'vo' : '';
+    const t = !c.kept[i] ? `dropped by subsampling (kept with probability ${V.keep[w].toFixed(2)})` : `kept with probability ${V.keep[w].toFixed(2)}`;
+    html += `<span class="chip ${cls}" title="${t}">${W[w]}</span>`;
+    if (i === hi) html += `<span class="winlbl">window ${c.b} (max ${CFG.WINDOW})</span></span>`;
+  });
+  $('m3-sent').innerHTML = html;
+  const mine = Array.from({ length: c.n }, (_, k) => G.stream.get(c.first + k));
+  $('m3-pairs').innerHTML = mine.length ? mine.map(p => `<span class="pairchip">${wchip(W[p.center], 'v')}${wchip(W[p.ctx], 'vo')}</span>`).join('') : '<span class="note">no pairs: every other word in this sentence was dropped</span>';
+  const done = c.first + c.n;
+  $('m3-note').textContent = `center word ${S3.ci + 1} of ${C.length} in the first pass · sentence ${c.sent + 1} · ${commas(done)} pairs so far · ${commas(G.stream.total)} pairs over all ${CFG.EPOCHS} passes`;
+  $('win-v').textContent = CFG.WINDOW;
+}
+const bar3 = PlayBar($('m3-bar'), {
+  ms: 700, canStep: () => S3.ci < G.stream.centers.length - 1, canReset: () => S3.ci > 0,
+  step: () => { S3.ci++; render3(); }, end: () => { S3.ci = G.stream.centers.length - 1; render3(); }, reset: () => { S3.ci = 0; render3(); },
+});
+$('win').addEventListener('input', e => {
+  stopAll(); CFG.WINDOW = +e.target.value; G.stream = makeStream(G.streamSeed);
+  S3.ci = Math.min(S3.ci, G.stream.centers.length - 1); resetTraining(); restart4(); renderAll();
+});
+
+// ---------- 4 the dot product ----------
+const S4 = { preset: 'start', v: null, u: null, ph: 0, cw: '', ow: '' };
+function preset4(k) {
+  S4.preset = k; S4.ph = 0;
+  if (k === 'start') { const p = G.stream.get(0); S4.v = G.init.Win[p.center].slice(); S4.u = G.init.Wout[p.ctx].slice(); S4.cw = W[p.center]; S4.ow = W[p.ctx]; }
+  if (k === 'similar') { S4.v = [0.8, -0.3, 0.5, 0.1, -0.6]; S4.u = [0.7, -0.2, 0.6, 0.0, -0.5]; S4.cw = S4.ow = ''; }
+  if (k === 'unrelated') { S4.v = [0.8, -0.3, 0.5, 0.1, -0.6]; S4.u = [0.3, 0.6, -0.2, 0.4, 0.1]; S4.cw = S4.ow = ''; }
+  $('m4-presets').querySelectorAll('button').forEach(b => b.classList.toggle('on', b.dataset.v === k));
+}
+function restart4() { if (S4.preset === 'start') { preset4('start'); render4(); render5(); } }   // its vectors come from the initial model
+function score4() { return dot(S4.v, S4.u); }
+function render4() {
+  const ph = S4.ph, prod = S4.v.map((x, d) => x * S4.u[d]);
+  let run = 0; const parts = [];
+  for (let d = 0; d < Math.min(ph, D); d++) { run += prod[d]; parts.push(num(prod[d], 4)); }
+  const inp = (a, row) => a.map((x, d) => `<td class="n ${ph - 1 === d ? 'merge' : ''}"><input type="number" step="0.05" data-r="${row}" data-d="${d}" value="${+x.toFixed(4)}"></td>`).join('');
+  const prodCells = prod.map((x, d) => d < ph ? `<td class="n prod ${ph - 1 === d ? 'pop' : ''}">${num(x, 4)}</td>` : '<td class="n dim">·</td>').join('');
+  const done = ph > D;
+  $('m4-table').innerHTML = `<table class="data vec"><thead><tr><th></th>${dimHead()}<th class="n">sum</th></tr></thead><tbody>
+    <tr class="r-v"><th>center v${S4.cw ? ` <span class="mono">${esc(S4.cw)}</span>` : ''}</th>${inp(S4.v, 'v')}<td></td></tr>
+    <tr class="r-vo"><th>context v′${S4.ow ? ` <span class="mono">${esc(S4.ow)}</span>` : ''}</th>${inp(S4.u, 'u')}<td></td></tr>
+    <tr class="r-p"><th>product</th>${prodCells}<td class="n score ${done ? 'pop' : ''}">${ph ? num(run, 4) : '·'}</td></tr></tbody></table>`;
+  $('m4-sum').innerHTML = ph === 0 ? 'Press play to multiply the two rows, one dimension at a time.'
+    : `score = ${parts.join(' + ').replace(/\+ −/g, '− ')}${ph < D ? ' + …' : ''} = <b>${num(run, 4)}</b>${done ? (Math.abs(run) < 1e-12 ? ' — exactly zero, because v′ starts as all zeros' : run > 0 ? ' — positive: the vectors point the same way' : ' — negative: the vectors point apart') : ''}`;
+  $('m4-plane').innerHTML = pairPlane(S4.v, S4.u, { aLabel: 'v', bLabel: 'v′' });
+}
+$('m4-table').addEventListener('change', e => {
+  const el = e.target.closest('input'); if (!el) return;
+  const x = parseFloat(el.value); if (!isFinite(x)) return;
+  (el.dataset.r === 'v' ? S4.v : S4.u)[+el.dataset.d] = x;
+  S4.preset = 'custom'; S4.ph = D + 1; S4.cw = S4.ow = '';
+  $('m4-presets').querySelectorAll('button').forEach(b => b.classList.remove('on'));
+  render4(); render5(); refreshBars();
+});
+$('m4-presets').querySelectorAll('button').forEach(b => b.addEventListener('click', () => { preset4(b.dataset.v); render4(); render5(); refreshBars(); }));
+const bar4 = PlayBar($('m4-bar'), {
+  ms: 650, canStep: () => S4.ph <= D, canReset: () => S4.ph > 0,
+  step: () => { S4.ph++; render4(); render5(); }, end: () => { S4.ph = D + 1; render4(); render5(); }, reset: () => { S4.ph = 0; render4(); render5(); },
+});
+
+// ---------- 5 the sigmoid ----------
+const S5 = { manual: null };
+const XM = 8;
+function render5() {
+  const x = S5.manual === null ? score4() : S5.manual, s = sigmoid(x);
+  const W0 = 700, H0 = 230, l = 44, r = 20, t = 14, b = 34;
+  const X = v => l + (Math.max(-XM, Math.min(XM, v)) + XM) / (2 * XM) * (W0 - l - r), Y = v => t + (1 - v) * (H0 - t - b);
+  let path = ''; for (let i = 0; i <= 200; i++) { const v = -XM + 2 * XM * i / 200; path += (i ? 'L' : 'M') + X(v).toFixed(1) + ',' + Y(sigmoid(v)).toFixed(1); }
+  const ticks = [-8, -6, -4, -2, 0, 2, 4, 6, 8].map(v => `<line x1="${X(v)}" y1="${Y(0)}" x2="${X(v)}" y2="${Y(0) + 4}" stroke="var(--axis)"/><text x="${X(v)}" y="${Y(0) + 17}" text-anchor="middle" font-size="11">${num(v, 0)}</text>`).join('');
+  const yt = [0, 0.5, 1].map(v => `<line x1="${l}" y1="${Y(v)}" x2="${W0 - r}" y2="${Y(v)}" stroke="var(--grid)"/><text x="${l - 8}" y="${Y(v)}" text-anchor="end" dominant-baseline="middle" font-size="11">${v}</text>`).join('');
+  const off = Math.abs(x) > XM;
+  $('m5-chart').innerHTML = `<svg viewBox="0 0 ${W0} ${H0}" width="100%" style="display:block">${yt}${ticks}
+    <line x1="${X(0)}" y1="${t}" x2="${X(0)}" y2="${Y(0)}" stroke="var(--grid)"/>
+    <path d="${path}" fill="none" stroke="var(--ink)" stroke-width="2"/>
+    <line x1="${X(x)}" y1="${Y(s)}" x2="${X(x)}" y2="${Y(1)}" stroke="var(--blue)" stroke-width="2" opacity="0.35"/>
+    <line x1="${l}" y1="${Y(s)}" x2="${X(x)}" y2="${Y(s)}" stroke="var(--blue)" stroke-dasharray="3 3"/>
+    <circle cx="${X(x)}" cy="${Y(s)}" r="7" fill="var(--blue)" stroke="white" stroke-width="2"/>
+    <text x="${X(x) + (x > 5 ? -12 : 12)}" y="${Y(1) + (Y(s) - Y(1)) / 2}" font-size="11" fill="var(--blue)" text-anchor="${x > 5 ? 'end' : 'start'}" dominant-baseline="middle">error ${num(1 - s, 3)}</text>
+    <text x="${W0 - r}" y="${H0 - 4}" text-anchor="end" font-size="11">score${off ? ' (off the chart)' : ''}</text>
+  </svg>`;
+  $('m5-stats').innerHTML = `<div class="s"><div class="l">score</div><div class="v">${num(x, 3)}</div></div>
+    <div class="s"><div class="l"><span class="lc">σ</span>(score)</div><div class="v">${s.toFixed(3)}</div></div>
+    <div class="s"><div class="l">error 1 − <span class="lc">σ</span></div><div class="v">${(1 - s).toFixed(3)}</div></div>`;
+  $('m5-src').textContent = S5.manual === null ? 'The dot follows the score from 4.' : 'Score set by hand. Reset to follow 4 again.';
+  $('m5-x').value = Math.max(-XM, Math.min(XM, x)); $('m5-xv').textContent = num(x, 2);
+}
+$('m5-x').addEventListener('input', e => { S5.manual = +e.target.value; render5(); refreshBars(); });
+const bar5 = PlayBar($('m5-bar'), {
+  ms: 350, canStep: () => (S5.manual === null ? score4() : S5.manual) < XM, canReset: () => S5.manual !== null,
+  step: () => { const x = S5.manual === null ? score4() : S5.manual; S5.manual = Math.min(XM, Math.floor(x * 2 + 1e-9) / 2 + 0.5); render5(); },
+  end: () => { S5.manual = XM; render5(); }, reset: () => { S5.manual = null; render5(); },
+});
+
+// ---------- 6 one positive update ----------
+function render6() {
+  if (!G.pair) { $('m6-table').innerHTML = '<p class="note">Training has finished. Reset it in 8 to step through pairs again.</p>'; ['m6-head', 'm6-plane', 'm6-note'].forEach(id => $(id).innerHTML = ''); return; }
+  const p = G.pair, R = G.R, ph = Math.min(G.phase, POS_END), t = R.T[0], fresh = k => G.phase === k ? ' new' : '';
+  const show = (k, cells) => ph >= k ? cells : blankCells();
+  const prod = R.v0.map((x, d) => x * t.vo0[d]);
+  $('m6-head').innerHTML = `<div class="pairhead">center ${wchip(W[p.center], 'v')} context ${wchip(W[p.ctx], 'vo')} <span class="badge pos">real pair · label 1</span><span class="note">pair ${commas(G.step + 1)} · α = ${R.alpha.toFixed(5)}</span></div>`;
+  $('m6-table').innerHTML = `<table class="data vec"><thead><tr><th></th>${dimHead()}<th class="n"></th></tr></thead><tbody>
+      <tr class="r-v"><th>center v</th>${vecCells(R.v0)}<td></td></tr>
+      <tr class="r-vo"><th>context v′</th>${vecCells(t.vo0)}<td></td></tr>
+      <tr class="r-p"><th>product</th>${show(1, vecCells(prod, 'prod' + fresh(1), 4))}<td class="n score${fresh(1)}">${ph >= 1 ? 'score ' + num(t.f, 4) : ''}</td></tr>
+      <tr class="r-s"><th>σ, g</th><td colspan="${D + 1}" class="scal${fresh(2)}">${ph >= 2 ? `σ(${num(t.f, 4)}) = <b>${t.s.toFixed(4)}</b>` : ''}${ph >= 3 ? `<span class="${fresh(3)}"> &nbsp;·&nbsp; g = (1 − ${t.s.toFixed(4)}) × ${R.alpha.toFixed(5)} = <b>${num(t.g, 6)}</b></span>` : ''}</td></tr>
+      <tr class="r-d"><th>Δv′ = g · v</th>${show(4, vecCells(t.dvo, 'chg' + fresh(4), 5))}<td></td></tr>
+      <tr class="r-vo"><th>new v′</th>${show(4, vecCells(ph >= 4 ? t.vo1 : t.vo0, 'chg' + fresh(4), 4))}<td class="n note">${ph >= 4 ? 'applied now' : ''}</td></tr>
+      <tr class="r-pend"><th>pending Δv += g · v′</th>${show(5, vecCells(t.contrib, 'chg' + fresh(5), 5))}<td class="n note">${ph >= 5 ? 'held for 7' : ''}</td></tr>
+    </tbody></table>`;
+  $('m6-plane').innerHTML = pairPlane(R.v0, ph >= 4 ? t.vo1 : t.vo0, { aLabel: 'v', bLabel: 'v′', ghost: ph >= 4 ? t.vo0 : null });
+  const msg = [
+    'Press play to score this pair and update it.',
+    `The score is the dot product of v and v′, ${num(t.f, 4)}.`,
+    `σ turns it into the model’s probability that the pair is real: ${t.s.toFixed(4)}. The pair is real, so the error is 1 − σ = ${(1 - t.s).toFixed(4)}.`,
+    `g scales the error by the learning rate. It is positive, so both vectors will move toward each other.`,
+    `v′ moves by g times v: a small step in v’s direction. It is changed straight away.`,
+    G.phase > POS_END ? 'The positive update is done. 7 is now working through the negative samples for this pair.' : `v’s change, g times the old v′, is only written into the pending row. 7 adds negative samples before it is applied.`,
+  ];
+  $('m6-note').textContent = msg[ph] + (G.step === 0 && ph >= 3 ? ' (On the very first pair v′ is all zeros, so v’s pending change is zero too.)' : '');
+}
+const bar6 = PlayBar($('m6-bar'), {
+  ms: 900, canStep: () => !!G.pair && (G.phase < POS_END || G.phase === END()), canReset: () => !!G.pair && G.phase > 0,
+  step: () => { if (G.phase === END()) commit(); else setPhase(G.phase + 1); renderAll(); },
+  end: () => { if (G.phase === END()) commit(); setPhase(POS_END); renderAll(); },
+  reset: () => { setPhase(0); renderAll(); },
+});
+
+// ---------- 7 negative samples ----------
+function render7() {
+  if (!G.pair) { $('m7-table').innerHTML = '<p class="note">Training has finished. Reset it in 8 to step through pairs again.</p>'; ['m7-draws', 'm7-plane', 'm7-note'].forEach(id => $(id).innerHTML = ''); return; }
+  const p = G.pair, R = G.R, ph = G.phase, cur = G.PL[ph];
+  // frequency vs frequency^0.75
+  const drawnUpTo = R.T.filter(t => t.label === 0 && ph >= t.drawAt);
+  const hits = new Map(); drawnUpTo.forEach(t => hits.set(t.w, (hits.get(t.w) || 0) + 1));
+  const W0 = 700, H0 = 210, l = 34, bt = 62, top = 16, n = W.length, bw = (W0 - l - 24) / n, mx = Math.max(...V.raw, ...V.noise);
+  const Y = v => top + (1 - v / mx) * (H0 - bt - top);
+  let svg = `<svg viewBox="0 0 ${W0} ${H0}" width="100%" style="display:block">`;
+  [0, 0.05, 0.1].filter(v => v <= mx).forEach(v => { svg += `<line x1="${l}" x2="${W0}" y1="${Y(v)}" y2="${Y(v)}" stroke="var(--grid)"/><text x="${l - 6}" y="${Y(v)}" text-anchor="end" dominant-baseline="middle" font-size="10">${Math.round(v * 100)}%</text>`; });
+  W.forEach((w, i) => {
+    const x = l + i * bw, h = hits.get(i) || 0, isCtx = i === p.ctx;
+    svg += `<g><title>${w}: ${(100 * V.raw[i]).toFixed(1)}% of words, ${(100 * V.noise[i]).toFixed(1)}% of noise draws</title>
+      <rect x="${x + 1}" y="${Y(V.raw[i])}" width="${bw / 2 - 1}" height="${Y(0) - Y(V.raw[i])}" fill="var(--axis)"/>
+      <rect x="${x + bw / 2}" y="${Y(V.noise[i])}" width="${bw / 2 - 1}" height="${Y(0) - Y(V.noise[i])}" fill="${h ? 'var(--orange)' : '#f6c3ad'}"/>
+      ${h ? `<text x="${x + bw * 0.75}" y="${Y(V.noise[i]) - 4}" text-anchor="middle" font-size="10" fill="var(--orange)">${h > 1 ? '×' + h : '●'}</text>` : ''}
+      <text transform="translate(${x + bw / 2 + 3},${Y(0) + 6}) rotate(60)" font-size="10" font-family="var(--mono)" fill="${isCtx ? 'var(--aqua)' : 'var(--ink-2)'}" font-weight="${isCtx ? 700 : 400}">${w}</text></g>`;
+  });
+  $('m7-chart').innerHTML = svg + `<line x1="${l}" x2="${W0}" y1="${Y(0)}" y2="${Y(0)}" stroke="var(--axis)"/></svg>`;
+  // the draws
+  const negs = R.T.slice(1);
+  $('m7-draws').innerHTML = negs.map(t => ph >= t.drawAt
+    ? (t.skip ? `<span class="chip skip" title="same word as the context: skipped">${W[t.w]}</span>` : `<span class="chip neg">${W[t.w]}</span>`)
+    : '<span class="dempty"></span>').join('');
+  // the running table
+  const row = t => {
+    const lab = t.label ? `<span class="badge pos">real</span>` : `<span class="badge neg">noise</span>`;
+    if (t.label === 0 && ph < t.drawAt) return '';
+    if (t.skip) return `<tr class="skipped"><th>${wchip(W[t.w], 'neg')}${lab}</th><td colspan="${3 + D}" class="note">same word as the context, so this draw is skipped</td></tr>`;
+    const doneT = ph >= t.pendAt, isNew = cur && ((cur.k === 'neg' && cur.j === t.j) || (cur.k === 'pend' && t.label));
+    return `<tr class="${doneT ? '' : 'wait'}${isNew ? ' newrow' : ''}"><th>${wchip(W[t.w], t.label ? 'vo' : 'neg')}${lab}</th>
+      <td class="n">${doneT ? num(t.f, 4) : '·'}</td><td class="n">${doneT ? t.s.toFixed(4) : '·'}</td><td class="n">${doneT ? num(t.g, 6) : '·'}</td>
+      ${doneT ? vecCells(t.contrib, 'chg' + (isNew ? ' new' : ''), 5) : blankCells()}</tr>`;
+  };
+  const applied = R.applied;
+  $('m7-table').innerHTML = `<table class="data vec upd"><thead><tr><th>target</th><th class="n">score</th><th class="n">σ</th><th class="n">g</th>${Array.from({ length: D }, (_, d) => `<th class="n">g·v′ d${d + 1}</th>`).join('')}</tr></thead><tbody>
+    ${R.T.map(row).join('')}
+    <tr class="r-pend tot"><th colspan="4">pending Δv (sum of the rows above)</th>${vecCells(R.pend, 'chg' + (cur && (cur.k === 'neg' || cur.k === 'pend') ? ' new' : ''), 5)}</tr>
+    <tr class="r-v"><th colspan="4">center v ${wchip(W[p.center], 'v')} before</th>${vecCells(R.v0, '', 4)}</tr>
+    <tr class="r-v ${applied ? '' : 'wait'}"><th colspan="4">v + pending Δv${applied ? '' : ' (not yet applied)'}</th>${applied ? vecCells(R.v1, 'chg new', 4) : blankCells()}</tr>
+  </tbody></table>`;
+  // the pair plane: the latest negative, or v before and after once the pending row is applied
+  let plane;
+  if (cur && cur.k === 'apply') plane = pairPlane(R.v0, R.v1, { aLabel: 'v', bLabel: 'new v', bCls: 'a2', title: 'center v, before and after the pending row is added' });
+  else {
+    const last = negs.filter(t => !t.skip && ph >= t.outAt).pop();
+    plane = last ? pairPlane(R.v0, last.vo1, { aLabel: 'v', bLabel: `v′ ${W[last.w]}`, ghost: last.vo0, title: `center v and noise word “${W[last.w]}”` })
+      : `<div class="pplane"><div class="note">Each negative sample’s v′ will be drawn here as it is pushed away from v.</div></div>`;
+  }
+  $('m7-plane').innerHTML = plane;
+  let msg;
+  if (ph < POS_END) msg = 'The positive update from 6 comes first. Step to complete it.';
+  else if (!cur || cur.k === 'pend') msg = `Next: draw ${CFG.K} noise words from the orange distribution.`;
+  else if (cur.k === 'draw') { const t = R.T[cur.j + 1]; msg = t.skip ? `Drew “${W[t.w]}”, the context word itself. word2vec skips such draws.` : `Drew “${W[t.w]}”. It is treated as a fake pair: label 0.`; }
+  else if (cur.k === 'neg') { const t = R.T[cur.j + 1]; msg = `Fake pair with “${W[t.w]}”: σ = ${t.s.toFixed(4)}, so g = (0 − σ) × α = ${num(t.g, 6)} is negative. Its v′ is pushed away from v, and g·v′ joins the pending row.`; }
+  else msg = `All ${CFG.K} draws done. The pending row is added to v once. The next step moves on to pair ${commas(G.step + 2)}.`;
+  $('m7-note').textContent = msg;
+}
+const bar7 = PlayBar($('m7-bar'), {
+  ms: 900, canStep: () => !!G.pair, canReset: () => !!G.pair && G.phase > POS_END,
+  step: () => { if (G.phase === END()) commit(); else setPhase(G.phase < POS_END ? POS_END : G.phase + 1); renderAll(); },
+  end: () => { if (G.phase === END()) commit(); setPhase(END()); renderAll(); },
+  reset: () => { setPhase(POS_END); renderAll(); },
+});
+
+// ---------- 8 training at scale ----------
+const S8 = { speed: 100, sel: 'coffee', showOut: false };
+function render8() {
+  const M = G.model, sel = V.index.get(S8.sel);
+  const pc = pca2(M.Win, G.pca && G.pca.comps); G.pca = pc;
+  const ptsIn = M.Win.map(pc.project), ptsOut = S8.showOut ? M.Wout.map(pc.project) : [];
+  const all = ptsIn.concat(ptsOut), want = 1.12 * Math.max(1e-6, ...all.map(([x, y]) => Math.max(Math.abs(x), Math.abs(y))));
+  G.rad = !G.rad || want > G.rad ? want : G.rad * 0.92 + want * 0.08;   // grow at once, shrink gently
+  const W0 = 700, H0 = 440, cx = W0 / 2, cy = H0 / 2, k = Math.min(W0, H0) / 2 / G.rad;
+  const P = ([x, y]) => [cx + x * k, cy - y * k];
+  const nb = neighbors(M.Win, sel, 5), nbs = new Set(nb.map(x => x.i));
+  let svg = `<svg viewBox="0 0 ${W0} ${H0}" width="100%" style="display:block" id="scatter">
+    <line x1="0" x2="${W0}" y1="${cy}" y2="${cy}" stroke="var(--grid)"/><line x1="${cx}" x2="${cx}" y1="0" y2="${H0}" stroke="var(--grid)"/>`;
+  nb.forEach(({ i }) => { const [x1, y1] = P(ptsIn[sel]), [x2, y2] = P(ptsIn[i]); svg += `<line x1="${x1}" y1="${y1}" x2="${x2}" y2="${y2}" stroke="var(--violet)" opacity="0.35"/>`; });
+  ptsOut.forEach((q, i) => { const [x, y] = P(q); svg += `<g class="pt out"><circle cx="${x}" cy="${y}" r="3"/><text x="${x + 5}" y="${y + 3}">${W[i]}′</text></g>`; });
+  ptsIn.forEach((q, i) => { const [x, y] = P(q); svg += `<g class="pt${i === sel ? ' sel' : nbs.has(i) ? ' nb' : ''}" data-w="${W[i]}"><circle cx="${x}" cy="${y}" r="${i === sel ? 6 : 4}"/><text x="${x + 7}" y="${y + 4}">${W[i]}</text></g>`; });
+  $('m8-scatter').innerHTML = svg + '</svg>';
+  // loss and learning rate
+  const nbk = Math.ceil(G.stream.total / G.bucket), L = [];
+  for (let b = 0; b < nbk; b++) if (G.lossN[b]) L.push([b, G.lossSum[b] / G.lossN[b]]);
+  const cw = 340, ch = 150, cl = 46, cb = 22, ct = 10;
+  const lmax = Math.max(4.5, ...L.map(x => x[1]));
+  const LX = b => cl + b / nbk * (cw - cl - 6), LY = v => ct + (1 - v / lmax) * (ch - ct - cb);
+  const lpath = L.map(([b, v], i) => (i ? 'L' : 'M') + LX(b + 0.5).toFixed(1) + ',' + LY(v).toFixed(1)).join('');
+  const frac = G.step / G.stream.total;
+  const axis = (fy, ticks, f) => ticks.map(v => `<line x1="${cl}" x2="${cw - 6}" y1="${fy(v)}" y2="${fy(v)}" stroke="var(--grid)"/><text x="${cl - 5}" y="${fy(v)}" text-anchor="end" dominant-baseline="middle" font-size="10">${f(v)}</text>`).join('');
+  $('m8-loss').innerHTML = `<svg viewBox="0 0 ${cw} ${ch}" width="100%" style="display:block">${axis(LY, [0, 2, 4], v => v)}
+    <path d="${lpath}" fill="none" stroke="var(--blue)" stroke-width="2"/>
+    <text x="${cw - 6}" y="${ch - 6}" text-anchor="end" font-size="10">training →</text></svg>`;
+  const AY = v => ct + (1 - v / CFG.ALPHA0) * (ch - ct - cb), AX = f => cl + f * (cw - cl - 6);
+  $('m8-alpha').innerHTML = `<svg viewBox="0 0 ${cw} ${ch}" width="100%" style="display:block">${axis(AY, [0, CFG.ALPHA0 / 2, CFG.ALPHA0], v => v.toFixed(4).replace(/0+$/, '').replace(/\.$/, ''))}
+    <line x1="${AX(0)}" y1="${AY(CFG.ALPHA0)}" x2="${AX(1)}" y2="${AY(0)}" stroke="var(--axis)" stroke-width="2"/>
+    <line x1="${AX(0)}" y1="${AY(CFG.ALPHA0)}" x2="${AX(frac)}" y2="${AY(CFG.ALPHA0 * (1 - frac))}" stroke="var(--blue)" stroke-width="2"/>
+    <circle cx="${AX(frac)}" cy="${AY(CFG.ALPHA0 * (1 - frac))}" r="4" fill="var(--blue)"/>
+    <text x="${cw - 6}" y="${ch - 6}" text-anchor="end" font-size="10">training →</text></svg>`;
+  // neighbours
+  $('m8-nn').innerHTML = `<table class="data"><tbody>${nb.map(({ i, c }) => `<tr data-w="${W[i]}"><td class="mono">${W[i]}</td><td class="n">${c.toFixed(2)}</td><td class="bar"><i style="width:${Math.max(0, c) * 100}%"></i></td></tr>`).join('')}</tbody></table>`;
+  const cs = (a, b) => cosine(M.Win[V.index.get(a)], M.Win[V.index.get(b)]).toFixed(2);
+  $('m8-stats').innerHTML = `<div class="s"><div class="l">pass</div><div class="v">${G.pair ? G.pair.epoch + 1 : CFG.EPOCHS}<small> / ${CFG.EPOCHS}</small></div></div>
+    <div class="s"><div class="l">cos(coffee, tea)</div><div class="v">${cs('coffee', 'tea')}</div></div>
+    <div class="s"><div class="l">cos(dog, cat)</div><div class="v">${cs('dog', 'cat')}</div></div>
+    <div class="s"><div class="l">cos(coffee, dog)</div><div class="v">${cs('coffee', 'dog')}</div></div>`;
+  const sel8 = $('m8-word'); if (!sel8.options.length) W.slice().sort().forEach(w => sel8.add(new Option(w, w)));
+  sel8.value = S8.sel;
+}
+$('m8-scatter').addEventListener('click', e => { const g = e.target.closest('[data-w]'); if (g) { S8.sel = g.dataset.w; render8(); } });
+$('m8-nn').addEventListener('click', e => { const g = e.target.closest('[data-w]'); if (g) { S8.sel = g.dataset.w; render8(); } });
+$('m8-word').addEventListener('change', e => { S8.sel = e.target.value; render8(); });
+$('m8-out').addEventListener('change', e => { S8.showOut = e.target.checked; G.rad = null; render8(); });
+$('m8-speed').querySelectorAll('button').forEach(b => b.addEventListener('click', () => {
+  S8.speed = +b.dataset.v; $('m8-speed').querySelectorAll('button').forEach(x => x.classList.toggle('on', x === b));
+}));
+const bar8 = PlayBar($('m8-bar'), {
+  ms: 16, canStep: () => !!G.pair, canReset: () => G.step > 0 || G.phase > 0,
+  step: () => { trainN(S8.speed); renderAll(); }, end: () => { trainN(Infinity); renderAll(); },
+  reset: () => { resetTraining(); renderAll(); },
+});
+
+// ---------- 9 CBOW ----------
+function box(x, y, w, txt, cls) { return `<g class="dg ${cls}"><rect x="${x - w / 2}" y="${y - 14}" width="${w}" height="28" rx="6"/><text x="${x}" y="${y + 1}" text-anchor="middle" dominant-baseline="middle">${txt}</text></g>`; }
+function arr(x1, y1, x2, y2, id) { return `<line x1="${x1}" y1="${y1}" x2="${x2}" y2="${y2}" stroke="var(--ink-2)" stroke-width="1.3" marker-end="url(#${id})"/>`; }
+function render9() {
+  const ctx = ['drink', 'hot', 'every', 'morning'], mk = '<marker id="dg-ar" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6" markerHeight="6" orient="auto"><path d="M0,0 L10,5 L0,10 z" fill="var(--ink-2)"/></marker>';
+  const xs = [45, 125, 215, 295];
+  let a = `<svg viewBox="0 0 340 250" width="100%" style="display:block"><defs>${mk}</defs><text x="170" y="16" text-anchor="middle" class="dg-t">skip-gram</text>`;
+  ctx.forEach((w, i) => { a += box(xs[i], 60, 74, w, 'vo') + arr(170, 196, xs[i], 76, 'dg-ar'); });
+  a += box(170, 210, 84, 'coffee', 'v') + `<text x="170" y="244" text-anchor="middle" class="dg-n">4 pairs → 4 updates of v</text></svg>`;
+  let b = `<svg viewBox="0 0 340 250" width="100%" style="display:block"><defs>${mk}</defs><text x="170" y="16" text-anchor="middle" class="dg-t">CBOW</text>`;
+  ctx.forEach((w, i) => { b += box(xs[i], 60, 74, w, 'v') + arr(xs[i], 76, 170, 124, 'dg-ar'); });
+  b += `<g class="dg avg"><circle cx="170" cy="138" r="15"/><text x="170" y="139" text-anchor="middle" dominant-baseline="middle">avg</text></g>` + arr(170, 154, 170, 194, 'dg-ar');
+  b += box(170, 210, 84, 'coffee', 'vo') + `<text x="170" y="244" text-anchor="middle" class="dg-n">1 update, shared by all 4 context words</text></svg>`;
+  $('m9-body').innerHTML = `<div class="cols2">${a}${b}</div>`;
+}
+
+// ---------- 10 the bridge to LLMs ----------
+function render10() {
+  const cells = (y, x, tone) => tone.map((c, i) => `<rect x="${x + i * 18}" y="${y}" width="16" height="16" rx="2" fill="${c}"/>`).join('');
+  const same = ['#cfcae9', '#8a7fd0', '#e4e1f5', '#4a3aa7', '#b3abe0'];
+  const riv = ['#bfe9d6', '#1baf7a', '#e0f5ec', '#73cfa8', '#9fdfc2'], mon = ['#73cfa8', '#e0f5ec', '#0e7a53', '#bfe9d6', '#1baf7a'];
+  const mk = '<marker id="br-ar" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6" markerHeight="6" orient="auto"><path d="M0,0 L10,5 L0,10 z" fill="var(--ink-2)"/></marker>';
+  $('m10-body').innerHTML = `<div class="tscroll"><svg viewBox="0 0 700 200" width="100%" style="display:block;min-width:560px"><defs>${mk}</defs>
+    <text x="10" y="44" class="dg-s">we sat on the river <tspan font-weight="700">bank</tspan></text>
+    <text x="10" y="164" class="dg-s">she paid it into the <tspan font-weight="700">bank</tspan></text>
+    ${arr(196, 40, 236, 90, 'br-ar')}${arr(196, 160, 236, 112, 'br-ar')}
+    <text x="290" y="72" text-anchor="middle" class="dg-n">one row of the table</text>${cells(92, 245, same)}
+    ${arr(342, 100, 392, 100, 'br-ar')}
+    <g class="dg"><rect x="396" y="58" width="104" height="84" rx="8"/><text x="448" y="94" text-anchor="middle" class="dg-n">transformer</text><text x="448" y="110" text-anchor="middle" class="dg-n">layers</text></g>
+    ${arr(504, 88, 548, 48, 'br-ar')}${arr(504, 112, 548, 152, 'br-ar')}
+    ${cells(32, 552, riv)}<text x="552" y="66" class="dg-n">“bank” by a river</text>
+    ${cells(144, 552, mon)}<text x="552" y="178" class="dg-n">“bank” for money</text>
+  </svg></div><p class="note" style="margin:8px 0 0">Schematic. The colours stand in for numbers: the same row comes out of the table both times, and the layers that follow pull it two ways.</p>`;
+}
+
+// ---------- everything ----------
+function stopAll() { BARS.forEach(b => b.playing && b.stop()); }
+function renderAll() {
+  renderStatebar(); render2(); render3(); render6(); render7(); render8(); refreshBars();
+}
+G.stream = makeStream(G.streamSeed);
+resetTraining(); preset4('start');
+render1(); render4(); render5(); render9(); render10(); renderAll();
+})();
+</script>
+</body>
+</html>
