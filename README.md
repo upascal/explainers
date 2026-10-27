@@ -9,6 +9,7 @@ folder with the same layout: prose in `src/index.md`, one widget per file in
 |---|---|
 | [`synthid/`](synthid/) | how tournament-sampling text watermarks (SynthID-Text) work |
 | [`word2vec/`](word2vec/) | how word2vec (skip-gram with negative sampling) learns, trained live in the browser |
+| [`gpt2-embeddings/`](gpt2-embeddings/) | GPT-2's first layer: tokenizer, token and position tables, and how next-token prediction trains them |
 
 ```bash
 pip install -r requirements.txt     # markdown-it-py, shared by every build.py

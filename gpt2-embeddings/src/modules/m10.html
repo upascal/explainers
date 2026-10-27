@@ -1,0 +1,21 @@
+<div class="module" id="m10">
+  <h4 class="m3title">Watch the rows arrange themselves</h4>
+  <div class="row"><label class="ctl"><input type="checkbox" id="m10-pos"> show position rows</label></div>
+  <div class="split8">
+    <div>
+      <h4>Token rows, projected to 2D (PCA, approximate)</h4>
+      <div class="m8map"><div id="m10-scatter"></div>
+        <span class="m8zoom" role="group" aria-label="zoom the map"><button data-z="in" title="zoom in">+</button><button data-z="out" title="zoom out">−</button><button data-z="fit" title="fit the whole map">Fit</button></span></div>
+      <div class="m8scrub" style="margin:12px 0 0">
+        <input type="range" id="m10-scrub" min="0" max="1" step="1" value="0" aria-label="training progress">
+        <span class="note" id="m10-at"></span>
+      </div>
+    </div>
+    <div>
+      <h4>Nearest neighbours</h4>
+      <label class="ctl" style="margin-bottom:8px">of <select id="m10-word"></select></label>
+      <div id="m10-nn"></div>
+      <p class="note">by cosine similarity, in all 6 dimensions</p>
+    </div>
+  </div>
+</div>
