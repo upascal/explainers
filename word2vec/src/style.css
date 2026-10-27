@@ -134,7 +134,8 @@ main > table td:first-child { color: var(--ink-2); white-space: nowrap; }
 .split { display: grid; grid-template-columns: minmax(0, 1fr) 300px; gap: 18px; align-items: start; }
 .split8 { display: grid; grid-template-columns: minmax(0, 1fr) 200px; gap: 18px; align-items: start; }
 .tscroll { overflow-x: auto; min-width: 0; }
-@media (max-width: 760px) { .split, .split8 { grid-template-columns: minmax(0, 1fr); } }
+@media (max-width: 760px) { .split { grid-template-columns: minmax(0, 1fr); } .split8 { grid-template-columns: minmax(0, 1fr) 160px; gap: 12px; } }
+@media (max-width: 520px) { .split8 { grid-template-columns: minmax(0, 1fr); } }
 @media (max-width: 600px) { .cols2 { grid-template-columns: minmax(0, 1fr); } }
 .note b { color: var(--ink); }
 
@@ -233,14 +234,14 @@ tr.skipped { opacity: 0.6; }
 
 /* 8 */
 #scatter .pt circle { fill: var(--ink-2); }
-#scatter .pt text { font-family: "JetBrains Mono", var(--mono); font-size: 11px; fill: var(--ink-2); }
+#scatter .pt text { font-family: "JetBrains Mono", var(--mono); font-size: calc(11px * var(--z, 1)); fill: var(--ink-2); }
 #scatter .pt { cursor: pointer; }
 #scatter .pt.sel circle { fill: var(--violet); }
 #scatter .pt.sel text { fill: var(--violet); font-weight: 700; }
 #scatter .pt.nb circle { fill: #8a7fd0; }
 #scatter .pt.nb text { fill: var(--violet); }
 #scatter .pt.out circle { fill: var(--aqua); }
-#scatter .pt.out text { fill: #0e7a53; font-style: italic; font-size: 10px; }
+#scatter .pt.out text { fill: #0e7a53; font-style: italic; font-size: calc(10px * var(--z, 1)); }
 #m8-scatter { background: white; border: 1px solid var(--grid); border-radius: 8px; }
 
 /* 9, 10 diagrams */
@@ -570,3 +571,16 @@ table.m6t thead th { white-space: normal; max-width: 92px; line-height: 1.25; } 
 .vq.compact .op { font-size: 1.2rem; }
 .vq.compact { gap: 4px 6px; }
 .m4br.selpart { outline: 2px solid var(--orange); outline-offset: 3px; border-radius: 4px; }
+.m8agrid { align-items: start; } #m8a-plane .pplane { max-width: none; }
+.m8num { width: 76px; padding: 5px 8px; border: 1px solid var(--axis); border-radius: 6px; font: inherit; font-family: var(--sans); }
+.ghostkey { display: inline-block; width: 22px; height: 0; border-top: 1.5px dashed var(--muted); vertical-align: middle; margin-right: 4px; }
+/* the map: zoom buttons, drag to pan */
+.m8map { position: relative; }
+#m8-scatter { overflow: hidden; }
+#m8-scatter.zoomed { cursor: grab; touch-action: none; }
+#m8-scatter.zoomed:active { cursor: grabbing; }
+.m8zoom { position: absolute; right: 8px; top: 8px; display: inline-flex; border: 1px solid var(--axis); border-radius: 6px; overflow: hidden; background: white; }
+.m8zoom button { border: 0; border-radius: 0; padding: 3px 9px; font-size: 0.85rem; background: white; }
+.m8zoom button + button { border-left: 1px solid var(--axis); }
+.m8scrub { flex-wrap: wrap; gap: 4px 12px; } .m8scrub .note { white-space: normal; }
+.split8 .m8scrub input[type=range] { flex: 1 1 100%; } .split8 .m8scrub .note { flex: 1 1 100%; }

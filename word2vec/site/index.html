@@ -16,7 +16,7 @@
 <main>
 <h1>How word2vec learns</h1>
 <p class="lede">In 2013 a team at Google released <a href="https://code.google.com/archive/p/word2vec/">word2vec</a>, a small program that reads a lot of text and gives every word a list of numbers. Words used in similar ways end up with similar lists. The idea underlies much of modern language technology, including the first layer of every large language model. This page takes the training procedure apart one step at a time.</p>
-<p class="note">Everything on this page is computed live in your browser. A tiny model with 5 dimensions trains on a hand-written corpus of 30 sentences, so the numbers on screen are the real numbers. Each section builds on the last, and they all share one model: the vectors created in section 2 are the ones trained in 6, 7 and 8. The bar at the top shows the pair you have selected: click one in section 3, or pick any two words in section 4. Every interactive has the same controls: reset, play, step, and skip to end. The keyboard drives the one you used last: → steps, space plays or pauses, shift + → skips to the end, and shift + ← resets.</p>
+<p class="note">Everything on this page is computed live in your browser. A tiny model with 5 dimensions trains on a hand-written corpus of 30 sentences, so the numbers on screen are the real numbers. Each section builds on the last, and they all share one model: the vectors created in section 2 are the ones trained in sections 6 to 9. The bar at the top shows the pair you have selected: click one in section 3, or pick any two words in section 4. Every interactive has the same controls: reset, play, step, and skip to end. The keyboard drives the one you used last: → steps, space plays or pauses, shift + → skips to the end, and shift + ← resets.</p>
 <nav class="toc">
   <a href="#s1">1. The problem</a>
   <a href="#s2">2. The vocabulary and two tables</a>
@@ -25,9 +25,10 @@
   <a href="#s5">5. The sigmoid</a>
   <a href="#s6">6. One update</a>
   <a href="#s7">7. Negative samples</a>
-  <a href="#s8">8. Training at scale</a>
-  <a href="#s9">9. Aside: CBOW</a>
-  <a href="#s10">10. The bridge to LLMs</a>
+  <a href="#s8">8. Two words drawing together</a>
+  <a href="#s9">9. Training at scale</a>
+  <a href="#s10">10. Aside: CBOW</a>
+  <a href="#s11">11. The bridge to LLMs</a>
 </nav>
 <h2 id="s1"><span class="num">1</span>The problem</h2>
 <p>Computers handle numbers, not meanings. To do anything useful with language, a program needs some numeric description of a word that captures what the word means. The simplest approach gives each word an arbitrary ID: “coffee” is 17, “tea” is 18. But the IDs say nothing about meaning. 17 is no closer to 18 than it is to 9,000.</p>
@@ -254,23 +255,53 @@
   </div>
 </div>
 <p>This is the whole of training. Every pair, in every pass, gets one positive update and up to five negative ones.</p>
-<h2 id="s8"><span class="num">8</span>Training at scale</h2>
-<p>Now run the same loop over the whole corpus, 200 times. The chart below projects the 5-dimensional input vectors down to 2 dimensions with PCA (principal component analysis), which keeps the two directions in which the vectors spread out most. This picture is approximate. Distances on it are only roughly right, and the neighbour list beside it is computed in all 5 dimensions. Drag the timeline to go back to any point in training.</p>
-<div class="module" id="m8">
+<h2 id="s8"><span class="num">8</span>Two words drawing together</h2>
+<p>Training never compares “coffee” with “tea”. They never appear in the same sentence, so no update ever involves both. Yet each one’s input vector is pulled toward the output vectors of the same neighbours, “hot”, “cup”, “drink” and “milk”, so the two input vectors drift toward each other.</p>
+<p>Any two vectors, in 5 dimensions or 300, lie together in one flat plane, so they can be drawn at their true lengths with the true angle between them. Compare the start, middle and end of training, and try a word that shares no neighbours, such as “coffee” against “dog”.</p>
+<div class="module" id="m8a">
+  <div class="row">
+    <label class="ctl">word <select id="m8a-center"></select></label>
+    <label class="ctl">compared with <select id="m8a-other"></select></label>
+    <label class="ctl">training <span class="seg" id="m8a-stage"><button data-v="start" class="on">start</button><button data-v="middle">middle</button><button data-v="trained">end</button></span></label>
+  </div>
+  <div class="cols2 m8agrid">
+    <div><h4>The two input vectors, at their true angle</h4><div id="m8a-plane"></div></div>
+    <div><h4>The angle between them over training</h4><div id="m8a-chart"></div></div>
+  </div>
+</div>
+<p>Early on, almost every vector moves the same way, so even “coffee” and “dog” briefly point together. Then the negative samples push words that never share neighbours apart again, while “coffee” and “tea” stay close. The angle settles to small for words used alike, and wide for words that are not.</p>
+<h2 id="s9"><span class="num">9</span>Training at scale</h2>
+<p>Now run the same loop over the whole corpus, 200 times: 66,627 pairs, each with its negative samples. The first thing to watch is the <em>loss</em>: the error measured as the model sees it, summed over the real word and its noise words, −log σ(score) for the real word and −log(1 − σ(score)) for each noise word.</p>
+<div class="module" id="m8l">
+  <h4 class="m3title">Train a model on the corpus</h4>
+  <div class="row">
+    <label class="ctl">seed <input type="number" id="m8-seed" min="1" max="9999" step="1" value="1" class="m8num"></label>
+    <button id="m8-seedrand">random</button>
+    <button class="primary" id="m8-train">Train</button>
+    <label class="ctl">learning rate <span class="seg" id="m8-lr"><button data-v="0.01">0.01</button><button data-v="0.025" class="on">0.025 (default)</button><button data-v="0.05">0.05</button><button data-v="0.1">0.1</button></span></label>
+  </div>
   <div class="row">
     <span id="m8-bar"></span>
-    <label class="ctl">pairs per frame <span class="seg" id="m8-speed"><button data-v="1">1</button><button data-v="10">10</button><button data-v="100" class="on">100</button><button data-v="1000">1,000</button></span></label>
-    <label class="ctl"><input type="checkbox" id="m8-out"> show output vectors v′</label>
   </div>
-  <div class="m8scrub">
-    <input type="range" id="m8-scrub" min="0" max="1" step="1" value="0" aria-label="training progress">
-    <span class="note" id="m8-pos"></span>
+  <div class="cols2">
+    <div><h4>Loss per pair</h4><div id="m8-loss"></div></div>
+    <div><h4>Learning rate <span style="text-transform:none">α</span></h4><div id="m8-alpha"></div></div>
   </div>
-  <div class="stat" id="m8-stats"></div>
+  <p class="note" id="m8-ghost" style="margin:6px 0 0"></p>
+</div>
+<p>The loss starts at about 6 × log 2 ≈ 4.2, one coin toss for each of the six pairs, and falls quickly as the vectors arrange themselves. Meanwhile the learning rate shrinks in a straight line, so the late steps are fine adjustments. Play training to watch both.</p>
+<p>To see the arrangement itself, the map below projects the 5-dimensional input vectors down to 2 dimensions with PCA (principal component analysis), which keeps the two directions in which the vectors spread out most. This picture is approximate. Distances on it are only roughly right, and the neighbour list beside it is computed in all 5 dimensions. Drag the slider under it to any point in training; playing above moves it too.</p>
+<div class="module" id="m8">
+  <div class="row"><label class="ctl"><input type="checkbox" id="m8-out"> show output vectors v′</label></div>
   <div class="split8">
     <div>
       <h4>Input vectors, projected to 2D (PCA, approximate)</h4>
-      <div id="m8-scatter"></div>
+      <div class="m8map"><div id="m8-scatter"></div>
+        <span class="m8zoom" role="group" aria-label="zoom the map"><button data-z="in" title="zoom in">+</button><button data-z="out" title="zoom out">−</button><button data-z="fit" title="fit the whole map">fit</button></span></div>
+      <div class="m8scrub" style="margin:12px 0 0">
+        <input type="range" id="m8-scrub" min="0" max="1" step="1" value="0" aria-label="training progress">
+        <span class="note" id="m8-pos"></span>
+      </div>
     </div>
     <div>
       <h4>Nearest neighbours</h4>
@@ -279,24 +310,15 @@
       <p class="note">by cosine similarity, in all 5 dimensions</p>
     </div>
   </div>
-  <h4 style="margin-top:18px">Two input vectors, at their true angle</h4>
-  <div class="row"><span class="seg" id="m8-pairs"><button data-v="coffee,tea" class="on">coffee &amp; tea</button><button data-v="dog,cat">dog &amp; cat</button><button data-v="coffee,dog">coffee &amp; dog</button></span></div>
-  <div id="m8-angle"></div>
-  <div class="cols2" style="margin-top:12px">
-    <div><h4>Loss per pair</h4><div id="m8-loss"></div></div>
-    <div><h4>Learning rate <span style="text-transform:none">α</span></h4><div id="m8-alpha"></div></div>
-  </div>
 </div>
-<p>The loss is the error measured as the model sees it, summed over the real word and its noise words: −log σ(score) for the real word and −log(1 − σ(score)) for each noise word. It starts at about 6 × log 2 ≈ 4.2, one coin toss for each of the six targets, and falls as the vectors arrange themselves.</p>
 <p>Watch “coffee” and “tea”. They never appear in the same sentence, yet they end up nearly on top of each other. Their input vectors were both pulled toward the same output vectors, those of “hot”, “cup”, “drink” and “milk”. Most of the time the same happens to “dog” and “cat”. Turn on the output vectors to see those context anchors that the input vectors arrange themselves around.</p>
-<p>Below the map, two input vectors are drawn exactly. Any two vectors, in 5 dimensions or 300, lie together in one flat plane, so they can be drawn at their true lengths with the true angle between them. At the start of training the angle between “coffee” and “tea” is close to 90°; by the end it has nearly closed.</p>
-<h2 id="s9"><span class="num">9</span>Aside: CBOW</h2>
+<h2 id="s10"><span class="num">10</span>Aside: CBOW</h2>
 <p>The first word2vec paper proposed a second model, <em>continuous bag-of-words</em> (CBOW), and it is the default in the released code. It flips the question around. Instead of using the center word to predict each context word, CBOW averages the input vectors of all the context words and uses that average to predict the center word.</p>
 <div class="module" id="m9">
   <div id="m9-body"></div>
 </div>
 <p>That makes one update per center word instead of one per pair, so CBOW trains faster. The cost is that every context word receives the same nudge, whatever its distance or role. The machinery is otherwise identical: the same sigmoid, the same negative samples, the same Δv so far. The fill-in-the-blank framing makes CBOW a distant ancestor of the masked language modelling later used to train BERT.</p>
-<h2 id="s10"><span class="num">10</span>The bridge to LLMs</h2>
+<h2 id="s11"><span class="num">11</span>The bridge to LLMs</h2>
 <p>The first layer of a large language model is the same kind of object as word2vec’s input table: a lookup table with one vector per token, started at random and learned by gradient descent. Three things differ.</p>
 <ul>
 <li><strong>Tokens, not words.</strong> LLMs split text into subword pieces, so rare and new words are built from parts instead of being dropped.</li>

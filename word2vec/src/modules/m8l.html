@@ -1,0 +1,17 @@
+<div class="module" id="m8l">
+  <h4 class="m3title">Train a model on the corpus</h4>
+  <div class="row">
+    <label class="ctl">seed <input type="number" id="m8-seed" min="1" max="9999" step="1" value="1" class="m8num"></label>
+    <button id="m8-seedrand">random</button>
+    <button class="primary" id="m8-train">Train</button>
+    <label class="ctl">learning rate <span class="seg" id="m8-lr"><button data-v="0.01">0.01</button><button data-v="0.025" class="on">0.025 (default)</button><button data-v="0.05">0.05</button><button data-v="0.1">0.1</button></span></label>
+  </div>
+  <div class="row">
+    <span id="m8-bar"></span>
+  </div>
+  <div class="cols2">
+    <div><h4>Loss per pair</h4><div id="m8-loss"></div></div>
+    <div><h4>Learning rate <span style="text-transform:none">α</span></h4><div id="m8-alpha"></div></div>
+  </div>
+  <p class="note" id="m8-ghost" style="margin:6px 0 0"></p>
+</div>

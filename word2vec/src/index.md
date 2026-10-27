@@ -2,7 +2,7 @@
 
 <p class="lede">In 2013 a team at Google released <a href="https://code.google.com/archive/p/word2vec/">word2vec</a>, a small program that reads a lot of text and gives every word a list of numbers. Words used in similar ways end up with similar lists. The idea underlies much of modern language technology, including the first layer of every large language model. This page takes the training procedure apart one step at a time.</p>
 
-<p class="note">Everything on this page is computed live in your browser. A tiny model with 5 dimensions trains on a hand-written corpus of 30 sentences, so the numbers on screen are the real numbers. Each section builds on the last, and they all share one model: the vectors created in section 2 are the ones trained in 6, 7 and 8. The bar at the top shows the pair you have selected: click one in section 3, or pick any two words in section 4. Every interactive has the same controls: reset, play, step, and skip to end. The keyboard drives the one you used last: → steps, space plays or pauses, shift + → skips to the end, and shift + ← resets.</p>
+<p class="note">Everything on this page is computed live in your browser. A tiny model with 5 dimensions trains on a hand-written corpus of 30 sentences, so the numbers on screen are the real numbers. Each section builds on the last, and they all share one model: the vectors created in section 2 are the ones trained in sections 6 to 9. The bar at the top shows the pair you have selected: click one in section 3, or pick any two words in section 4. Every interactive has the same controls: reset, play, step, and skip to end. The keyboard drives the one you used last: → steps, space plays or pauses, shift + → skips to the end, and shift + ← resets.</p>
 
 <!-- toc -->
 
@@ -133,19 +133,31 @@ For a negative pair the label is 0, so *g* = (0 − σ) × α is negative, and t
 
 This is the whole of training. Every pair, in every pass, gets one positive update and up to five negative ones.
 
-## 8 Training at scale
+## 8 Two words drawing together
 
-Now run the same loop over the whole corpus, 200 times. The chart below projects the 5-dimensional input vectors down to 2 dimensions with PCA (principal component analysis), which keeps the two directions in which the vectors spread out most. This picture is approximate. Distances on it are only roughly right, and the neighbour list beside it is computed in all 5 dimensions. Drag the timeline to go back to any point in training.
+Training never compares “coffee” with “tea”. They never appear in the same sentence, so no update ever involves both. Yet each one’s input vector is pulled toward the output vectors of the same neighbours, “hot”, “cup”, “drink” and “milk”, so the two input vectors drift toward each other.
+
+Any two vectors, in 5 dimensions or 300, lie together in one flat plane, so they can be drawn at their true lengths with the true angle between them. Compare the start, middle and end of training, and try a word that shares no neighbours, such as “coffee” against “dog”.
+
+<!-- module: m8a -->
+
+Early on, almost every vector moves the same way, so even “coffee” and “dog” briefly point together. Then the negative samples push words that never share neighbours apart again, while “coffee” and “tea” stay close. The angle settles to small for words used alike, and wide for words that are not.
+
+## 9 Training at scale
+
+Now run the same loop over the whole corpus, 200 times: 66,627 pairs, each with its negative samples. The first thing to watch is the *loss*: the error measured as the model sees it, summed over the real word and its noise words, −log σ(score) for the real word and −log(1 − σ(score)) for each noise word.
+
+<!-- module: m8l -->
+
+The loss starts at about 6 × log 2 ≈ 4.2, one coin toss for each of the six pairs, and falls quickly as the vectors arrange themselves. Meanwhile the learning rate shrinks in a straight line, so the late steps are fine adjustments. Play training to watch both.
+
+To see the arrangement itself, the map below projects the 5-dimensional input vectors down to 2 dimensions with PCA (principal component analysis), which keeps the two directions in which the vectors spread out most. This picture is approximate. Distances on it are only roughly right, and the neighbour list beside it is computed in all 5 dimensions. Drag the slider under it to any point in training; playing above moves it too.
 
 <!-- module: m8 -->
 
-The loss is the error measured as the model sees it, summed over the real word and its noise words: −log σ(score) for the real word and −log(1 − σ(score)) for each noise word. It starts at about 6 × log 2 ≈ 4.2, one coin toss for each of the six targets, and falls as the vectors arrange themselves.
-
 Watch “coffee” and “tea”. They never appear in the same sentence, yet they end up nearly on top of each other. Their input vectors were both pulled toward the same output vectors, those of “hot”, “cup”, “drink” and “milk”. Most of the time the same happens to “dog” and “cat”. Turn on the output vectors to see those context anchors that the input vectors arrange themselves around.
 
-Below the map, two input vectors are drawn exactly. Any two vectors, in 5 dimensions or 300, lie together in one flat plane, so they can be drawn at their true lengths with the true angle between them. At the start of training the angle between “coffee” and “tea” is close to 90°; by the end it has nearly closed.
-
-## 9 Aside: CBOW
+## 10 Aside: CBOW
 
 The first word2vec paper proposed a second model, *continuous bag-of-words* (CBOW), and it is the default in the released code. It flips the question around. Instead of using the center word to predict each context word, CBOW averages the input vectors of all the context words and uses that average to predict the center word.
 
@@ -153,7 +165,7 @@ The first word2vec paper proposed a second model, *continuous bag-of-words* (CBO
 
 That makes one update per center word instead of one per pair, so CBOW trains faster. The cost is that every context word receives the same nudge, whatever its distance or role. The machinery is otherwise identical: the same sigmoid, the same negative samples, the same Δv so far. The fill-in-the-blank framing makes CBOW a distant ancestor of the masked language modelling later used to train BERT.
 
-## 10 The bridge to LLMs
+## 11 The bridge to LLMs
 
 The first layer of a large language model is the same kind of object as word2vec’s input table: a lookup table with one vector per token, started at random and learned by gradient descent. Three things differ.
 

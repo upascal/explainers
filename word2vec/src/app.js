@@ -40,13 +40,18 @@ function unflat(f) {
 function resetTraining() {
   G.init = initModel(G.seed);
   G.bucket = Math.ceil(G.stream.total / NB); G.lossSum = new Float64Array(NB + 1); G.lossN = new Uint32Array(NB + 1);
-  const m = cloneModel(G.init); G.ck = [];
-  for (let i = 0; i < G.stream.total; i++) {
+  const m = cloneModel(G.init), N = G.stream.total; G.ck = []; G.lossAll = new Float32Array(N);
+  // input vectors at log-spaced steps, for charts whose time axis is logarithmic (early training in detail)
+  const snapAt = [...new Set([0, ...Array.from({ length: 90 }, (_, k) => Math.round(Math.pow(N, (k + 1) / 90)))])].filter(x => x < N);
+  G.wsnaps = []; let si = 0;
+  for (let i = 0; i < N; i++) {
     if (i % CK === 0) G.ck.push(flat(m));
+    if (i === snapAt[si]) { G.wsnaps.push({ step: i, Win: m.Win.map(r => r.slice()) }); si++; }
     if (i === Math.floor(G.stream.total / 2)) G.mid = cloneModel(m);
     const p = G.stream.get(i), l = trainPair(m, p, alphaAt(p.wordsDone));
-    const b = Math.floor(i / G.bucket); G.lossSum[b] += l; G.lossN[b]++;
+    const b = Math.floor(i / G.bucket); G.lossSum[b] += l; G.lossN[b]++; G.lossAll[i] = l;
   }
+  G.wsnaps.push({ step: N, Win: m.Win.map(r => r.slice()) });
   G.final = m; G.model = cloneModel(G.init); G.step = 0; G.pca = null; G.rad = null;
 }
 // the model after `step` pairs, from the nearest checkpoint
@@ -356,7 +361,9 @@ function render2() {
 }
 function selWord2(w) { if (w && V.index.has(w)) { S2.sel = w; render2(); } }
 ['m2-corpus', 'm2-vocab'].forEach(id => $(id).addEventListener('click', e => { const el = e.target.closest('[data-w]'); if (el) selWord2(el.dataset.w); }));
-$('reroll').addEventListener('click', () => { stopAll(); G.seed = 1 + Math.floor(Math.random() * 9999); resetTraining(); loadPair6(); restart4(); renderAll(); });
+// retrain the whole page's model, after the seed or the learning rate changes
+function retrain(prev) { stopAll(); G.prev = prev; resetTraining(); loadPair6(); S8A.key = ''; restart4(); renderAll(); }
+$('reroll').addEventListener('click', () => { const prev = snapshotRun(); G.seed = 1 + Math.floor(Math.random() * 9999); retrain(prev); });
 
 // ---------- 2 an example input vector, at the beginning, middle and end of training ----------
 // Four fixed words, plus a fifth slot: a random word at first, then the selected pair's center
@@ -420,7 +427,7 @@ const isReal = (c, x) => REAL.has(V.index.get(c) + ',' + V.index.get(x));
 function selectPair(c, x, from) {
   S4.center = c; S4.ctx = x;
   if (from !== '3') sync3(); else pairs3();
-  load4(); if (S4.math) play4(); else render4(); render5(); renderStatebar(); follow2v(); sync6(); refreshBars();
+  load4(); if (S4.math) play4(); else render4(); render5(); renderStatebar(); follow2v(); sync6(); render8a(); refreshBars();
 }
 // 6–7 step through the selected pair; a negative pair never gets a positive update, so then
 // they show the center word with its most common real neighbour instead (and say so)
@@ -507,7 +514,7 @@ $('m3-sent-pick').addEventListener('change', e => setSent3(+e.target.value));
 $('m3-minus').addEventListener('click', () => { S3.b = Math.max(1, S3.b - 1); render3(); follow3(); });
 $('m3-plus').addEventListener('click', () => { S3.b = Math.min(CFG.WINDOW, S3.b + 1); render3(); follow3(); });
 ['m3-pairs', 'm3-fakes'].forEach(id => $(id).addEventListener('click', e => { const x = e.target.closest('[data-x]'); if (x) selectPair(x.dataset.c, x.dataset.x, '3'); }));
-window.addEventListener('resize', () => place3());
+window.addEventListener('resize', () => { place3(); if (typeof render8 === 'function') render8(); });
 (function drag3() {
   // press and drag moves the window; a press that doesn't move picks the word as center
   const track = $('m3-track'); let g = null;
@@ -603,7 +610,7 @@ function play4() { bar4.stop(); S4.step = 0; render4(); refreshBars(); bar4.act(
 $('m4-eq').addEventListener('click', e => {
   if (e.target.closest('#m4-math')) { S4.math = !S4.math; if (S4.math) play4(); else { bar4.stop(); render4(); } }
 });
-function pick4() { stopAll(); load4(); if (S4.math) play4(); else render4(); render5(); renderStatebar(); refreshBars(); }
+function pick4() { stopAll(); load4(); if (S4.math) play4(); else render4(); render5(); renderStatebar(); render8a(); refreshBars(); }
 ['m4', 'm5'].forEach(k => {
   $(k + '-center').addEventListener('change', e => { stopAll(); selectPair(e.target.value, S4.ctx, k); });
   $(k + '-ctx').addEventListener('change', e => { stopAll(); selectPair(S4.center, e.target.value, k); });
@@ -817,69 +824,145 @@ const bar7 = PlayBar($('m7-bar'), {
   reset: () => { setPhase(POS_END); render6(); render7(); },
 });
 
+// ---------- 8 two words drawing together ----------
+// The selected pair's center word against any other word, at the start, middle or end of
+// training (shared with 4–5), plus the angle between their input vectors over the whole run.
+const S8A = { other: null, series: null, key: '' };
+const angle = (x, y) => Math.acos(Math.max(-1, Math.min(1, cosine(Array.from(x), Array.from(y))))) * 180 / Math.PI;
+function other8a() {   // default: the word most like the center word at the end of training
+  if (!S8A.other || S8A.other === S4.center) S8A.other = W[neighbors(G.final.Win, V.index.get(S4.center), 1)[0].i];
+  return S8A.other;
+}
+function angleSeries(a, b) {   // [step, angle] at every log-spaced snapshot
+  const key = G.seed + ':' + CFG.ALPHA0 + ':' + a + ',' + b; if (S8A.key === key) return S8A.series;
+  S8A.series = G.wsnaps.map(w => [w.step, angle(w.Win[a], w.Win[b])]);
+  S8A.key = key; return S8A.series;
+}
+function render8a() {
+  const aw = S4.center, bw = other8a(), a = V.index.get(aw), b = V.index.get(bw), N = G.stream.total;
+  const M = { start: G.init, middle: G.mid, trained: G.final }[S4.stage], at = { start: 0, middle: Math.floor(N / 2), trained: N }[S4.stage];
+  $('m8a-plane').innerHTML = pairPlane(M.Win[a], M.Win[b], { aLabel: aw, bLabel: bw, bCls: 'a2', cos: true });
+  const ser = angleSeries(a, b), cur = angle(M.Win[a], M.Win[b]);
+  const cw = 340, ch = 190, cl = 40, cr = 10, ct = 12, cb = 30, X = v => cl + logx(v) * (cw - cl - cr), Y = v => ct + (1 - v / 180) * (ch - ct - cb);   // log time axis
+  const grid = [0, 45, 90, 135, 180].map(v => `<line x1="${cl}" x2="${cw - cr}" y1="${Y(v)}" y2="${Y(v)}" stroke="var(--grid)"/><text x="${cl - 6}" y="${Y(v)}" text-anchor="end" dominant-baseline="middle" font-size="10">${v}°</text>`).join('');
+  const ticks = LOG_TICKS().map(([x, l]) => `<text x="${X(x)}" y="${ch - 14}" text-anchor="${x === N ? 'end' : 'middle'}" font-size="9">${l}</text>`).join('')
+    + `<text x="${X(N / 2)}" y="${ch - 26}" text-anchor="middle" font-size="9" fill="var(--muted)">middle</text>`;
+  $('m8a-chart').innerHTML = `<svg viewBox="0 0 ${cw} ${ch}" width="100%" style="display:block">${grid}${ticks}
+    <path d="${ser.map(([x, v], i) => (i ? 'L' : 'M') + X(x).toFixed(1) + ',' + Y(v).toFixed(1)).join('')}" fill="none" stroke="var(--violet)" stroke-width="2"/>
+    <line x1="${X(at)}" x2="${X(at)}" y1="${ct}" y2="${ch - cb}" stroke="var(--ink-2)" stroke-dasharray="3 3"/>
+    <circle cx="${X(at)}" cy="${Y(cur)}" r="5" fill="var(--violet)" stroke="white" stroke-width="2"/>
+    <text x="${X(at) + (at > N * 0.8 ? -8 : 8)}" y="${Y(cur) - 10}" text-anchor="${at > N * 0.8 ? 'end' : 'start'}" font-size="11" font-weight="600" fill="var(--violet)">${Math.round(cur)}°</text>
+    <text x="${cl + (cw - cl - cr) / 2}" y="${ch - 2}" text-anchor="middle" font-size="10" fill="var(--ink-2)">pairs trained (log scale)</text></svg>`;
+  const cs = $('m8a-center'), os = $('m8a-other');
+  if (!cs.options.length) W.slice().sort().forEach(w => { cs.add(new Option(w, w)); os.add(new Option(w, w)); });
+  cs.value = aw; os.value = bw;
+  $('m8a-stage').querySelectorAll('button').forEach(x => x.classList.toggle('on', x.dataset.v === S4.stage));
+}
+$('m8a-center').addEventListener('change', e => { const c = e.target.value; selectPair(c, contexts6(c).includes(S4.ctx) ? S4.ctx : contexts6(c, true), '8'); render8a(); });
+$('m8a-other').addEventListener('change', e => { S8A.other = e.target.value; render8a(); });
+$('m8a-stage').addEventListener('click', e => { const b = e.target.closest('button'); if (b) { S4.stage = b.dataset.v; pick4(); render8a(); } });
+
 // ---------- 8 training at scale ----------
-const S8 = { speed: 100, sel: 'coffee', showOut: false, pair: ['coffee', 'tea'] };
+const S8 = { speed: 500, sel: 'coffee', showOut: false, zoom: 1, pan: [0, 0] };   // zoom and pan of the map, in PCA units   // speed: pairs trained per frame (a full run plays in about 5 s)
 function render8() {
   const M = G.model, sel = V.index.get(S8.sel);
   const pc = pca2(M.Win, G.pca && G.pca.comps); G.pca = pc;
   const ptsIn = M.Win.map(pc.project), ptsOut = S8.showOut ? M.Wout.map(pc.project) : [];
   const all = ptsIn.concat(ptsOut), want = 1.12 * Math.max(1e-6, ...all.map(([x, y]) => Math.max(Math.abs(x), Math.abs(y))));
   G.rad = !G.rad || want > G.rad ? want : G.rad * 0.92 + want * 0.08;   // grow at once, shrink gently
-  const W0 = 700, H0 = 440, cx = W0 / 2, cy = H0 / 2, k = Math.min(W0, H0) / 2 / G.rad;
-  const P = ([x, y]) => [cx + x * k, cy - y * k];
+  // the map's shape follows its width: wide on a big screen, squarer as it narrows
+  const box = $('m8-scatter').clientWidth || 700, W0 = 700, H0 = box < 420 ? 700 : box < 560 ? 560 : 440;
+  const cx = W0 / 2, cy = H0 / 2, k = Math.min(W0, H0) / 2 / G.rad * S8.zoom;
+  const P = ([x, y]) => [cx + (x - S8.pan[0]) * k, cy - (y - S8.pan[1]) * k];
+  S8.k = k; S8.W0 = W0; S8.selPt = ptsIn[sel];   // for dragging and zooming
   const nb = neighbors(M.Win, sel, 5), nbs = new Set(nb.map(x => x.i));
-  let svg = `<svg viewBox="0 0 ${W0} ${H0}" width="100%" style="display:block" id="scatter">
-    <line x1="0" x2="${W0}" y1="${cy}" y2="${cy}" stroke="var(--grid)"/><line x1="${cx}" x2="${cx}" y1="0" y2="${H0}" stroke="var(--grid)"/>`;
-  nb.forEach(({ i }) => { const [x1, y1] = P(ptsIn[sel]), [x2, y2] = P(ptsIn[i]); svg += `<line x1="${x1}" y1="${y1}" x2="${x2}" y2="${y2}" stroke="var(--violet)" opacity="0.35"/>`; });
-  ptsOut.forEach((q, i) => { const [x, y] = P(q); svg += `<g class="pt out"><circle cx="${x}" cy="${y}" r="3"/><text x="${x + 5}" y="${y + 3}">${W[i]}′</text></g>`; });
-  ptsIn.forEach((q, i) => { const [x, y] = P(q); svg += `<g class="pt${i === sel ? ' sel' : nbs.has(i) ? ' nb' : ''}" data-w="${W[i]}"><circle cx="${x}" cy="${y}" r="${i === sel ? 6 : 4}"/><text x="${x + 7}" y="${y + 4}">${W[i]}</text></g>`; });
+  const [ox, oy] = P([0, 0]);   // the axes follow the pan
+  // labels and dots are sized in screen pixels (the drawing is scaled to fit its box), then zoom magnifies them
+  const z = (W0 / box) * S8.zoom;
+  let svg = `<svg viewBox="0 0 ${W0} ${H0}" width="100%" style="display:block;--z:${z}" id="scatter">
+    <line x1="0" x2="${W0}" y1="${oy}" y2="${oy}" stroke="var(--grid)"/><line x1="${ox}" x2="${ox}" y1="0" y2="${H0}" stroke="var(--grid)"/>`;
+  nb.forEach(({ i }) => { const [x1, y1] = P(ptsIn[sel]), [x2, y2] = P(ptsIn[i]); svg += `<line x1="${x1}" y1="${y1}" x2="${x2}" y2="${y2}" stroke="var(--violet)" stroke-width="${z}" opacity="0.35"/>`; });
+  ptsOut.forEach((q, i) => { const [x, y] = P(q); svg += `<g class="pt out"><circle cx="${x}" cy="${y}" r="${3 * z}"/><text x="${x + 5 * z}" y="${y + 3 * z}">${W[i]}′</text></g>`; });
+  ptsIn.forEach((q, i) => { const [x, y] = P(q); svg += `<g class="pt${i === sel ? ' sel' : nbs.has(i) ? ' nb' : ''}" data-w="${W[i]}"><circle cx="${x}" cy="${y}" r="${(i === sel ? 6 : 4) * z}"/><text x="${x + 7 * z}" y="${y + 4 * z}">${W[i]}</text></g>`; });
   $('m8-scatter').innerHTML = svg + '</svg>';
-  // loss and learning rate
-  const nbk = Math.ceil(G.stream.total / G.bucket), L = [];
-  for (let b = 0; b < nbk; b++) if (G.lossN[b]) L.push([b, G.lossSum[b] / G.lossN[b]]);
-  const done = L.filter(([b]) => b * G.bucket < G.step);   // the full run is known; blue up to where the timeline is
-  const cw = 340, ch = 150, cl = 46, cb = 22, ct = 10;
-  const lmax = Math.max(4.5, ...L.map(x => x[1]));
-  const LX = b => cl + b / nbk * (cw - cl - 6), LY = v => ct + (1 - v / lmax) * (ch - ct - cb);
-  const lp = A => A.map(([b, v], i) => (i ? 'L' : 'M') + LX(b + 0.5).toFixed(1) + ',' + LY(v).toFixed(1)).join('');
-  const frac = G.step / G.stream.total;
-  const axis = (fy, ticks, f) => ticks.map(v => `<line x1="${cl}" x2="${cw - 6}" y1="${fy(v)}" y2="${fy(v)}" stroke="var(--grid)"/><text x="${cl - 5}" y="${fy(v)}" text-anchor="end" dominant-baseline="middle" font-size="10">${f(v)}</text>`).join('');
-  $('m8-loss').innerHTML = `<svg viewBox="0 0 ${cw} ${ch}" width="100%" style="display:block">${axis(LY, [0, 2, 4], v => v)}
-    <path d="${lp(L)}" fill="none" stroke="var(--blue-100)" stroke-width="2"/><path d="${lp(done)}" fill="none" stroke="var(--blue)" stroke-width="2"/>
-    <text x="${cw - 6}" y="${ch - 6}" text-anchor="end" font-size="10">training →</text></svg>`;
-  const AY = v => ct + (1 - v / CFG.ALPHA0) * (ch - ct - cb), AX = f => cl + f * (cw - cl - 6);
-  $('m8-alpha').innerHTML = `<svg viewBox="0 0 ${cw} ${ch}" width="100%" style="display:block">${axis(AY, [0, CFG.ALPHA0 / 2, CFG.ALPHA0], v => v.toFixed(4).replace(/0+$/, '').replace(/\.$/, ''))}
-    <line x1="${AX(0)}" y1="${AY(CFG.ALPHA0)}" x2="${AX(1)}" y2="${AY(0)}" stroke="var(--axis)" stroke-width="2"/>
-    <line x1="${AX(0)}" y1="${AY(CFG.ALPHA0)}" x2="${AX(frac)}" y2="${AY(CFG.ALPHA0 * (1 - frac))}" stroke="var(--blue)" stroke-width="2"/>
-    <circle cx="${AX(frac)}" cy="${AY(CFG.ALPHA0 * (1 - frac))}" r="4" fill="var(--blue)"/>
-    <text x="${cw - 6}" y="${ch - 6}" text-anchor="end" font-size="10">training →</text></svg>`;
+  $('m8-scatter').classList.toggle('zoomed', S8.zoom > 1);   // only a zoomed map takes over touch drags
   // neighbours
   $('m8-nn').innerHTML = `<table class="data"><tbody>${nb.map(({ i, c }) => `<tr data-w="${W[i]}"><td class="mono">${W[i]}</td><td class="n">${c.toFixed(2)}</td><td class="bar"><i style="width:${Math.max(0, c) * 100}%"></i></td></tr>`).join('')}</tbody></table>`;
-  const cs = (a, b) => cosine(M.Win[V.index.get(a)], M.Win[V.index.get(b)]).toFixed(2);
-  $('m8-stats').innerHTML = `<div class="s"><div class="l">pass</div><div class="v">${G.step >= G.stream.total ? CFG.EPOCHS : timelinePair().epoch + 1}<small> / ${CFG.EPOCHS}</small></div></div>
-    <div class="s"><div class="l">cos(coffee, tea)</div><div class="v">${cs('coffee', 'tea')}</div></div>
-    <div class="s"><div class="l">cos(dog, cat)</div><div class="v">${cs('dog', 'cat')}</div></div>
-    <div class="s"><div class="l">cos(coffee, dog)</div><div class="v">${cs('coffee', 'dog')}</div></div>`;
   const sel8 = $('m8-word'); if (!sel8.options.length) W.slice().sort().forEach(w => sel8.add(new Option(w, w)));
   sel8.value = S8.sel;
-  // two input vectors in their own plane: true lengths, true angle
-  const [a, b] = S8.pair;
-  $('m8-angle').innerHTML = pairPlane(M.Win[V.index.get(a)], M.Win[V.index.get(b)], { aLabel: a, bLabel: b, bCls: 'a2', cos: true });
-  $('m8-pairs').querySelectorAll('button').forEach(x => x.classList.toggle('on', x.dataset.v === S8.pair.join(',')));
   // the timeline
   const sc = $('m8-scrub'); sc.max = G.stream.total; sc.value = G.step;
-  $('m8-pos').textContent = `${commas(G.step)} of ${commas(G.stream.total)} pairs trained`;
+  const at = `${commas(G.step)} of ${commas(G.stream.total)} pairs trained · pass ${G.step >= G.stream.total ? CFG.EPOCHS : timelinePair().epoch + 1} of ${CFG.EPOCHS}`;
+  $('m8-pos').textContent = at;
 }
-function renderTimeline() { renderStatebar(); render8(); refreshBars(); }
+// the loss and learning rate over the whole run (section 9's first piece)
+// time on a log scale: x in 0..1 for a step, so the first few percent of training get room
+const logx = step => Math.log10(1 + step) / Math.log10(1 + G.stream.total);
+const LOG_TICKS = () => [[100, '100'], [1000, '1,000'], [10000, '10,000'], [G.stream.total, 'end']];
+// the loss in equal-width bins along training (a linear time axis), as [x 0..1, mean loss, last step in bin]
+function lossBinsLinear() {
+  const N = G.stream.total, out = [];
+  for (let b = 0; b * G.bucket < N; b++) if (G.lossN[b]) out.push([(b + 0.5) * G.bucket / N, G.lossSum[b] / G.lossN[b], Math.min(N, (b + 1) * G.bucket)]);
+  return out;
+}
+// the run before the latest retrain, drawn faintly for comparison
+function snapshotRun() { return G.lossAll ? { bins: lossBinsLinear(), alpha: CFG.ALPHA0, seed: G.seed } : null; }
+function render8l() {
+  $('m8-seed').value = G.seed;
+  $('m8-lr').querySelectorAll('button').forEach(b => b.classList.toggle('on', +b.dataset.v === CFG.ALPHA0));
+  const cw = 340, ch = 160, cl = 46, cb = 34, ct = 10, N = G.stream.total, X = f => cl + f * (cw - cl - 6);
+  const L = lossBinsLinear(), lmax = Math.max(4.5, ...L.map(x => x[1])), LY = v => ct + (1 - v / lmax) * (ch - ct - cb);
+  const lp = A => A.map(([x, v], i) => (i ? 'L' : 'M') + X(x).toFixed(1) + ',' + LY(v).toFixed(1)).join('');
+  const axis = (fy, ticks, f) => ticks.map(v => `<line x1="${cl}" x2="${cw - 6}" y1="${fy(v)}" y2="${fy(v)}" stroke="var(--grid)"/><text x="${cl - 5}" y="${fy(v)}" text-anchor="end" dominant-baseline="middle" font-size="10">${f(v)}</text>`).join('');
+  const xticks = [[0, '0'], [N / 2, 'middle'], [N, 'end']].map(([v, l]) => `<line x1="${X(v / N)}" x2="${X(v / N)}" y1="${ch - cb}" y2="${ch - cb + 4}" stroke="var(--axis)"/><text x="${X(v / N)}" y="${ch - cb + 14}" text-anchor="${v === N ? 'end' : v ? 'middle' : 'start'}" font-size="9">${l}</text>`).join('')
+    + `<text x="${cl + (cw - cl - 6) / 2}" y="${ch - 3}" text-anchor="middle" font-size="10">pairs trained</text>`;
+  const now = X(G.step / N), prev = G.prev;
+  const ghost = prev ? `<path d="${lp(prev.bins)}" fill="none" stroke="var(--muted)" stroke-width="1.5" stroke-dasharray="4 3"/>` : '';
+  $('m8-loss').innerHTML = `<svg viewBox="0 0 ${cw} ${ch}" width="100%" style="display:block">${axis(LY, [0, 2, 4], v => v)}${xticks}${ghost}
+    <path d="${lp(L.filter(([, , e]) => e <= G.step))}" fill="none" stroke="var(--blue)" stroke-width="2"/>
+    <line x1="${now}" x2="${now}" y1="${ct}" y2="${ch - cb}" stroke="var(--ink-2)" stroke-dasharray="3 3"/></svg>`;
+  // learning rate on the same log time axis, on a fixed scale up to the largest choice
+  const AMAX = 0.1, AY = v => ct + (1 - v / AMAX) * (ch - ct - cb);
+  const aline = a0 => `M${X(0)},${AY(a0)}L${X(1)},${AY(0)}`;   // linear decay: a straight line on a linear axis
+  $('m8-alpha').innerHTML = `<svg viewBox="0 0 ${cw} ${ch}" width="100%" style="display:block">${axis(AY, [0, 0.025, 0.05, 0.075, 0.1], v => v ? String(v) : '0')}${xticks}
+    ${prev && prev.alpha !== CFG.ALPHA0 ? `<path d="${aline(prev.alpha)}" fill="none" stroke="var(--muted)" stroke-width="1.5" stroke-dasharray="4 3"/>` : ''}
+    <path d="${aline(CFG.ALPHA0)}" fill="none" stroke="var(--blue)" stroke-width="2"/>
+    <circle cx="${now}" cy="${AY(CFG.ALPHA0 * (1 - G.step / N))}" r="4" fill="var(--blue)" stroke="white" stroke-width="2"/></svg>`;
+  $('m8-ghost').innerHTML = prev ? `<span class="ghostkey"></span> previous run: seed ${prev.seed}, α ${prev.alpha}` : '';
+}
+function renderTimeline() { renderStatebar(); render8l(); render8(); refreshBars(); }
+// Train: watch the run from the start (the model itself is already computed)
+$('m8-train').addEventListener('click', () => { bar8.stop(); seek(0); renderTimeline(); bar8.act('play'); });
+$('m8-seed').addEventListener('change', e => { const prev = snapshotRun(); G.seed = Math.max(1, Math.min(9999, Math.round(+e.target.value) || 1)); retrain(prev); });
+$('m8-seedrand').addEventListener('click', () => { const prev = snapshotRun(); G.seed = 1 + Math.floor(Math.random() * 9999); retrain(prev); });
+$('m8-lr').addEventListener('click', e => { const b = e.target.closest('button'); if (b) { const prev = snapshotRun(); CFG.ALPHA0 = +b.dataset.v; retrain(prev); } });
 $('m8-scrub').addEventListener('input', e => { stopAll(); seek(+e.target.value); renderTimeline(); });
-$('m8-pairs').addEventListener('click', e => { const x = e.target.closest('button'); if (x) { S8.pair = x.dataset.v.split(','); render8(); } });
-$('m8-scatter').addEventListener('click', e => { const g = e.target.closest('[data-w]'); if (g) { S8.sel = g.dataset.w; render8(); } });
+
+$('m8-scatter').addEventListener('click', e => { if (S8.dragged) return; const g = e.target.closest('[data-w]'); if (g) { S8.sel = g.dataset.w; render8(); } });
+// zoom with the buttons; drag the map to pan (a press that doesn't move still selects a word)
+document.querySelector('.m8zoom').addEventListener('click', e => {
+  const b = e.target.closest('button'); if (!b) return;
+  if (b.dataset.z === 'in' && S8.zoom === 1 && S8.selPt) S8.pan = S8.selPt.slice();   // first zoom-in centres on the selected word
+  if (b.dataset.z === 'fit') { S8.zoom = 1; S8.pan = [0, 0]; } else S8.zoom = Math.max(1, Math.min(12, S8.zoom * (b.dataset.z === 'in' ? 1.6 : 1 / 1.6)));
+  if (S8.zoom === 1) S8.pan = [0, 0];
+  render8();
+});
+(function pan8() {
+  const el = $('m8-scatter'); let d = null;
+  el.addEventListener('pointerdown', e => { if (e.button || S8.zoom === 1) return; d = { x: e.clientX, y: e.clientY, pan: S8.pan.slice() }; S8.dragged = false; });   // pan only when zoomed in
+  window.addEventListener('pointermove', e => {
+    if (!d) return;
+    const dx = e.clientX - d.x, dy = e.clientY - d.y; if (!S8.dragged && Math.hypot(dx, dy) < 5) return;
+    S8.dragged = true; el.setPointerCapture?.(e.pointerId);
+    const px = S8.W0 / el.clientWidth / S8.k;   // screen pixels → PCA units
+    S8.pan = [d.pan[0] - dx * px, d.pan[1] + dy * px]; render8();
+  });
+  window.addEventListener('pointerup', () => { d = null; setTimeout(() => { S8.dragged = false; }, 0); });
+})();
 $('m8-nn').addEventListener('click', e => { const g = e.target.closest('[data-w]'); if (g) { S8.sel = g.dataset.w; render8(); } });
 $('m8-word').addEventListener('change', e => { S8.sel = e.target.value; render8(); });
 $('m8-out').addEventListener('change', e => { S8.showOut = e.target.checked; G.rad = null; render8(); });
-$('m8-speed').querySelectorAll('button').forEach(b => b.addEventListener('click', () => {
-  S8.speed = +b.dataset.v; $('m8-speed').querySelectorAll('button').forEach(x => x.classList.toggle('on', x === b));
-}));
+
 const bar8 = PlayBar($('m8-bar'), {
   ms: 40, canStep: () => G.step < G.stream.total, canReset: () => G.step > 0, rewind: () => seek(0),
   step: () => { advance(S8.speed); renderTimeline(); }, end: () => { seek(G.stream.total); renderTimeline(); },
@@ -924,7 +1007,7 @@ function render10() {
 // ---------- everything ----------
 function stopAll() { BARS.forEach(b => b.playing && b.stop()); }
 function renderAll() {
-  renderStatebar(); render2(); render2v(); render3(); render6(); render7(); render8(); refreshBars();
+  renderStatebar(); render2(); render2v(); render3(); render6(); render7(); render8a(); render8l(); render8(); refreshBars();
 }
 G.stream = makeStream(G.streamSeed);
 resetTraining(); load4(); sync3(); P6.center = S4.center; P6.ctx = S4.ctx; loadPair6();
