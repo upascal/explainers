@@ -253,9 +253,6 @@ svg .dg.avg text { font-family: var(--sans); font-size: 10px; fill: var(--violet
 svg .dg-t { font-size: 13px; font-weight: 600; fill: var(--ink); }
 svg .dg-n { font-size: 11px; fill: var(--ink-2); }
 svg .dg-s { font-family: var(--serif); font-size: 14px; fill: var(--ink); }
-.below { display: grid; grid-template-columns: 300px minmax(0, 1fr); gap: 18px; align-items: start; margin-top: 14px; }
-.below > .note, .below p.note { margin: 0; }
-@media (max-width: 640px) { .below { grid-template-columns: minmax(0, 1fr); } }
 @media (max-width: 600px) { #statebar .sb-sent { display: none; } #statebar .sb-vals { gap: 10px; } }
 @media (max-width: 600px) { .stat { grid-template-columns: repeat(2, minmax(0, 1fr)); } .stat .s .v { font-size: 1.25rem; } }
 
@@ -297,3 +294,10 @@ svg .dg-s { font-family: var(--serif); font-size: 14px; fill: var(--ink); }
 @keyframes m3fade { from { opacity: 0; } to { opacity: 1; } }
 @media (prefers-reduced-motion: reduce) { #m3-pairs .pairchip.grow { animation: none; } .pairchip .chip.pop { animation: m3fade 0.3s ease both; } }
 svg .pp-undef { font-family: var(--sans); font-size: 12px; font-weight: 600; }
+
+/* 8: training timeline */
+.m8scrub { display: flex; align-items: center; gap: 12px; margin: 4px 0 14px; }
+.m8scrub input[type=range] { flex: 1; min-width: 0; }
+.m8scrub .note { white-space: nowrap; font-variant-numeric: tabular-nums; }
+#m8-angle .pplane { max-width: 420px; }
+#m4-table th .chip { font-size: 0.78rem; padding: 1px 6px; margin-left: 3px; }

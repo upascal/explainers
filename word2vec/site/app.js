@@ -17,20 +17,55 @@ const I_STEP = '<svg viewBox="0 0 18 16" width="12" height="10" aria-hidden="tru
 const I_END = '<svg viewBox="0 0 20 16" width="13" height="10" aria-hidden="true"><polygon points="2,2 2,14 9,8" fill="currentColor"/><polygon points="9,2 9,14 16,8" fill="currentColor"/><rect x="17" y="2" width="2" height="12" fill="currentColor"/></svg>';
 
 // ---------- shared model state ----------
-// One model for the whole page. 2 initialises it, 6–7 train it one pair at a time, 8 trains
-// it in bulk, and every section reads from it.
+// One initialisation (2) and one training stream for the whole page. Section 8 owns the
+// training timeline: G.model is the model after G.step pairs. The full run is computed once
+// up front, with a checkpoint every CK pairs, so any point of training can be revisited.
+// Sections 6–7 take their own copy of the model at one chosen pair (P6 below).
 const G = {
   seed: 1,                 // initialisation seed (re-rolled in 2)
   streamSeed: 2013,        // seed for window shrink, subsampling and negative draws
-  stream: null, init: null, model: null, snap: null,
-  step: 0,                 // index of the pair in progress
-  pair: null, PL: null,    // that pair and its list of phases
-  phase: 0,                // how far into the pair (see phaseList)
-  R: null,                 // the pair's numbers at the current phase (replay())
-  lossSum: null, lossN: null, bucket: 1,
+  stream: null, init: null, model: null, final: null,
+  step: 0,                 // pairs trained so far on the timeline
+  ck: [], lossSum: null, lossN: null, bucket: 1,
   pca: null, rad: null,
 };
 const NB = 150;            // loss-curve buckets
+const CK = 500;            // pairs between checkpoints
+
+function flat(m) { return Float64Array.from(m.Win.flat().concat(m.Wout.flat())); }
+function unflat(f) {
+  const n = W.length, row = (o, i) => Array.from(f.subarray(o + i * D, o + i * D + D));
+  return { Win: W.map((_, i) => row(0, i)), Wout: W.map((_, i) => row(n * D, i)) };
+}
+function resetTraining() {
+  G.init = initModel(G.seed);
+  G.bucket = Math.ceil(G.stream.total / NB); G.lossSum = new Float64Array(NB + 1); G.lossN = new Uint32Array(NB + 1);
+  const m = cloneModel(G.init); G.ck = [];
+  for (let i = 0; i < G.stream.total; i++) {
+    if (i % CK === 0) G.ck.push(flat(m));
+    const p = G.stream.get(i), l = trainPair(m, p, alphaAt(p.wordsDone));
+    const b = Math.floor(i / G.bucket); G.lossSum[b] += l; G.lossN[b]++;
+  }
+  G.final = m; G.model = cloneModel(G.init); G.step = 0; G.pca = null; G.rad = null;
+}
+// the model after `step` pairs, from the nearest checkpoint
+function modelAt(step) {
+  const c = Math.min(Math.floor(step / CK), G.ck.length - 1), m = unflat(G.ck[c]);
+  for (let i = c * CK; i < step; i++) { const p = G.stream.get(i); trainPair(m, p, alphaAt(p.wordsDone)); }
+  return m;
+}
+function seek(step) { G.step = Math.max(0, Math.min(G.stream.total, step)); G.model = modelAt(G.step); }
+function advance(n) {
+  const end = Math.min(G.stream.total, G.step + n);
+  for (; G.step < end; G.step++) { const p = G.stream.get(G.step); trainPair(G.model, p, alphaAt(p.wordsDone)); }
+}
+const timelinePair = () => G.stream.get(Math.min(G.step, G.stream.total - 1));
+
+// ---------- one pair, stepped through (6–7) ----------
+// The reader picks a real pair (center, context) and a moment in training; P6 holds that
+// pair from the stream, the model as it stood just before it, and how far the update has got.
+const P6 = { center: 'coffee', ctx: 'cup', moment: 'early', idx: 0, pair: null, PL: null, phase: 0, R: null, snap: null };
+const MOMENTS = { early: 0, middle: 0.5, late: 0.9 };
 
 // The phases of one pair update. 0–5 belong to 6 (the positive), the rest to 7.
 const POS_END = 5;
@@ -40,13 +75,13 @@ function phaseList(p) {
   L.push({ k: 'apply' });
   return L;
 }
-const END = () => G.PL.length - 1;
+const END = () => P6.PL.length - 1;
 
 // Every number shown in 6 and 7, recomputed from the model as it stood before the pair.
 // Updates are applied in word2vec.c's order: each target's v′ moves at once, while the
 // change to v collects in a pending row that is added at the very end.
-function replay(upto = G.phase) {
-  const p = G.pair, PL = G.PL, m = cloneModel(G.snap), alpha = alphaAt(p.wordsDone);
+function replay(upto = P6.phase) {
+  const p = P6.pair, PL = P6.PL, m = cloneModel(P6.snap), alpha = alphaAt(p.wordsDone);
   const v = m.Win[p.center], pend = zeros(); let loss = 0;
   const T = [{ w: p.ctx, label: 1, skip: false, drawAt: 0, outAt: 4, pendAt: 5 }];
   p.negs.forEach((n, j) => {
@@ -66,32 +101,23 @@ function replay(upto = G.phase) {
   if (applied) for (let d = 0; d < D; d++) v[d] += pend[d];
   return { m, T, pend, v0, v1: v.slice(), alpha, loss, applied };
 }
-
-function loadPair() {
-  G.pair = G.stream.get(G.step);
-  G.PL = G.pair ? phaseList(G.pair) : null; G.phase = 0;
-  G.R = G.pair ? replay(0) : null;
+// context words that really occur with a center word, alphabetical; and a default among them,
+// the most frequent one that isn't a small word like "the"
+const SMALL = new Set(['the', 'a', 'i', 'my', 'is', 'of', 'into', 'with', 'to', 'and', 'can', 'has', 'every']);
+function contexts6(c, best) {
+  const ci = V.index.get(c), n = new Map();
+  for (let i = 0; i < G.stream.total; i++) { const p = G.stream.get(i); if (p.center === ci) n.set(W[p.ctx], (n.get(W[p.ctx]) || 0) + 1); }
+  if (best) return [...n].filter(([w]) => !SMALL.has(w)).sort((a, b) => b[1] - a[1])[0]?.[0] || [...n.keys()][0];
+  return [...n.keys()].sort();
 }
-function logLoss(i, l) { const b = Math.floor(i / G.bucket); G.lossSum[b] += l; G.lossN[b]++; }
-function resetTraining() {
-  G.init = initModel(G.seed); G.model = cloneModel(G.init); G.snap = cloneModel(G.init); G.step = 0;
-  G.bucket = Math.ceil(G.stream.total / NB); G.lossSum = new Float64Array(NB + 1); G.lossN = new Uint32Array(NB + 1);
-  G.pca = null; G.rad = null; loadPair();
+// find the pair in the stream at the chosen moment and load the model just before it
+function loadPair6() {
+  const ci = V.index.get(P6.center), xi = V.index.get(P6.ctx), N = G.stream.total, from = Math.floor(MOMENTS[P6.moment] * N);
+  let idx = -1;
+  for (let k = 0; k < N && idx < 0; k++) { const i = (from + k) % N, p = G.stream.get(i); if (p.center === ci && p.ctx === xi) idx = i; }
+  P6.idx = idx; P6.pair = G.stream.get(idx); P6.PL = phaseList(P6.pair); P6.snap = modelAt(idx); setPhase(0);
 }
-function setPhase(ph) { G.phase = ph; G.R = replay(); G.model = G.R.m; }
-function commit() {                      // finish the pair in progress and move to the next
-  const r = replay(END()); G.model = r.m; logLoss(G.step, r.loss);
-  G.step++; G.snap = cloneModel(G.model); loadPair();
-}
-function trainN(n) {
-  if (!G.pair) return;
-  if (G.phase > 0) { commit(); n--; }
-  const m = G.model;
-  for (; n > 0 && G.step < G.stream.total; n--, G.step++) {
-    const p = G.stream.get(G.step); logLoss(G.step, trainPair(m, p, alphaAt(p.wordsDone)));
-  }
-  G.snap = cloneModel(m); loadPair();
-}
+function setPhase(ph) { P6.phase = ph; P6.R = replay(); }
 
 // ---------- the shared play bar ----------
 // reset · play/pause · step · skip to end, the same in every section. The keyboard drives the
@@ -113,13 +139,16 @@ function PlayBar(host, o) {
   bar.act = a => {
     ACTIVE = bar;
     BARS.forEach(b => { if (b !== bar && b.playing) b.stop(); });
-    if (a === 'play') { if (bar.playing) bar.stop(); else if (o.canStep()) { bar.playing = true; tick(); } }
+    if (a === 'play') {
+      if (bar.playing) bar.stop();
+      else { if (!o.canStep() && o.rewind) o.rewind(); if (o.canStep()) { bar.playing = true; tick(); } }   // play at the end starts over
+    }
     else { bar.stop(); if (a === 'step' && o.canStep()) o.step(); else if (a === 'end' && o.canStep()) o.end(); else if (a === 'reset' && (!o.canReset || o.canReset())) o.reset(); }
     refreshBars();
   };
   bar.refresh = () => {
     const can = o.canStep(), b = k => host.querySelector(`[data-a="${k}"]`);
-    b('step').disabled = !can || bar.playing; b('end').disabled = !can; b('play').disabled = !can && !bar.playing;
+    b('step').disabled = !can || bar.playing; b('end').disabled = !can; b('play').disabled = !can && !bar.playing && !o.rewind;
     b('reset').disabled = o.canReset ? !o.canReset() : false;
     b('play').innerHTML = bar.playing ? I_PAUSE : I_PLAY;
     b('play').classList.toggle('on', bar.playing);
@@ -204,7 +233,8 @@ function pairPlane(a, b, o = {}) {
     <path d="M${ox - Rpx},${oy} A${Rpx},${Rpx} 0 0 1 ${ox + Rpx},${oy}" fill="none" stroke="var(--grid)" stroke-dasharray="2 4"/>`}
     ${arc}${ghost ? arrow(ghost, bc, '', true) : ''}${arrow(b, bc, o.bLabel || 'v′')}${arrow(a, 'a', o.aLabel || 'v')}
   </svg>`;
-  const cap = cos === null
+  const deg = Math.round(ang * 180 / Math.PI);
+  const cap = o.cos && cos !== null ? `<span class="note">angle ${deg}° · cosine similarity <b>${cos.toFixed(2)}</b></span>` : cos === null
     ? `<span class="note">${na <= 1e-12 ? (o.aLabel || 'v') : (o.bLabel || 'v′')} is all zeros. With no length it has no direction, so the angle is undefined. Every product is × 0, so the dot product is 0.</span>`
     : `<span class="note">|${o.aLabel || 'v'}| = ${num(na)} · |${o.bLabel || 'v′'}| = ${num(nb, nb < 0.01 ? 4 : 3)} · angle ${Math.round(ang * 180 / Math.PI)}°<br>${num(na)} × ${num(nb, nb < 0.01 ? 4 : 3)} × cos ${Math.round(ang * 180 / Math.PI)}° = <b>${num(dot(a, b), 4)}</b></span>`;
   return `<div class="pplane">${o.title ? `<div class="pp-title">${o.title}</div>` : ''}${svg}${cap}${ghost ? '<div class="note">dashed: v′ before this update</div>' : ''}</div>`;
@@ -212,13 +242,12 @@ function pairPlane(a, b, o = {}) {
 
 // ---------- sticky status bar ----------
 function renderStatebar() {
-  const p = G.pair, sb = $('statebar-in');
-  if (!p) { sb.innerHTML = `<div class="sb-set"><span class="sb-vals"><span>training finished · <b>${commas(G.stream.total)}</b> pairs</span><a href="#s2">seed <b>${G.seed}</b></a></span></div>`; return; }
-  const s = V.sents[p.sent];
+  // where section 8's training timeline is
+  const p = timelinePair(), sb = $('statebar-in'), s = V.sents[p.sent];
   const sent = s.map((w, i) => wchip(W[w], i === p.pos ? 'v' : i === p.ctxPos ? 'vo' : '')).join('');
   sb.innerHTML = `
     <div class="sb-set"><span class="sb-vals">
-      <span>pair <b>${commas(G.step + 1)}</b> / ${commas(G.stream.total)}</span>
+      <a href="#s8" title="training timeline — scrub it in 8">pair <b>${commas(Math.min(G.step + 1, G.stream.total))}</b> / ${commas(G.stream.total)}</a>
       <span>pass <b>${p.epoch + 1}</b> / ${CFG.EPOCHS}</span>
       <a href="#s6" title="learning rate α — decays linearly over training (6)">α <b>${alphaAt(p.wordsDone).toFixed(4)}</b></a>
       <a href="#s2" title="initialisation seed — re-roll it in 2">seed <b>${G.seed}</b></a>
@@ -322,11 +351,11 @@ function render2() {
   $('m2-corpus').innerHTML = V.sents.map(s => `<div class="sline">${s.map(w => `<span class="w${w === sel ? ' on' : ''}" data-w="${W[w]}">${W[w]}</span>`).join(' ')}</div>`).join('');
   $('m2-vocab').innerHTML = `<table class="data vocab"><tbody>${W.map((w, i) => `<tr class="${i === sel ? 'on' : ''}" data-w="${w}"><td class="n rk">${i + 1}</td><td class="mono">${w}</td><td class="n">${V.count[i]}</td><td class="bar"><i style="width:${100 * V.count[i] / maxc}%"></i></td></tr>`).join('')}</tbody></table>`;
   $('m2-stats').textContent = `${W.length} words in the vocabulary · ${V.total} words of running text · ${V.sents.length} sentences`;
-  $('m2-seed').textContent = G.step === 0 && G.phase === 0 ? `seed ${G.seed}, untrained` : `seed ${G.seed}, after ${commas(G.step)} pair updates`;
+  $('m2-seed').textContent = `seed ${G.seed}`;
 }
 function selWord2(w) { if (w && V.index.has(w)) { S2.sel = w; render2(); } }
 ['m2-corpus', 'm2-vocab'].forEach(id => $(id).addEventListener('click', e => { const el = e.target.closest('[data-w]'); if (el) selWord2(el.dataset.w); }));
-$('reroll').addEventListener('click', () => { stopAll(); G.seed = 1 + Math.floor(Math.random() * 9999); resetTraining(); restart4(); renderAll(); });
+$('reroll').addEventListener('click', () => { stopAll(); G.seed = 1 + Math.floor(Math.random() * 9999); resetTraining(); loadPair6(); restart4(); renderAll(); });
 
 // ---------- 2 an example input vector, before and after training ----------
 // "trained" runs the whole stream on a private copy (what 8 does), so this works whatever
@@ -432,15 +461,17 @@ window.addEventListener('resize', () => place3());
 })();
 
 // ---------- 4 the dot product ----------
-const S4 = { preset: 'start', v: null, u: null, ph: 0, cw: '', ow: '' };
-function preset4(k) {
-  S4.preset = k; S4.ph = 0;
-  if (k === 'start') { const p = G.stream.get(0); S4.v = G.init.Win[p.center].slice(); S4.u = G.init.Wout[p.ctx].slice(); S4.cw = W[p.center]; S4.ow = W[p.ctx]; }
-  if (k === 'similar') { S4.v = [0.8, -0.3, 0.5, 0.1, -0.6]; S4.u = [0.7, -0.2, 0.6, 0.0, -0.5]; S4.cw = S4.ow = ''; }
-  if (k === 'unrelated') { S4.v = [0.8, -0.3, 0.5, 0.1, -0.6]; S4.u = [0.3, 0.6, -0.2, 0.4, 0.1]; S4.cw = S4.ow = ''; }
-  $('m4-presets').querySelectorAll('button').forEach(b => b.classList.toggle('on', b.dataset.v === k));
+// any center word's v against any context word's v′, at the start of training or after it
+const S4 = { center: 'coffee', ctx: 'cup', stage: 'start', edited: false, v: null, u: null, ph: 0 };
+function load4() {
+  const M = S4.stage === 'start' ? G.init : G.final;
+  S4.v = M.Win[V.index.get(S4.center)].slice(); S4.u = M.Wout[V.index.get(S4.ctx)].slice(); S4.ph = 0; S4.edited = false;
+  const cs = $('m4-center'), xs = $('m4-ctx');
+  if (!cs.options.length) W.slice().sort().forEach(w => { cs.add(new Option(w, w)); xs.add(new Option(w, w)); });
+  cs.value = S4.center; xs.value = S4.ctx;
+  $('m4-stage').querySelectorAll('button').forEach(b => b.classList.toggle('on', b.dataset.v === S4.stage));
 }
-function restart4() { if (S4.preset === 'start') { preset4('start'); render4(); render5(); } }   // its vectors come from the initial model
+function restart4() { load4(); render4(); render5(); }   // after a re-roll: new initial and trained models
 function score4() { return dot(S4.v, S4.u); }
 function render4() {
   const ph = S4.ph, prod = S4.v.map((x, d) => x * S4.u[d]);
@@ -450,22 +481,23 @@ function render4() {
   const prodCells = prod.map((x, d) => d < ph ? `<td class="n prod ${ph - 1 === d ? 'pop' : ''}">${num(x, 4)}</td>` : '<td class="n dim">·</td>').join('');
   const done = ph > D;
   $('m4-table').innerHTML = `<table class="data vec"><thead><tr><th></th>${dimHead()}<th class="n">sum</th></tr></thead><tbody>
-    <tr class="r-v"><th>center v${S4.cw ? ` <span class="mono">${esc(S4.cw)}</span>` : ''}</th>${inp(S4.v, 'v')}<td></td></tr>
-    <tr class="r-vo"><th>context v′${S4.ow ? ` <span class="mono">${esc(S4.ow)}</span>` : ''}</th>${inp(S4.u, 'u')}<td></td></tr>
+    <tr class="r-v"><th>center v ${S4.edited ? '<span class="note">(edited)</span>' : wchip(S4.center, 'v')}</th>${inp(S4.v, 'v')}<td></td></tr>
+    <tr class="r-vo"><th>context v′ ${S4.edited ? '<span class="note">(edited)</span>' : wchip(S4.ctx, 'vo')}</th>${inp(S4.u, 'u')}<td></td></tr>
     <tr class="r-p"><th>product</th>${prodCells}<td class="n score ${done ? 'pop' : ''}">${ph ? num(run, 4) : '·'}</td></tr></tbody></table>`;
   $('m4-sum').innerHTML = ph === 0 ? 'Press play to multiply the two rows, one dimension at a time.'
     : `score = ${parts.join(' + ').replace(/\+ −/g, '− ')}${ph < D ? ' + …' : ''} = <b>${num(run, 4)}</b>${done ? (Math.abs(run) < 1e-12 ? ' — exactly zero, because v′ starts as all zeros' : run > 0 ? ' — positive: the vectors point the same way' : ' — negative: the vectors point apart') : ''}`;
-  $('m4-plane').innerHTML = pairPlane(S4.v, S4.u, { aLabel: 'v', bLabel: 'v′' });
 }
 $('m4-table').addEventListener('change', e => {
   const el = e.target.closest('input'); if (!el) return;
   const x = parseFloat(el.value); if (!isFinite(x)) return;
   (el.dataset.r === 'v' ? S4.v : S4.u)[+el.dataset.d] = x;
-  S4.preset = 'custom'; S4.ph = D + 1; S4.cw = S4.ow = '';
-  $('m4-presets').querySelectorAll('button').forEach(b => b.classList.remove('on'));
+  S4.edited = true; S4.ph = D + 1;
   render4(); render5(); refreshBars();
 });
-$('m4-presets').querySelectorAll('button').forEach(b => b.addEventListener('click', () => { preset4(b.dataset.v); render4(); render5(); refreshBars(); }));
+function pick4() { stopAll(); load4(); render4(); render5(); refreshBars(); }
+$('m4-center').addEventListener('change', e => { S4.center = e.target.value; pick4(); });
+$('m4-ctx').addEventListener('change', e => { S4.ctx = e.target.value; pick4(); });
+$('m4-stage').addEventListener('click', e => { const b = e.target.closest('button'); if (b) { S4.stage = b.dataset.v; pick4(); } });
 const bar4 = PlayBar($('m4-bar'), {
   ms: 650, canStep: () => S4.ph <= D, canReset: () => S4.ph > 0,
   step: () => { S4.ph++; render4(); render5(); }, end: () => { S4.ph = D + 1; render4(); render5(); }, reset: () => { S4.ph = 0; render4(); render5(); },
@@ -506,11 +538,10 @@ const bar5 = PlayBar($('m5-bar'), {
 
 // ---------- 6 one positive update ----------
 function render6() {
-  if (!G.pair) { $('m6-table').innerHTML = '<p class="note">Training has finished. Reset it in 8 to step through pairs again.</p>'; ['m6-head', 'm6-plane', 'm6-note'].forEach(id => $(id).innerHTML = ''); return; }
-  const p = G.pair, R = G.R, ph = Math.min(G.phase, POS_END), t = R.T[0], fresh = k => G.phase === k ? ' new' : '';
+  const p = P6.pair, R = P6.R, ph = Math.min(P6.phase, POS_END), t = R.T[0], fresh = k => P6.phase === k ? ' new' : '';
   const show = (k, cells) => ph >= k ? cells : blankCells();
   const prod = R.v0.map((x, d) => x * t.vo0[d]);
-  $('m6-head').innerHTML = `<div class="pairhead">center ${wchip(W[p.center], 'v')} context ${wchip(W[p.ctx], 'vo')} <span class="badge pos">real pair · label 1</span><span class="note">pair ${commas(G.step + 1)} · α = ${R.alpha.toFixed(5)}</span></div>`;
+  $('m6-head').innerHTML = `<div class="pairhead">center ${wchip(W[p.center], 'v')} context ${wchip(W[p.ctx], 'vo')} <span class="badge pos">real pair · label 1</span><span class="note">pair ${commas(P6.idx + 1)} of ${commas(G.stream.total)}, pass ${p.epoch + 1} · α = ${R.alpha.toFixed(5)}</span></div>`;
   $('m6-table').innerHTML = `<table class="data vec"><thead><tr><th></th>${dimHead()}<th class="n"></th></tr></thead><tbody>
       <tr class="r-v"><th>center v</th>${vecCells(R.v0)}<td></td></tr>
       <tr class="r-vo"><th>context v′</th>${vecCells(t.vo0)}<td></td></tr>
@@ -520,28 +551,35 @@ function render6() {
       <tr class="r-vo"><th>new v′</th>${show(4, vecCells(ph >= 4 ? t.vo1 : t.vo0, 'chg' + fresh(4), 4))}<td class="n note">${ph >= 4 ? 'applied now' : ''}</td></tr>
       <tr class="r-pend"><th>pending Δv += g · v′</th>${show(5, vecCells(t.contrib, 'chg' + fresh(5), 5))}<td class="n note">${ph >= 5 ? 'held for 7' : ''}</td></tr>
     </tbody></table>`;
-  $('m6-plane').innerHTML = pairPlane(R.v0, ph >= 4 ? t.vo1 : t.vo0, { aLabel: 'v', bLabel: 'v′', ghost: ph >= 4 ? t.vo0 : null });
   const msg = [
     'Press play to score this pair and update it.',
     `The score is the dot product of v and v′, ${num(t.f, 4)}.`,
     `σ turns it into the model’s probability that the pair is real: ${t.s.toFixed(4)}. The pair is real, so the error is 1 − σ = ${(1 - t.s).toFixed(4)}.`,
     `g scales the error by the learning rate. It is positive, so both vectors will move toward each other.`,
     `v′ moves by g times v: a small step in v’s direction. It is changed straight away.`,
-    G.phase > POS_END ? 'The positive update is done. 7 is now working through the negative samples for this pair.' : `v’s change, g times the old v′, is only written into the pending row. 7 adds negative samples before it is applied.`,
+    P6.phase > POS_END ? 'The positive update is done. 7 is now working through the negative samples for this pair.' : `v’s change, g times the old v′, is only written into the pending row. 7 adds negative samples before it is applied.`,
   ];
-  $('m6-note').textContent = msg[ph] + (G.step === 0 && ph >= 3 ? ' (On the very first pair v′ is all zeros, so v’s pending change is zero too.)' : '');
+  $('m6-note').textContent = msg[ph] + (norm(t.vo0) === 0 && ph >= 3 ? ' (v′ is still all zeros at this point, so v’s pending change is zero too.)' : '');
+  // pickers
+  const cs = $('m6-center'), xs = $('m6-ctx');
+  if (!cs.options.length) W.slice().sort().forEach(w => cs.add(new Option(w, w)));
+  cs.value = P6.center;
+  xs.innerHTML = contexts6(P6.center).map(w => `<option>${w}</option>`).join(''); xs.value = P6.ctx;
+  $('m6-moment').querySelectorAll('button').forEach(x => x.classList.toggle('on', x.dataset.v === P6.moment));
 }
 const bar6 = PlayBar($('m6-bar'), {
-  ms: 900, canStep: () => !!G.pair && (G.phase < POS_END || G.phase === END()), canReset: () => !!G.pair && G.phase > 0,
-  step: () => { if (G.phase === END()) commit(); else setPhase(G.phase + 1); renderAll(); },
-  end: () => { if (G.phase === END()) commit(); setPhase(POS_END); renderAll(); },
-  reset: () => { setPhase(0); renderAll(); },
+  ms: 900, canStep: () => P6.phase < POS_END, canReset: () => P6.phase > 0,
+  step: () => { setPhase(P6.phase + 1); render6(); render7(); }, end: () => { setPhase(POS_END); render6(); render7(); },
+  reset: () => { setPhase(0); render6(); render7(); },
 });
+function pick6() { stopAll(); loadPair6(); render6(); render7(); refreshBars(); }
+$('m6-center').addEventListener('change', e => { P6.center = e.target.value; P6.ctx = contexts6(P6.center, true); pick6(); });
+$('m6-ctx').addEventListener('change', e => { P6.ctx = e.target.value; pick6(); });
+$('m6-moment').addEventListener('click', e => { const x = e.target.closest('button'); if (x) { P6.moment = x.dataset.v; pick6(); } });
 
 // ---------- 7 negative samples ----------
 function render7() {
-  if (!G.pair) { $('m7-table').innerHTML = '<p class="note">Training has finished. Reset it in 8 to step through pairs again.</p>'; ['m7-draws', 'm7-plane', 'm7-note'].forEach(id => $(id).innerHTML = ''); return; }
-  const p = G.pair, R = G.R, ph = G.phase, cur = G.PL[ph];
+  const p = P6.pair, R = P6.R, ph = P6.phase, cur = P6.PL[ph];
   // frequency vs frequency^0.75
   const drawnUpTo = R.T.filter(t => t.label === 0 && ph >= t.drawAt);
   const hits = new Map(); drawnUpTo.forEach(t => hits.set(t.w, (hits.get(t.w) || 0) + 1));
@@ -580,32 +618,23 @@ function render7() {
     <tr class="r-v"><th colspan="4">center v ${wchip(W[p.center], 'v')} before</th>${vecCells(R.v0, '', 4)}</tr>
     <tr class="r-v ${applied ? '' : 'wait'}"><th colspan="4">v + pending Δv${applied ? '' : ' (not yet applied)'}</th>${applied ? vecCells(R.v1, 'chg new', 4) : blankCells()}</tr>
   </tbody></table>`;
-  // the pair plane: the latest negative, or v before and after once the pending row is applied
-  let plane;
-  if (cur && cur.k === 'apply') plane = pairPlane(R.v0, R.v1, { aLabel: 'v', bLabel: 'new v', bCls: 'a2', title: 'center v, before and after the pending row is added' });
-  else {
-    const last = negs.filter(t => !t.skip && ph >= t.outAt).pop();
-    plane = last ? pairPlane(R.v0, last.vo1, { aLabel: 'v', bLabel: `v′ ${W[last.w]}`, ghost: last.vo0, title: `center v and noise word “${W[last.w]}”` })
-      : `<div class="pplane"><div class="note">Each negative sample’s v′ will be drawn here as it is pushed away from v.</div></div>`;
-  }
-  $('m7-plane').innerHTML = plane;
   let msg;
   if (ph < POS_END) msg = 'The positive update from 6 comes first. Step to complete it.';
   else if (!cur || cur.k === 'pend') msg = `Next: draw ${CFG.K} noise words from the orange distribution.`;
   else if (cur.k === 'draw') { const t = R.T[cur.j + 1]; msg = t.skip ? `Drew “${W[t.w]}”, the context word itself. word2vec skips such draws.` : `Drew “${W[t.w]}”. It is treated as a fake pair: label 0.`; }
   else if (cur.k === 'neg') { const t = R.T[cur.j + 1]; msg = `Fake pair with “${W[t.w]}”: σ = ${t.s.toFixed(4)}, so g = (0 − σ) × α = ${num(t.g, 6)} is negative. Its v′ is pushed away from v, and g·v′ joins the pending row.`; }
-  else msg = `All ${CFG.K} draws done. The pending row is added to v once. The next step moves on to pair ${commas(G.step + 2)}.`;
+  else msg = `All ${CFG.K} draws done. The pending row is added to v once. That finishes this pair; training moves on to the next one.`;
   $('m7-note').textContent = msg;
 }
 const bar7 = PlayBar($('m7-bar'), {
-  ms: 900, canStep: () => !!G.pair, canReset: () => !!G.pair && G.phase > POS_END,
-  step: () => { if (G.phase === END()) commit(); else setPhase(G.phase < POS_END ? POS_END : G.phase + 1); renderAll(); },
-  end: () => { if (G.phase === END()) commit(); setPhase(END()); renderAll(); },
-  reset: () => { setPhase(POS_END); renderAll(); },
+  ms: 900, canStep: () => P6.phase < END(), canReset: () => P6.phase > POS_END,
+  step: () => { setPhase(P6.phase < POS_END ? POS_END : P6.phase + 1); render6(); render7(); },
+  end: () => { setPhase(END()); render6(); render7(); },
+  reset: () => { setPhase(POS_END); render6(); render7(); },
 });
 
 // ---------- 8 training at scale ----------
-const S8 = { speed: 100, sel: 'coffee', showOut: false };
+const S8 = { speed: 100, sel: 'coffee', showOut: false, pair: ['coffee', 'tea'] };
 function render8() {
   const M = G.model, sel = V.index.get(S8.sel);
   const pc = pca2(M.Win, G.pca && G.pca.comps); G.pca = pc;
@@ -624,14 +653,15 @@ function render8() {
   // loss and learning rate
   const nbk = Math.ceil(G.stream.total / G.bucket), L = [];
   for (let b = 0; b < nbk; b++) if (G.lossN[b]) L.push([b, G.lossSum[b] / G.lossN[b]]);
+  const done = L.filter(([b]) => b * G.bucket < G.step);   // the full run is known; blue up to where the timeline is
   const cw = 340, ch = 150, cl = 46, cb = 22, ct = 10;
   const lmax = Math.max(4.5, ...L.map(x => x[1]));
   const LX = b => cl + b / nbk * (cw - cl - 6), LY = v => ct + (1 - v / lmax) * (ch - ct - cb);
-  const lpath = L.map(([b, v], i) => (i ? 'L' : 'M') + LX(b + 0.5).toFixed(1) + ',' + LY(v).toFixed(1)).join('');
+  const lp = A => A.map(([b, v], i) => (i ? 'L' : 'M') + LX(b + 0.5).toFixed(1) + ',' + LY(v).toFixed(1)).join('');
   const frac = G.step / G.stream.total;
   const axis = (fy, ticks, f) => ticks.map(v => `<line x1="${cl}" x2="${cw - 6}" y1="${fy(v)}" y2="${fy(v)}" stroke="var(--grid)"/><text x="${cl - 5}" y="${fy(v)}" text-anchor="end" dominant-baseline="middle" font-size="10">${f(v)}</text>`).join('');
   $('m8-loss').innerHTML = `<svg viewBox="0 0 ${cw} ${ch}" width="100%" style="display:block">${axis(LY, [0, 2, 4], v => v)}
-    <path d="${lpath}" fill="none" stroke="var(--blue)" stroke-width="2"/>
+    <path d="${lp(L)}" fill="none" stroke="var(--blue-100)" stroke-width="2"/><path d="${lp(done)}" fill="none" stroke="var(--blue)" stroke-width="2"/>
     <text x="${cw - 6}" y="${ch - 6}" text-anchor="end" font-size="10">training →</text></svg>`;
   const AY = v => ct + (1 - v / CFG.ALPHA0) * (ch - ct - cb), AX = f => cl + f * (cw - cl - 6);
   $('m8-alpha').innerHTML = `<svg viewBox="0 0 ${cw} ${ch}" width="100%" style="display:block">${axis(AY, [0, CFG.ALPHA0 / 2, CFG.ALPHA0], v => v.toFixed(4).replace(/0+$/, '').replace(/\.$/, ''))}
@@ -642,13 +672,23 @@ function render8() {
   // neighbours
   $('m8-nn').innerHTML = `<table class="data"><tbody>${nb.map(({ i, c }) => `<tr data-w="${W[i]}"><td class="mono">${W[i]}</td><td class="n">${c.toFixed(2)}</td><td class="bar"><i style="width:${Math.max(0, c) * 100}%"></i></td></tr>`).join('')}</tbody></table>`;
   const cs = (a, b) => cosine(M.Win[V.index.get(a)], M.Win[V.index.get(b)]).toFixed(2);
-  $('m8-stats').innerHTML = `<div class="s"><div class="l">pass</div><div class="v">${G.pair ? G.pair.epoch + 1 : CFG.EPOCHS}<small> / ${CFG.EPOCHS}</small></div></div>
+  $('m8-stats').innerHTML = `<div class="s"><div class="l">pass</div><div class="v">${G.step >= G.stream.total ? CFG.EPOCHS : timelinePair().epoch + 1}<small> / ${CFG.EPOCHS}</small></div></div>
     <div class="s"><div class="l">cos(coffee, tea)</div><div class="v">${cs('coffee', 'tea')}</div></div>
     <div class="s"><div class="l">cos(dog, cat)</div><div class="v">${cs('dog', 'cat')}</div></div>
     <div class="s"><div class="l">cos(coffee, dog)</div><div class="v">${cs('coffee', 'dog')}</div></div>`;
   const sel8 = $('m8-word'); if (!sel8.options.length) W.slice().sort().forEach(w => sel8.add(new Option(w, w)));
   sel8.value = S8.sel;
+  // two input vectors in their own plane: true lengths, true angle
+  const [a, b] = S8.pair;
+  $('m8-angle').innerHTML = pairPlane(M.Win[V.index.get(a)], M.Win[V.index.get(b)], { aLabel: a, bLabel: b, bCls: 'a2', cos: true });
+  $('m8-pairs').querySelectorAll('button').forEach(x => x.classList.toggle('on', x.dataset.v === S8.pair.join(',')));
+  // the timeline
+  const sc = $('m8-scrub'); sc.max = G.stream.total; sc.value = G.step;
+  $('m8-pos').textContent = `${commas(G.step)} of ${commas(G.stream.total)} pairs trained`;
 }
+function renderTimeline() { renderStatebar(); render8(); refreshBars(); }
+$('m8-scrub').addEventListener('input', e => { stopAll(); seek(+e.target.value); renderTimeline(); });
+$('m8-pairs').addEventListener('click', e => { const x = e.target.closest('button'); if (x) { S8.pair = x.dataset.v.split(','); render8(); } });
 $('m8-scatter').addEventListener('click', e => { const g = e.target.closest('[data-w]'); if (g) { S8.sel = g.dataset.w; render8(); } });
 $('m8-nn').addEventListener('click', e => { const g = e.target.closest('[data-w]'); if (g) { S8.sel = g.dataset.w; render8(); } });
 $('m8-word').addEventListener('change', e => { S8.sel = e.target.value; render8(); });
@@ -657,9 +697,9 @@ $('m8-speed').querySelectorAll('button').forEach(b => b.addEventListener('click'
   S8.speed = +b.dataset.v; $('m8-speed').querySelectorAll('button').forEach(x => x.classList.toggle('on', x === b));
 }));
 const bar8 = PlayBar($('m8-bar'), {
-  ms: 16, canStep: () => !!G.pair, canReset: () => G.step > 0 || G.phase > 0,
-  step: () => { trainN(S8.speed); renderAll(); }, end: () => { trainN(Infinity); renderAll(); },
-  reset: () => { resetTraining(); renderAll(); },
+  ms: 40, canStep: () => G.step < G.stream.total, canReset: () => G.step > 0, rewind: () => seek(0),
+  step: () => { advance(S8.speed); renderTimeline(); }, end: () => { seek(G.stream.total); renderTimeline(); },
+  reset: () => { seek(0); renderTimeline(); },
 });
 
 // ---------- 9 CBOW ----------
@@ -703,6 +743,6 @@ function renderAll() {
   renderStatebar(); render2(); render2v(); render3(); render6(); render7(); render8(); refreshBars();
 }
 G.stream = makeStream(G.streamSeed);
-resetTraining(); preset4('start');
+resetTraining(); loadPair6(); load4();
 render1(); render4(); render5(); render9(); render10(); renderAll();
 })();

@@ -2,7 +2,7 @@
 
 <p class="lede">In 2013 a team at Google released <a href="https://code.google.com/archive/p/word2vec/">word2vec</a>, a small program that reads a lot of text and gives every word a list of numbers. Words used in similar ways end up with similar lists. The idea underlies much of modern language technology, including the first layer of every large language model. This page takes the training procedure apart one step at a time.</p>
 
-<p class="note">Everything on this page is computed live in your browser. A tiny model with 5 dimensions trains on a hand-written corpus of 30 sentences, so the numbers on screen are the real numbers. Each section builds on the last, and they all share one model: the vectors created in section 2 are the ones multiplied in 4 and nudged in 6 and 7. The bar at the top tracks the training pair currently in progress. Every interactive has the same controls: reset, play, step, and skip to end. The keyboard drives the one you used last: → steps, space plays or pauses, shift + → skips to the end, and shift + ← resets.</p>
+<p class="note">Everything on this page is computed live in your browser. A tiny model with 5 dimensions trains on a hand-written corpus of 30 sentences, so the numbers on screen are the real numbers. Each section builds on the last, and they all share one model: the vectors created in section 2 are the ones trained in 6, 7 and 8. The bar at the top shows where training stands in section 8. Every interactive has the same controls: reset, play, step, and skip to end. The keyboard drives the one you used last: → steps, space plays or pauses, shift + → skips to the end, and shift + ← resets.</p>
 
 <!-- toc -->
 
@@ -79,7 +79,7 @@ For each pair, the model needs a score: a single number saying how strongly it b
 
 When the two vectors point the same way, most of the products are positive and the score is large. When they point in opposite directions, the score is negative. When they are unrelated, the positive and negative products cancel out and the score is near zero. At the start of training every output vector is zero, so every score is exactly zero.
 
-The diagram beside the table is not a projection. Any two vectors, in 5 dimensions or 300, lie together in one flat plane, so they can be drawn at their true lengths with the true angle between them. The dot product equals length × length × the cosine of that angle.
+After training, try “coffee” with “cup”, then with “fur”. The real neighbour scores far higher. In this small corpus almost every score ends up below zero, because each word is also drawn as a fake “noise” word thousands of times (section 7), which pushes scores down. What matters is the ranking: words that really appear together score higher than words that don’t.
 
 ## 5 The sigmoid
 
@@ -111,7 +111,7 @@ Both vectors then move:
 
 <!-- module: m6 -->
 
-On the first pair, *v*′ is all zeros, so the pending change to *v* is zero too. Only *v*′ moves, and it moves exactly in *v*’s direction: in the diagram, *v*′ grows straight along *v*. This step uses the model’s real current state. After training in section 8, pause partway and come back here to see a pair from the middle of training.
+Pick any real pair from the corpus, and a moment in training: the numbers are the model’s actual state just before that pair. Early on, a context word’s *v*′ may still be all zeros, so the pending change to *v* is zero too and only *v*′ moves. Later the vectors are larger, the error is smaller and α has shrunk, so the steps are finer.
 
 ## 7 Negative samples
 
@@ -127,13 +127,15 @@ This is the whole of training. Every pair, in every pass, gets one positive upda
 
 ## 8 Training at scale
 
-Now run the same loop over the whole corpus, 200 times. The chart below projects the 5-dimensional input vectors down to 2 dimensions with PCA (principal component analysis), which keeps the two directions in which the vectors spread out most. Unlike the pair plane in section 4, this picture is approximate. Distances on it are only roughly right, and the neighbour list beside it is computed in all 5 dimensions.
+Now run the same loop over the whole corpus, 200 times. The chart below projects the 5-dimensional input vectors down to 2 dimensions with PCA (principal component analysis), which keeps the two directions in which the vectors spread out most. This picture is approximate. Distances on it are only roughly right, and the neighbour list beside it is computed in all 5 dimensions. Drag the timeline to go back to any point in training.
 
 <!-- module: m8 -->
 
 The loss is the error measured as the model sees it, summed over the real word and its noise words: −log σ(score) for the real word and −log(1 − σ(score)) for each noise word. It starts at about 6 × log 2 ≈ 4.2, one coin toss for each of the six targets, and falls as the vectors arrange themselves.
 
 Watch “coffee” and “tea”. They never appear in the same sentence, yet they end up nearly on top of each other. Their input vectors were both pulled toward the same output vectors, those of “hot”, “cup”, “drink” and “milk”. Most of the time the same happens to “dog” and “cat”. Turn on the output vectors to see those context anchors that the input vectors arrange themselves around.
+
+Below the map, two input vectors are drawn exactly. Any two vectors, in 5 dimensions or 300, lie together in one flat plane, so they can be drawn at their true lengths with the true angle between them. At the start of training the angle between “coffee” and “tea” is close to 90°; by the end it has nearly closed.
 
 ## 9 Aside: CBOW
 

@@ -16,7 +16,7 @@
 <main>
 <h1>How word2vec learns</h1>
 <p class="lede">In 2013 a team at Google released <a href="https://code.google.com/archive/p/word2vec/">word2vec</a>, a small program that reads a lot of text and gives every word a list of numbers. Words used in similar ways end up with similar lists. The idea underlies much of modern language technology, including the first layer of every large language model. This page takes the training procedure apart one step at a time.</p>
-<p class="note">Everything on this page is computed live in your browser. A tiny model with 5 dimensions trains on a hand-written corpus of 30 sentences, so the numbers on screen are the real numbers. Each section builds on the last, and they all share one model: the vectors created in section 2 are the ones multiplied in 4 and nudged in 6 and 7. The bar at the top tracks the training pair currently in progress. Every interactive has the same controls: reset, play, step, and skip to end. The keyboard drives the one you used last: → steps, space plays or pauses, shift + → skips to the end, and shift + ← resets.</p>
+<p class="note">Everything on this page is computed live in your browser. A tiny model with 5 dimensions trains on a hand-written corpus of 30 sentences, so the numbers on screen are the real numbers. Each section builds on the last, and they all share one model: the vectors created in section 2 are the ones trained in 6, 7 and 8. The bar at the top shows where training stands in section 8. Every interactive has the same controls: reset, play, step, and skip to end. The keyboard drives the one you used last: → steps, space plays or pauses, shift + → skips to the end, and shift + ← resets.</p>
 <nav class="toc">
   <a href="#s1">1. The problem</a>
   <a href="#s2">2. The vocabulary and two tables</a>
@@ -159,17 +159,17 @@
 <p>For each pair, the model needs a score: a single number saying how strongly it believes the two words belong together. word2vec uses the simplest score there is, the <em>dot product</em>. Multiply the center word’s input vector and the context word’s output vector dimension by dimension, then add up the results.</p>
 <div class="module" id="m4">
   <div class="row">
-    <span id="m4-bar"></span>
-    <span class="seg" id="m4-presets"><button data-v="start" class="on">start of training</button><button data-v="similar">similar words</button><button data-v="unrelated">unrelated words</button></span>
+    <label class="ctl">center <select id="m4-center"></select></label>
+    <label class="ctl">context <select id="m4-ctx"></select></label>
+    <span class="seg" id="m4-stage"><button data-v="start" class="on">start of training</button><button data-v="trained">after training</button></span>
   </div>
+  <div class="row"><span id="m4-bar"></span></div>
   <div class="tscroll" id="m4-table"></div>
-  <div class="below">
-    <div id="m4-plane"></div>
-    <div><p class="sumline" id="m4-sum"></p><p class="note" style="margin:10px 0 0">Every number is editable. Type over one to change the vectors.</p></div>
-  </div>
+  <p class="sumline" id="m4-sum" style="margin-top:12px"></p>
+  <p class="note" style="margin:10px 0 0">Every number is editable. Type over one to change the vectors.</p>
 </div>
 <p>When the two vectors point the same way, most of the products are positive and the score is large. When they point in opposite directions, the score is negative. When they are unrelated, the positive and negative products cancel out and the score is near zero. At the start of training every output vector is zero, so every score is exactly zero.</p>
-<p>The diagram beside the table is not a projection. Any two vectors, in 5 dimensions or 300, lie together in one flat plane, so they can be drawn at their true lengths with the true angle between them. The dot product equals length × length × the cosine of that angle.</p>
+<p>After training, try “coffee” with “cup”, then with “fur”. The real neighbour scores far higher. In this small corpus almost every score ends up below zero, because each word is also drawn as a fake “noise” word thousands of times (section 7), which pushes scores down. What matters is the ranking: words that really appear together score higher than words that don’t.</p>
 <h2 id="s5"><span class="num">5</span>The sigmoid</h2>
 <p>A score can be any number. To read it as a probability, word2vec passes it through the <em>sigmoid</em> function, σ(<em>x</em>) = 1 / (1 + e<sup>−<em>x</em></sup>). It is a smooth step. Large negative scores go to almost 0, large positive scores go to almost 1, and a score of 0 goes to exactly 0.5.</p>
 <p>The result is the model’s probability that this pair really appeared together in the text. For a real pair, the right answer is 1, so the <strong>error</strong> is 1 − σ(score).</p>
@@ -197,15 +197,17 @@
 <li>The input vector should move toward the output vector by <em>g</em> · <em>v</em>′, using <em>v</em>′ as it was before the update. But this change is <strong>not applied yet</strong>. It goes into a pending row, for reasons that section 7 makes clear.</li>
 </ul>
 <div class="module" id="m6">
+  <div class="row">
+    <label class="ctl">center <select id="m6-center"></select></label>
+    <label class="ctl">context <select id="m6-ctx"></select></label>
+    <label class="ctl">moment in training <span class="seg" id="m6-moment"><button data-v="early" class="on">early</button><button data-v="middle">middle</button><button data-v="late">late</button></span></label>
+  </div>
   <div class="row"><span id="m6-bar"></span><span class="note">one step per stage of the update</span></div>
   <div id="m6-head"></div>
   <div class="tscroll" id="m6-table"></div>
-  <div class="below">
-    <div id="m6-plane"></div>
-    <p class="note" id="m6-note"></p>
-  </div>
+  <p class="note" id="m6-note" style="margin:12px 0 0"></p>
 </div>
-<p>On the first pair, <em>v</em>′ is all zeros, so the pending change to <em>v</em> is zero too. Only <em>v</em>′ moves, and it moves exactly in <em>v</em>’s direction: in the diagram, <em>v</em>′ grows straight along <em>v</em>. This step uses the model’s real current state. After training in section 8, pause partway and come back here to see a pair from the middle of training.</p>
+<p>Pick any real pair from the corpus, and a moment in training: the numbers are the model’s actual state just before that pair. Early on, a context word’s <em>v</em>′ may still be all zeros, so the pending change to <em>v</em> is zero too and only <em>v</em>′ moves. Later the vectors are larger, the error is smaller and α has shrunk, so the steps are finer.</p>
 <h2 id="s7"><span class="num">7</span>Negative samples</h2>
 <p>A positive update alone would be useless. The easiest way to score every pair high is to make every vector point the same way, and then the vectors carry no information. The model also needs examples of words that do <em>not</em> belong together.</p>
 <p>Negative sampling makes them up. For each real pair, word2vec draws <em>k</em> = 5 “noise” words at random and treats each as a fake pair with the center word. A word’s chance of being drawn is its frequency raised to the power 0.75. This flattens the distribution: common words are still drawn most often, but rare words get more of a chance than their raw frequency would give them. If a draw happens to be the real context word, it is skipped.</p>
@@ -219,19 +221,20 @@
     <span class="draws" id="m7-draws"></span>
   </div>
   <div class="tscroll" id="m7-table"></div>
-  <div class="below">
-    <div id="m7-plane"></div>
-    <p class="note" id="m7-note"></p>
-  </div>
+  <p class="note" id="m7-note" style="margin:12px 0 0"></p>
 </div>
 <p>This is the whole of training. Every pair, in every pass, gets one positive update and up to five negative ones.</p>
 <h2 id="s8"><span class="num">8</span>Training at scale</h2>
-<p>Now run the same loop over the whole corpus, 200 times. The chart below projects the 5-dimensional input vectors down to 2 dimensions with PCA (principal component analysis), which keeps the two directions in which the vectors spread out most. Unlike the pair plane in section 4, this picture is approximate. Distances on it are only roughly right, and the neighbour list beside it is computed in all 5 dimensions.</p>
+<p>Now run the same loop over the whole corpus, 200 times. The chart below projects the 5-dimensional input vectors down to 2 dimensions with PCA (principal component analysis), which keeps the two directions in which the vectors spread out most. This picture is approximate. Distances on it are only roughly right, and the neighbour list beside it is computed in all 5 dimensions. Drag the timeline to go back to any point in training.</p>
 <div class="module" id="m8">
   <div class="row">
     <span id="m8-bar"></span>
     <label class="ctl">pairs per frame <span class="seg" id="m8-speed"><button data-v="1">1</button><button data-v="10">10</button><button data-v="100" class="on">100</button><button data-v="1000">1,000</button></span></label>
     <label class="ctl"><input type="checkbox" id="m8-out"> show output vectors v′</label>
+  </div>
+  <div class="m8scrub">
+    <input type="range" id="m8-scrub" min="0" max="1" step="1" value="0" aria-label="training progress">
+    <span class="note" id="m8-pos"></span>
   </div>
   <div class="stat" id="m8-stats"></div>
   <div class="split8">
@@ -246,6 +249,9 @@
       <p class="note">by cosine similarity, in all 5 dimensions</p>
     </div>
   </div>
+  <h4 style="margin-top:18px">Two input vectors, at their true angle</h4>
+  <div class="row"><span class="seg" id="m8-pairs"><button data-v="coffee,tea" class="on">coffee &amp; tea</button><button data-v="dog,cat">dog &amp; cat</button><button data-v="coffee,dog">coffee &amp; dog</button></span></div>
+  <div id="m8-angle"></div>
   <div class="cols2" style="margin-top:12px">
     <div><h4>Loss per pair</h4><div id="m8-loss"></div></div>
     <div><h4>Learning rate <span style="text-transform:none">α</span></h4><div id="m8-alpha"></div></div>
@@ -253,6 +259,7 @@
 </div>
 <p>The loss is the error measured as the model sees it, summed over the real word and its noise words: −log σ(score) for the real word and −log(1 − σ(score)) for each noise word. It starts at about 6 × log 2 ≈ 4.2, one coin toss for each of the six targets, and falls as the vectors arrange themselves.</p>
 <p>Watch “coffee” and “tea”. They never appear in the same sentence, yet they end up nearly on top of each other. Their input vectors were both pulled toward the same output vectors, those of “hot”, “cup”, “drink” and “milk”. Most of the time the same happens to “dog” and “cat”. Turn on the output vectors to see those context anchors that the input vectors arrange themselves around.</p>
+<p>Below the map, two input vectors are drawn exactly. Any two vectors, in 5 dimensions or 300, lie together in one flat plane, so they can be drawn at their true lengths with the true angle between them. At the start of training the angle between “coffee” and “tea” is close to 90°; by the end it has nearly closed.</p>
 <h2 id="s9"><span class="num">9</span>Aside: CBOW</h2>
 <p>The first word2vec paper proposed a second model, <em>continuous bag-of-words</em> (CBOW), and it is the default in the released code. It flips the question around. Instead of using the center word to predict each context word, CBOW averages the input vectors of all the context words and uses that average to predict the center word.</p>
 <div class="module" id="m9">
