@@ -314,7 +314,8 @@ const M1_EX = [
 const S1 = { sel: -1 };
 function render1() {
   const text = $('m1-text').value, ids = BPE.encode(text);
-  $('m1-stats').innerHTML = `<b>${commas([...text].length)}</b> characters → <b>${commas(ids.length)}</b> tokens`;
+  const n = [...text].length;
+  $('m1-nchar').innerHTML = `<b>${commas(n)}</b> character${n === 1 ? '' : 's'}`; $('m1-ntok').innerHTML = `<b>${commas(ids.length)}</b> token${ids.length === 1 ? '' : 's'}`;
   $('m1-toks').innerHTML = ids.map((id, i) => `<span class="m1tok t${i % 5}${i === S1.sel ? ' on' : ''}" data-i="${i}"><span class="s">${gstr(id)}</span><span class="id">${id}</span></span>${BPE.bytes(id).includes(10) ? '<span class="m1br"></span>' : ''}`).join('');
   const id = ids[S1.sel];
   $('m1-detail').innerHTML = id === undefined ? 'Click a token to see its ID and bytes. A dot · marks a space.'
@@ -359,7 +360,7 @@ function render2() {
   $('m2-merges').innerHTML = k ? S2.merges.slice(0, k).map((m, i) => `<span class="m2m${i === k - 1 ? ' last' : ''}"><span class="m2t">${vis(m.a)}</span>+<span class="m2t">${vis(m.b)}</span></span>`).reverse().join('') : '<span class="note">none yet</span>';
   const tokens = st.reduce((s, t, i) => s + t.length * S2.freq.get(S2.pieces[i]), 0);
   $('m2-stats').innerHTML = `merges <b>${k}</b> · vocabulary <b>${S2.nChars + k}</b> (${S2.nChars} characters + ${k} merges) · the corpus is <b>${tokens}</b> tokens long`;
-  $('m2-note').innerHTML = k === S2.merges.length ? `Done after ${k} merges: every word in this small corpus is now one token. On a large corpus the merges run out long before that, at whatever size is chosen: 50,000 for GPT-2.`
+  $('m2-note').innerHTML = k === S2.merges.length ? `Done after ${k} merges: every word in this small corpus is now a single token, so no pairs are left to merge. A large corpus has far too many different words for that. There, merging stops at a chosen number instead: GPT-2 stopped after 50,000, so rarer words are still split into pieces.`
     : k ? `Merged “${vis(last.a)}” + “${vis(last.b)}”, which sat side by side ${last.n} times. Next: “${vis(S2.merges[k].a)}” + “${vis(S2.merges[k].b)}”.`
     : `The corpus starts as ${S2.nChars} different characters, spaces included. Step to make the first merge: “${vis(S2.merges[0].a)}” + “${vis(S2.merges[0].b)}”, the most common pair.`;
 }

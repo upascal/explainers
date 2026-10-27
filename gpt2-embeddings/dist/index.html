@@ -741,6 +741,16 @@ table.m6real tr.on td.bar i { background: var(--blue); }
 @media (max-width: 600px) { #statebar .sb-vals { flex-wrap: wrap; white-space: normal; } }
 #statebar { right: auto; width: 100%; max-width: 100vw; }
 @media (max-width: 560px) { .m6g { flex-wrap: wrap; gap: 4px 8px; } .m6g .term { min-width: 0; } .m6g .term .v { font-size: 1.2rem; } .m6g .op { font-size: 1.2rem; padding-top: 12px; } }
+/* 1: each box carries its own count in its corner */
+.m1box { position: relative; }
+.m1box + .m1box { margin-top: 8px; }
+.m1box #m1-text { display: block; padding-bottom: 30px; }
+.m1box .m1toks { padding-bottom: 34px; }
+.m1badge { position: absolute; right: 8px; bottom: 8px; padding: 2px 8px; border-radius: 10px; background: #f0efec; font-size: 0.75rem; color: var(--ink-2); font-variant-numeric: tabular-nums; pointer-events: none; }
+.m1badge b { color: var(--ink); }
+.m1box #m1-text + .m1badge { right: 22px; }
+.m1box + .m1arrow + .m1box { margin-top: 0; }
+.m1arrow { display: flex; justify-content: center; color: var(--muted); padding: 4px 0; }
 </style>
 </head>
 <body>
@@ -771,9 +781,9 @@ table.m6real tr.on td.bar i { background: var(--blue); }
 <div class="module" id="m1">
   <h4 class="m3title">Type anything and see GPT-2’s tokens</h4>
   <div class="row"><span class="presets" id="m1-ex"></span></div>
-  <textarea id="m1-text" rows="3" spellcheck="false" aria-label="text to tokenize"></textarea>
-  <p class="note" id="m1-stats" style="margin:8px 0 10px"></p>
-  <div class="m1toks" id="m1-toks"></div>
+  <div class="m1box"><textarea id="m1-text" rows="3" spellcheck="false" aria-label="text to tokenize"></textarea><span class="m1badge" id="m1-nchar" aria-live="polite"></span></div>
+  <div class="m1arrow" aria-hidden="true"><svg viewBox="0 0 16 22" width="14" height="20"><path d="M8 1v18M2 13l6 6 6-6" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg></div>
+  <div class="m1box"><div class="m1toks" id="m1-toks"></div><span class="m1badge" id="m1-ntok" aria-live="polite"></span></div>
   <p class="note" id="m1-detail" style="margin:10px 0 0">Click a token to see its ID and bytes. A dot · marks a space.</p>
 </div>
 <p>Notice the spaces. A space belongs to the word after it, so <span class="tok"><span class="sp">·</span>coffee</span> (with its space) and “coffee” (at the start of a line) are different tokens, with different IDs. Capitals make different tokens too: <span class="tok"><span class="sp">·</span>coffee</span> is one token, <span class="tok"><span class="sp">·</span>COFFEE</span> is three. A dot marks the space: on this page a token written <span class="tok"><span class="sp">·</span>coffee</span> starts with a space.</p>
@@ -1670,7 +1680,8 @@ const M1_EX = [
 const S1 = { sel: -1 };
 function render1() {
   const text = $('m1-text').value, ids = BPE.encode(text);
-  $('m1-stats').innerHTML = `<b>${commas([...text].length)}</b> characters → <b>${commas(ids.length)}</b> tokens`;
+  const n = [...text].length;
+  $('m1-nchar').innerHTML = `<b>${commas(n)}</b> character${n === 1 ? '' : 's'}`; $('m1-ntok').innerHTML = `<b>${commas(ids.length)}</b> token${ids.length === 1 ? '' : 's'}`;
   $('m1-toks').innerHTML = ids.map((id, i) => `<span class="m1tok t${i % 5}${i === S1.sel ? ' on' : ''}" data-i="${i}"><span class="s">${gstr(id)}</span><span class="id">${id}</span></span>${BPE.bytes(id).includes(10) ? '<span class="m1br"></span>' : ''}`).join('');
   const id = ids[S1.sel];
   $('m1-detail').innerHTML = id === undefined ? 'Click a token to see its ID and bytes. A dot · marks a space.'
@@ -1715,7 +1726,7 @@ function render2() {
   $('m2-merges').innerHTML = k ? S2.merges.slice(0, k).map((m, i) => `<span class="m2m${i === k - 1 ? ' last' : ''}"><span class="m2t">${vis(m.a)}</span>+<span class="m2t">${vis(m.b)}</span></span>`).reverse().join('') : '<span class="note">none yet</span>';
   const tokens = st.reduce((s, t, i) => s + t.length * S2.freq.get(S2.pieces[i]), 0);
   $('m2-stats').innerHTML = `merges <b>${k}</b> · vocabulary <b>${S2.nChars + k}</b> (${S2.nChars} characters + ${k} merges) · the corpus is <b>${tokens}</b> tokens long`;
-  $('m2-note').innerHTML = k === S2.merges.length ? `Done after ${k} merges: every word in this small corpus is now one token. On a large corpus the merges run out long before that, at whatever size is chosen: 50,000 for GPT-2.`
+  $('m2-note').innerHTML = k === S2.merges.length ? `Done after ${k} merges: every word in this small corpus is now a single token, so no pairs are left to merge. A large corpus has far too many different words for that. There, merging stops at a chosen number instead: GPT-2 stopped after 50,000, so rarer words are still split into pieces.`
     : k ? `Merged “${vis(last.a)}” + “${vis(last.b)}”, which sat side by side ${last.n} times. Next: “${vis(S2.merges[k].a)}” + “${vis(S2.merges[k].b)}”.`
     : `The corpus starts as ${S2.nChars} different characters, spaces included. Step to make the first merge: “${vis(S2.merges[0].a)}” + “${vis(S2.merges[0].b)}”, the most common pair.`;
 }
