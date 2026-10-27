@@ -70,8 +70,8 @@ const timelinePair = () => G.stream.get(Math.min(G.step, G.stream.total - 1));
 // ---------- one pair, stepped through (6–7) ----------
 // The reader picks a real pair (center, context) and a moment in training; P6 holds that
 // pair from the stream, the model as it stood just before it, and how far the update has got.
-const P6 = { center: 'coffee', ctx: 'cup', moment: 'early', idx: 0, pair: null, PL: null, phase: 0, R: null, snap: null, stand: null };
-const MOMENTS = { early: 0, middle: 0.5, late: 0.9 };
+const P6 = { center: 'coffee', ctx: 'cup', idx: 0, pair: null, PL: null, phase: 0, R: null, snap: null, stand: null };
+const MOMENTS = { start: 0, middle: 0.5, trained: 0.95 };   // where in training 6–7 look for the pair, by the shared stage
 
 // The phases of one pair update. 0–5 belong to 6 (the positive), the rest to 7.
 const POS_END = 5;
@@ -118,7 +118,7 @@ function contexts6(c, best) {
 }
 // find the pair in the stream at the chosen moment and load the model just before it
 function loadPair6() {
-  const ci = V.index.get(P6.center), xi = V.index.get(P6.ctx), ni = P6.stand ? V.index.get(P6.stand) : -1, N = G.stream.total, from = Math.floor(MOMENTS[P6.moment] * N);
+  const ci = V.index.get(P6.center), xi = V.index.get(P6.ctx), ni = P6.stand ? V.index.get(P6.stand) : -1, N = G.stream.total, from = Math.floor(MOMENTS[S4.stage] * N);
   // a positive pair occurs as itself; a negative one as a negative draw for some positive pair with that center
   const hit = p => p.center === ci && (ni >= 0 ? p.negs.some(n => n.w === ni && !n.skip) : p.ctx === xi);
   let idx = -1;
@@ -262,6 +262,14 @@ function renderStatebar() {
   </div>`;
 }
 
+// the header only makes sense once pairs exist: show it from section 3's widget on
+(function headerWhenPairs() {
+  let ticking = false;
+  const check = () => { ticking = false; $('statebar').classList.toggle('shown', $('m3').getBoundingClientRect().top < innerHeight * 0.75); };
+  addEventListener('scroll', () => { if (!ticking) { ticking = true; requestAnimationFrame(check); } }, { passive: true });
+  addEventListener('resize', check); setTimeout(check, 0);
+})();
+
 // ---------- 1 the problem ----------
 // A fill-in-the-blank puzzle from four corpus sentences: the reader matches words by their
 // company, the way word2vec does. Each word goes in one blank; coffee and tea fit either cup.
@@ -351,15 +359,18 @@ $('m1-reset').addEventListener('click', () => { m1.fill.fill(null); m1.sel = m1.
 })();
 
 // ---------- 2 vocabulary and the two tables ----------
-const S2 = { sel: 'coffee' };
+// section 2 highlights the selected pair's center word; clicking a word selects it page-wide
 function render2() {
-  const sel = V.index.get(S2.sel), maxc = Math.max(...V.count);
+  const sel = V.index.get(S4.center), maxc = Math.max(...V.count);
   $('m2-corpus').innerHTML = V.sents.map(s => `<div class="sline">${s.map(w => `<span class="w${w === sel ? ' on' : ''}" data-w="${W[w]}">${W[w]}</span>`).join(' ')}</div>`).join('');
   $('m2-vocab').innerHTML = `<table class="data vocab"><tbody>${W.map((w, i) => `<tr class="${i === sel ? 'on' : ''}" data-w="${w}"><td class="n rk">${i + 1}</td><td class="mono">${w}</td><td class="n">${V.count[i]}</td><td class="bar"><i style="width:${100 * V.count[i] / maxc}%"></i></td></tr>`).join('')}</tbody></table>`;
   $('m2-stats').textContent = `${W.length} words in the vocabulary · ${V.total} words of running text · ${V.sents.length} sentences`;
   $('m2-seed').textContent = `seed ${G.seed}`;
 }
-function selWord2(w) { if (w && V.index.has(w)) { S2.sel = w; render2(); } }
+function selWord2(w) {
+  if (!w || !V.index.has(w)) return;
+  selectPair(w, contexts6(w).includes(S4.ctx) ? S4.ctx : contexts6(w, true), '2');   // center of the page's selected pair
+}
 ['m2-corpus', 'm2-vocab'].forEach(id => $(id).addEventListener('click', e => { const el = e.target.closest('[data-w]'); if (el) selWord2(el.dataset.w); }));
 // retrain the whole page's model, after the seed or the learning rate changes
 function retrain(prev) { stopAll(); G.prev = prev; resetTraining(); loadPair6(); S8A.key = ''; restart4(); renderAll(); }
@@ -370,11 +381,10 @@ $('reroll').addEventListener('click', () => { const prev = snapshotRun(); G.seed
 // word whenever that is not one of the four.
 const FIXED2V = ['coffee', 'tea', 'dog', 'cat'];
 const S2V = { word: 'coffee', stage: 'start', extra: (o => o[Math.floor(Math.random() * o.length)])(W.filter(w => !FIXED2V.includes(w))) };
-function follow2v() {                      // called when the selected pair changes
-  if (FIXED2V.includes(S4.center) || S4.center === S2V.extra) return;
-  const viewing = S2V.word === S2V.extra;
-  S2V.extra = S4.center; if (viewing) S2V.word = S2V.extra;
-  render2v();
+function follow2v() {                      // called when the selected pair changes: show its center word
+  if (!FIXED2V.includes(S4.center)) S2V.extra = S4.center;   // a word that isn't one of the four takes the fifth slot
+  S2V.word = S4.center;
+  render2(); render2v();
 }
 function render2v() {
   const M = { start: G.init, middle: G.mid, end: G.final }[S2V.stage], v = M.Win[V.index.get(S2V.word)];
@@ -388,7 +398,7 @@ function render2v() {
   $('m2v-note').textContent = {
     start: `Five random numbers between −0.1 and 0.1. Nothing about “${S2V.word}” is in them yet.`,
     middle: 'Halfway through training the numbers have already grown and moved. Switch between the words to compare.',
-    end: 'Training nudges the numbers up and down to bring similar words closer together. Notice how the numbers for “coffee” are more similar to “tea” than to “dog”.',
+    end: 'Training nudges the numbers up and down to bring similar words closer together. Notice how the numbers for “coffee” become more similar to “tea” than to “dog”.',
   }[S2V.stage];
   const ex = $('m2v-extra'); ex.dataset.v = S2V.extra; ex.textContent = S2V.extra;
   document.querySelectorAll('#m2v-word button').forEach(b => b.classList.toggle('on', b.dataset.v === S2V.word));
@@ -610,7 +620,7 @@ function play4() { bar4.stop(); S4.step = 0; render4(); refreshBars(); bar4.act(
 $('m4-eq').addEventListener('click', e => {
   if (e.target.closest('#m4-math')) { S4.math = !S4.math; if (S4.math) play4(); else { bar4.stop(); render4(); } }
 });
-function pick4() { stopAll(); load4(); if (S4.math) play4(); else render4(); render5(); renderStatebar(); render8a(); refreshBars(); }
+function pick4() { stopAll(); load4(); if (S4.math) play4(); else render4(); render5(); renderStatebar(); render8a(); sync6(); refreshBars(); }   // the stage is shared: 6–7 follow it too
 ['m4', 'm5'].forEach(k => {
   $(k + '-center').addEventListener('change', e => { stopAll(); selectPair(e.target.value, S4.ctx, k); });
   $(k + '-ctx').addEventListener('change', e => { stopAll(); selectPair(S4.center, e.target.value, k); });
@@ -727,7 +737,7 @@ function render6() {
   const opts = contexts6(P6.center).concat(P6.stand ? [P6.stand] : []).sort();   // keep a negative selection in the list
   xs.innerHTML = opts.map(w => `<option value="${w}">${w}</option>`).join(''); xs.value = P6.stand || P6.ctx;
   $('m6-kind').innerHTML = `<span class="badge ${P6.stand ? 'neg' : 'pos'}">${P6.stand ? 'negative pair · label = 0' : 'positive pair · label = 1'}</span>`;   // as in 4 and 5
-  $('m6-moment').querySelectorAll('button').forEach(x => x.classList.toggle('on', x.dataset.v === P6.moment));
+  $('m6-stage').querySelectorAll('button').forEach(x => x.classList.toggle('on', x.dataset.v === S4.stage));
 }
 // the pair section 6 works on: the positive pair, or the selected negative sample within it
 function t6() {
@@ -754,7 +764,7 @@ $('m6-center').addEventListener('change', e => { const c = e.target.value; selec
 $('m6-ctx').addEventListener('change', e => selectPair(S4.center, e.target.value, '6'));
 $('m7-center').addEventListener('change', e => { const c = e.target.value; selectPair(c, contexts6(c).includes(S4.ctx) ? S4.ctx : contexts6(c, true), '7'); });
 $('m7-ctx').addEventListener('change', e => selectPair(S4.center, e.target.value, '7'));
-$('m6-moment').addEventListener('click', e => { const x = e.target.closest('button'); if (x) { P6.moment = x.dataset.v; pick6(); } });
+$('m6-stage').addEventListener('click', e => { const x = e.target.closest('button'); if (x) { S4.stage = x.dataset.v; pick4(); } });
 
 // ---------- 7 negative samples ----------
 function render7() {

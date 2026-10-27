@@ -80,7 +80,7 @@ input[type=range] { width: 160px; accent-color: var(--blue); }
 .chip { display: inline-block; padding: 3px 9px; border-radius: 6px; background: #eeede8; font-family: var(--mono); font-size: 0.9rem; white-space: pre; border: 1px solid transparent; }
 
 /* sticky state bar */
-#statebar { position: sticky; top: 0; z-index: 20; background: rgba(249,249,247,0.94); backdrop-filter: blur(6px); border-bottom: 1px solid var(--grid); padding: 10px 16px; font-family: var(--sans); }
+#statebar { position: fixed; top: 0; left: 0; right: 0; z-index: 20; transform: translateY(-110%); transition: transform 0.25s ease;  background: rgba(249,249,247,0.94); backdrop-filter: blur(6px); border-bottom: 1px solid var(--grid); padding: 10px 16px; font-family: var(--sans); }
 #statebar .in { max-width: 760px; margin: 0 auto; display: grid; gap: 9px; }
 #statebar .sb-set { display: flex; flex-wrap: wrap; justify-content: flex-start; gap: 8px 24px; align-items: center; }
 #statebar .sb-vals { display: inline-flex; gap: 16px; align-items: center; flex: 0 0 auto; font-size: 0.8rem; font-variant-caps: all-small-caps; letter-spacing: 0.06em; color: var(--muted); white-space: nowrap; }
@@ -594,6 +594,10 @@ table.m6t thead th { white-space: normal; max-width: 92px; line-height: 1.25; } 
 .m8zoom button + button { border-left: 1px solid var(--axis); }
 .m8scrub { flex-wrap: wrap; gap: 4px 12px; } .m8scrub .note { white-space: normal; }
 .split8 .m8scrub input[type=range] { flex: 1 1 100%; } .split8 .m8scrub .note { flex: 1 1 100%; }
+
+/* the header appears once the reader reaches section 3, where pairs are introduced */
+#statebar.shown { transform: none; }
+@media (prefers-reduced-motion: reduce) { #statebar { transition: none; } }
 </style>
 </head>
 <body>
@@ -603,7 +607,7 @@ table.m6t thead th { white-space: normal; max-width: 92px; line-height: 1.25; } 
 <main>
 <h1>How word2vec learns</h1>
 <p class="lede">In 2013 a team at Google released <a href="https://code.google.com/archive/p/word2vec/">word2vec</a>, a small program that reads a lot of text and gives every word a list of numbers. Words used in similar ways end up with similar lists. The idea underlies much of modern language technology, including the first layer of every large language model. This page takes the training procedure apart one step at a time.</p>
-<p class="note">Everything on this page is computed live in your browser. A tiny model with 5 dimensions trains on a hand-written corpus of 30 sentences, so the numbers on screen are the real numbers. Each section builds on the last, and they all share one model: the vectors created in section 2 are the ones trained in sections 6 to 9. The bar at the top shows the pair you have selected: click one in section 3, or pick any two words in section 4. Every interactive has the same controls: reset, play, step, and skip to end. The keyboard drives the one you used last: → steps, space plays or pauses, shift + → skips to the end, and shift + ← resets.</p>
+<p class="note">Everything on this page is computed live in your browser. A tiny model with 5 dimensions trains on a hand-written corpus of 30 sentences, so the numbers on screen are the real numbers. Each section builds on the last, and they all share one model: the vectors created in section 2 are the ones trained in sections 6 to 9. From section 3 on, a bar at the top shows the pair you have selected: click one in section 3, or pick any two words in section 4. Every interactive has the same controls: reset, play, step, and skip to end. The keyboard drives the one you used last: → steps, space plays or pauses, shift + → skips to the end, and shift + ← resets.</p>
 <nav class="toc">
   <a href="#s1">1. The problem</a>
   <a href="#s2">2. The vocabulary and two tables</a>
@@ -622,11 +626,12 @@ table.m6t thead th { white-space: normal; max-width: 92px; line-height: 1.25; } 
 <p>word2vec starts from an old observation in linguistics, the <em>distributional hypothesis</em>: words that appear in similar contexts tend to have similar meanings. As the linguist J.R. Firth put it, “you shall know a word by the company it keeps.” You may never have seen “coffee” and “tea” in the same sentence, but you have seen both next to “hot”, “cup” and “drink”. Their shared company is the clue.</p>
 <p>You can use the same clue yourself. Each sentence below, taken from the toy corpus on this page, is missing a word.</p>
 <div class="module" id="m1">
+  <h4 class="m3title">Can you guess a word by the company it keeps?</h4>
   <div class="row m1top">
     <div class="m1bank" id="m1-bank" role="group" aria-label="Words to place"></div>
     <button id="m1-reset">Start over</button>
   </div>
-  <p class="note" style="margin:0 0 12px"><b>Can you guess a word by the company it keeps?</b><br>Drag each word to the sentence it fits best, or tap a word and then a blank. Tap a filled blank to empty it.</p>
+  <p class="note" style="margin:0 0 12px">Drag each word to the sentence it fits best, or tap a word and then a blank. Tap a filled blank to empty it.</p>
   <div class="m1sents" id="m1-sents"></div>
   <p class="note m1fb" id="m1-fb" aria-live="polite"></p>
 </div>
@@ -638,60 +643,72 @@ table.m6t thead th { white-space: normal; max-width: 92px; line-height: 1.25; } 
 <tr>
 <th>Setting</th>
 <th>This page</th>
-<th>word2vec (paper / code)</th>
+<th>Original paper (2013)</th>
+<th>Released code and vectors*</th>
 </tr>
 </thead>
 <tbody>
 <tr>
 <td>Vocabulary</td>
 <td>36 words</td>
-<td>692K words (paper); 3M words and phrases (Google News vectors)</td>
+<td>692K words</td>
+<td>3M words and phrases</td>
 </tr>
 <tr>
 <td>Corpus</td>
 <td>30 sentences, 156 words</td>
-<td>about 1B words (paper); about 100B (Google News vectors)</td>
+<td>about 1B words</td>
+<td>about 100B words</td>
 </tr>
 <tr>
 <td>Dimensions</td>
 <td>5</td>
-<td>300 (paper, Google News vectors); the code defaults to 100</td>
+<td>300</td>
+<td>300 (the code defaults to 100)</td>
 </tr>
 <tr>
 <td>Window</td>
 <td>up to 5, randomly shrunk</td>
+<td>—</td>
 <td>up to 5, randomly shrunk</td>
 </tr>
 <tr>
 <td>Negative samples <em>k</em></td>
 <td>5</td>
-<td>5 by default; the paper suggests 5–20 for small data, 2–5 for large</td>
+<td>5–20 for small data, 2–5 for large</td>
+<td>5</td>
 </tr>
 <tr>
 <td>Learning rate</td>
 <td>0.025, decaying linearly</td>
+<td>—</td>
 <td>0.025 for skip-gram, 0.05 for CBOW</td>
 </tr>
 <tr>
 <td>Subsampling threshold <em>t</em></td>
 <td>0.01</td>
-<td>10⁻⁵ (paper’s formula); 10⁻³ (code’s formula and default)</td>
+<td>10⁻⁵</td>
+<td>10⁻³ (with a slightly different formula)</td>
 </tr>
 <tr>
 <td>Minimum count</td>
 <td>1</td>
+<td>—</td>
 <td>5</td>
 </tr>
 <tr>
 <td>Passes over the corpus</td>
 <td>200</td>
-<td>5 by default</td>
+<td>—</td>
+<td>5</td>
 </tr>
 </tbody>
 </table>
+<p class="note">* Google released the word2vec program with the paper, along with a pretrained set of vectors, the “Google News” vectors, trained on news articles. That column gives the program’s default settings and the size of those vectors. A “—” means the paper does not give that setting, so the program’s default applies.</p>
 <h2 id="s2"><span class="num">2</span>The vocabulary and two tables</h2>
 <p>Training begins with bookkeeping. The program splits the corpus into words, counts each one, and builds the <em>vocabulary</em>: the list of every distinct word. The real program drops words that appear fewer than five times. The toy corpus keeps them all.</p>
 <div class="module" id="m2">
+  <h4 class="m3title">The corpus and its vocabulary</h4>
   <div class="row">
     <span class="note" id="m2-stats"></span>
   </div>
@@ -699,7 +716,7 @@ table.m6t thead th { white-space: normal; max-width: 92px; line-height: 1.25; } 
     <div><h4>Corpus</h4><div class="corpus" id="m2-corpus"></div></div>
     <div><h4>Vocabulary, by count</h4><div class="vocabwrap" id="m2-vocab"></div></div>
   </div>
-  <p class="note" style="margin:10px 0 0">Click any word to find it in the corpus and the vocabulary.</p>
+  <p class="note" style="margin:10px 0 0">Click any word to select it: it is highlighted here, shown in the input vector below, and centred in the window of section 3.</p>
 </div>
 <p>Then every word gets <strong>two</strong> vectors, each a list of numbers, one per dimension. This page uses 5 dimensions, so each vector holds 5 numbers. The original paper used 300.</p>
 <p>The two vectors are:</p>
@@ -709,6 +726,7 @@ table.m6t thead th { white-space: normal; max-width: 92px; line-height: 1.25; } 
 </ul>
 <p>Here is one input vector, as it starts and as it ends up after training.</p>
 <div class="module" id="m2v">
+  <h4 class="m3title">One word’s input vector</h4>
   <div class="row">
     <label class="ctl">word <span class="seg" id="m2v-word"><button data-v="coffee" class="on">coffee</button><button data-v="tea">tea</button><button data-v="dog">dog</button><button data-v="cat">cat</button><button id="m2v-extra" data-slot="extra"></button></span></label>
     <label class="ctl">training <span class="seg" id="m2v-state"><button data-v="start" class="on">start</button><button data-v="middle">middle</button><button data-v="end">end</button></span></label>
@@ -735,8 +753,8 @@ table.m6t thead th { white-space: normal; max-width: 92px; line-height: 1.25; } 
   <h4 class="m3title">Explore how window size affects training pairs</h4>
   <p class="note" style="margin:0 0 14px">Pick a sentence, then drag the window along it or click a word to make it the center.</p>
   <div class="row">
-    <label class="m3pick"><span class="lab">Sentence</span><select id="m3-sent-pick"></select></label>
-    <span class="m3step"><span class="lab">Window size</span><button id="m3-minus" aria-label="smaller window">−</button><b id="m3-bv" aria-live="polite">2</b><button id="m3-plus" aria-label="larger window">+</button></span>
+    <label class="m3pick"><span class="lab">sentence</span><select id="m3-sent-pick"></select></label>
+    <span class="m3step"><span class="lab">window size</span><button id="m3-minus" aria-label="smaller window">−</button><b id="m3-bv" aria-live="polite">2</b><button id="m3-plus" aria-label="larger window">+</button></span>
   </div>
   <div class="m3scroll"><div class="m3track" id="m3-track"></div></div>
   <h4>Positive pairs: words inside the window</h4>
@@ -749,6 +767,7 @@ table.m6t thead th { white-space: normal; max-width: 92px; line-height: 1.25; } 
 <h2 id="s4"><span class="num">4</span>The dot product</h2>
 <p>For each pair, the model needs a score: a single number saying how strongly it believes the two words belong together. word2vec uses the simplest score there is, the <em>dot product</em>. Multiply the center word’s input vector and the context word’s output vector dimension by dimension, then add up the results.</p>
 <div class="module" id="m4">
+  <h4 class="m3title">Score a pair</h4>
   <div class="row">
     <label class="ctl">center <select id="m4-center"></select></label>
     <label class="ctl">context <select id="m4-ctx"></select></label>
@@ -764,6 +783,7 @@ table.m6t thead th { white-space: normal; max-width: 92px; line-height: 1.25; } 
 <p>A score can be any number. To read it as a probability, word2vec passes it through the <em>sigmoid</em> function, σ(<em>x</em>) = 1 / (1 + e<sup>−<em>x</em></sup>). It is a smooth step. Large negative scores go to almost 0, large positive scores go to almost 1, and a score of 0 goes to exactly 0.5.</p>
 <p>The result is the model’s probability that this pair really appeared together in the text. For a positive pair, one that really comes from the text, the right answer is 1, so the <strong>error</strong> is 1 − σ(score). For a negative pair (section 7) the right answer is 0.</p>
 <div class="module" id="m5">
+  <h4 class="m3title">Turn the score into an error</h4>
   <div class="row">
     <label class="ctl">center <select id="m5-center"></select></label>
     <label class="ctl">context <select id="m5-ctx"></select></label>
@@ -794,11 +814,12 @@ table.m6t thead th { white-space: normal; max-width: 92px; line-height: 1.25; } 
 <li>The input vector <em>v</em> should also move toward the output vector, by <span class="fx"><span class="w"><span class="t tg">scaling factor</span><span class="g"><span class="o">×</span><span class="t tvo">output vector</span></span></span><span class="s"><span class="sg"><i>g</i></span> · <span class="svo"><i>v</i>′</span></span></span>, using <em>v</em>′ as it was before the update. But this change is <strong>not applied yet</strong>. It is kept as <em>Δv so far</em>, for reasons that section 7 makes clear.</li>
 </ul>
 <div class="module" id="m6">
+  <h4 class="m3title">Update one pair</h4>
   <div class="row">
     <label class="ctl">center <select id="m6-center"></select></label>
     <label class="ctl">context <select id="m6-ctx"></select></label>
     <span id="m6-kind"></span>
-    <label class="ctl">moment in training <span class="seg" id="m6-moment"><button data-v="early" class="on">early</button><button data-v="middle">middle</button><button data-v="late">late</button></span></label>
+    <label class="ctl">training <span class="seg" id="m6-stage"><button data-v="start" class="on">start</button><button data-v="middle">middle</button><button data-v="trained">end</button></span></label>
   </div>
   <p class="note m6neg" id="m6-neg" hidden></p>
   <div id="m6-body">
@@ -813,12 +834,13 @@ table.m6t thead th { white-space: normal; max-width: 92px; line-height: 1.25; } 
   <p class="note" id="m6-zero" hidden style="margin:6px 0 0"><span class="cvo">v′</span> is still all zeros at this point in training, so the input vector’s change is zero too.</p>
   </div>
 </div>
-<p>Pick any positive pair from the corpus, and a moment in training: the numbers are the model’s actual state just before that pair. Early on, a context word’s <em>v</em>′ may still be all zeros, so the change to <em>v</em> is zero too and only <em>v</em>′ moves. Later the vectors are larger, the error is smaller and α has shrunk, so the steps are finer.</p>
+<p>Pick any pair, positive or negative, and a stage of training (start, middle or end): the numbers are the model’s actual state just before that pair. Early on, a context word’s <em>v</em>′ may still be all zeros, so the change to <em>v</em> is zero too and only <em>v</em>′ moves. Later the vectors are larger, the error is smaller and α has shrunk, so the steps are finer.</p>
 <h2 id="s7"><span class="num">7</span>Negative samples</h2>
 <p>A positive update alone would be useless. The easiest way to score every pair high is to make every vector point the same way, and then the vectors carry no information. The model also needs examples of words that do <em>not</em> belong together.</p>
 <p>Negative sampling makes them up. For each real pair, word2vec draws <em>k</em> = 5 “noise” words at random and treats each as a <em>negative pair</em> with the center word. A word’s chance of being drawn is its frequency raised to the power 0.75. This flattens the distribution: common words are still drawn most often, but rare words get more of a chance than their raw frequency would give them. If a draw happens to be the real context word, it is skipped.</p>
 <p>For a negative pair the label is 0, so <em>g</em> = (0 − σ) × α is negative, and the same update rule pushes the two vectors apart. Each noise word’s output vector moves at once, and each adds its part to the center word’s <em>Δv so far</em>. Only after the real pair and all the noise words is <strong>Δv so far added to the input vector, once</strong>. Every pair is scored against the same, unchanged <em>v</em>.</p>
 <div class="module" id="m7">
+  <h4 class="m3title">Add up the negative samples</h4>
   <div class="row">
     <label class="ctl">center <select id="m7-center"></select></label>
     <label class="ctl">context <select id="m7-ctx"></select></label>
@@ -846,6 +868,7 @@ table.m6t thead th { white-space: normal; max-width: 92px; line-height: 1.25; } 
 <p>Training never compares “coffee” with “tea”. They never appear in the same sentence, so no update ever involves both. Yet each one’s input vector is pulled toward the output vectors of the same neighbours, “hot”, “cup”, “drink” and “milk”, so the two input vectors drift toward each other.</p>
 <p>Any two vectors, in 5 dimensions or 300, lie together in one flat plane, so they can be drawn at their true lengths with the true angle between them. Compare the start, middle and end of training, and try a word that shares no neighbours, such as “coffee” against “dog”.</p>
 <div class="module" id="m8a">
+  <h4 class="m3title">Compare two words’ input vectors</h4>
   <div class="row">
     <label class="ctl">word <select id="m8a-center"></select></label>
     <label class="ctl">compared with <select id="m8a-other"></select></label>
@@ -863,7 +886,7 @@ table.m6t thead th { white-space: normal; max-width: 92px; line-height: 1.25; } 
   <h4 class="m3title">Train a model on the corpus</h4>
   <div class="row">
     <label class="ctl">seed <input type="number" id="m8-seed" min="1" max="9999" step="1" value="1" class="m8num"></label>
-    <button id="m8-seedrand">random</button>
+    <button id="m8-seedrand">Random</button>
     <button class="primary" id="m8-train">Train</button>
     <label class="ctl">learning rate <span class="seg" id="m8-lr"><button data-v="0.01">0.01</button><button data-v="0.025" class="on">0.025 (default)</button><button data-v="0.05">0.05</button><button data-v="0.1">0.1</button></span></label>
   </div>
@@ -879,12 +902,13 @@ table.m6t thead th { white-space: normal; max-width: 92px; line-height: 1.25; } 
 <p>The loss starts at about 6 × log 2 ≈ 4.2, one coin toss for each of the six pairs, and falls quickly as the vectors arrange themselves. Meanwhile the learning rate shrinks in a straight line, so the late steps are fine adjustments. Play training to watch both.</p>
 <p>To see the arrangement itself, the map below projects the 5-dimensional input vectors down to 2 dimensions with PCA (principal component analysis), which keeps the two directions in which the vectors spread out most. This picture is approximate. Distances on it are only roughly right, and the neighbour list beside it is computed in all 5 dimensions. Drag the slider under it to any point in training; playing above moves it too.</p>
 <div class="module" id="m8">
+  <h4 class="m3title">Watch the words arrange themselves</h4>
   <div class="row"><label class="ctl"><input type="checkbox" id="m8-out"> show output vectors v′</label></div>
   <div class="split8">
     <div>
       <h4>Input vectors, projected to 2D (PCA, approximate)</h4>
       <div class="m8map"><div id="m8-scatter"></div>
-        <span class="m8zoom" role="group" aria-label="zoom the map"><button data-z="in" title="zoom in">+</button><button data-z="out" title="zoom out">−</button><button data-z="fit" title="fit the whole map">fit</button></span></div>
+        <span class="m8zoom" role="group" aria-label="zoom the map"><button data-z="in" title="zoom in">+</button><button data-z="out" title="zoom out">−</button><button data-z="fit" title="fit the whole map">Fit</button></span></div>
       <div class="m8scrub" style="margin:12px 0 0">
         <input type="range" id="m8-scrub" min="0" max="1" step="1" value="0" aria-label="training progress">
         <span class="note" id="m8-pos"></span>
@@ -1185,8 +1209,8 @@ const timelinePair = () => G.stream.get(Math.min(G.step, G.stream.total - 1));
 // ---------- one pair, stepped through (6–7) ----------
 // The reader picks a real pair (center, context) and a moment in training; P6 holds that
 // pair from the stream, the model as it stood just before it, and how far the update has got.
-const P6 = { center: 'coffee', ctx: 'cup', moment: 'early', idx: 0, pair: null, PL: null, phase: 0, R: null, snap: null, stand: null };
-const MOMENTS = { early: 0, middle: 0.5, late: 0.9 };
+const P6 = { center: 'coffee', ctx: 'cup', idx: 0, pair: null, PL: null, phase: 0, R: null, snap: null, stand: null };
+const MOMENTS = { start: 0, middle: 0.5, trained: 0.95 };   // where in training 6–7 look for the pair, by the shared stage
 
 // The phases of one pair update. 0–5 belong to 6 (the positive), the rest to 7.
 const POS_END = 5;
@@ -1233,7 +1257,7 @@ function contexts6(c, best) {
 }
 // find the pair in the stream at the chosen moment and load the model just before it
 function loadPair6() {
-  const ci = V.index.get(P6.center), xi = V.index.get(P6.ctx), ni = P6.stand ? V.index.get(P6.stand) : -1, N = G.stream.total, from = Math.floor(MOMENTS[P6.moment] * N);
+  const ci = V.index.get(P6.center), xi = V.index.get(P6.ctx), ni = P6.stand ? V.index.get(P6.stand) : -1, N = G.stream.total, from = Math.floor(MOMENTS[S4.stage] * N);
   // a positive pair occurs as itself; a negative one as a negative draw for some positive pair with that center
   const hit = p => p.center === ci && (ni >= 0 ? p.negs.some(n => n.w === ni && !n.skip) : p.ctx === xi);
   let idx = -1;
@@ -1377,6 +1401,14 @@ function renderStatebar() {
   </div>`;
 }
 
+// the header only makes sense once pairs exist: show it from section 3's widget on
+(function headerWhenPairs() {
+  let ticking = false;
+  const check = () => { ticking = false; $('statebar').classList.toggle('shown', $('m3').getBoundingClientRect().top < innerHeight * 0.75); };
+  addEventListener('scroll', () => { if (!ticking) { ticking = true; requestAnimationFrame(check); } }, { passive: true });
+  addEventListener('resize', check); setTimeout(check, 0);
+})();
+
 // ---------- 1 the problem ----------
 // A fill-in-the-blank puzzle from four corpus sentences: the reader matches words by their
 // company, the way word2vec does. Each word goes in one blank; coffee and tea fit either cup.
@@ -1466,15 +1498,18 @@ $('m1-reset').addEventListener('click', () => { m1.fill.fill(null); m1.sel = m1.
 })();
 
 // ---------- 2 vocabulary and the two tables ----------
-const S2 = { sel: 'coffee' };
+// section 2 highlights the selected pair's center word; clicking a word selects it page-wide
 function render2() {
-  const sel = V.index.get(S2.sel), maxc = Math.max(...V.count);
+  const sel = V.index.get(S4.center), maxc = Math.max(...V.count);
   $('m2-corpus').innerHTML = V.sents.map(s => `<div class="sline">${s.map(w => `<span class="w${w === sel ? ' on' : ''}" data-w="${W[w]}">${W[w]}</span>`).join(' ')}</div>`).join('');
   $('m2-vocab').innerHTML = `<table class="data vocab"><tbody>${W.map((w, i) => `<tr class="${i === sel ? 'on' : ''}" data-w="${w}"><td class="n rk">${i + 1}</td><td class="mono">${w}</td><td class="n">${V.count[i]}</td><td class="bar"><i style="width:${100 * V.count[i] / maxc}%"></i></td></tr>`).join('')}</tbody></table>`;
   $('m2-stats').textContent = `${W.length} words in the vocabulary · ${V.total} words of running text · ${V.sents.length} sentences`;
   $('m2-seed').textContent = `seed ${G.seed}`;
 }
-function selWord2(w) { if (w && V.index.has(w)) { S2.sel = w; render2(); } }
+function selWord2(w) {
+  if (!w || !V.index.has(w)) return;
+  selectPair(w, contexts6(w).includes(S4.ctx) ? S4.ctx : contexts6(w, true), '2');   // center of the page's selected pair
+}
 ['m2-corpus', 'm2-vocab'].forEach(id => $(id).addEventListener('click', e => { const el = e.target.closest('[data-w]'); if (el) selWord2(el.dataset.w); }));
 // retrain the whole page's model, after the seed or the learning rate changes
 function retrain(prev) { stopAll(); G.prev = prev; resetTraining(); loadPair6(); S8A.key = ''; restart4(); renderAll(); }
@@ -1485,11 +1520,10 @@ $('reroll').addEventListener('click', () => { const prev = snapshotRun(); G.seed
 // word whenever that is not one of the four.
 const FIXED2V = ['coffee', 'tea', 'dog', 'cat'];
 const S2V = { word: 'coffee', stage: 'start', extra: (o => o[Math.floor(Math.random() * o.length)])(W.filter(w => !FIXED2V.includes(w))) };
-function follow2v() {                      // called when the selected pair changes
-  if (FIXED2V.includes(S4.center) || S4.center === S2V.extra) return;
-  const viewing = S2V.word === S2V.extra;
-  S2V.extra = S4.center; if (viewing) S2V.word = S2V.extra;
-  render2v();
+function follow2v() {                      // called when the selected pair changes: show its center word
+  if (!FIXED2V.includes(S4.center)) S2V.extra = S4.center;   // a word that isn't one of the four takes the fifth slot
+  S2V.word = S4.center;
+  render2(); render2v();
 }
 function render2v() {
   const M = { start: G.init, middle: G.mid, end: G.final }[S2V.stage], v = M.Win[V.index.get(S2V.word)];
@@ -1503,7 +1537,7 @@ function render2v() {
   $('m2v-note').textContent = {
     start: `Five random numbers between −0.1 and 0.1. Nothing about “${S2V.word}” is in them yet.`,
     middle: 'Halfway through training the numbers have already grown and moved. Switch between the words to compare.',
-    end: 'Training nudges the numbers up and down to bring similar words closer together. Notice how the numbers for “coffee” are more similar to “tea” than to “dog”.',
+    end: 'Training nudges the numbers up and down to bring similar words closer together. Notice how the numbers for “coffee” become more similar to “tea” than to “dog”.',
   }[S2V.stage];
   const ex = $('m2v-extra'); ex.dataset.v = S2V.extra; ex.textContent = S2V.extra;
   document.querySelectorAll('#m2v-word button').forEach(b => b.classList.toggle('on', b.dataset.v === S2V.word));
@@ -1725,7 +1759,7 @@ function play4() { bar4.stop(); S4.step = 0; render4(); refreshBars(); bar4.act(
 $('m4-eq').addEventListener('click', e => {
   if (e.target.closest('#m4-math')) { S4.math = !S4.math; if (S4.math) play4(); else { bar4.stop(); render4(); } }
 });
-function pick4() { stopAll(); load4(); if (S4.math) play4(); else render4(); render5(); renderStatebar(); render8a(); refreshBars(); }
+function pick4() { stopAll(); load4(); if (S4.math) play4(); else render4(); render5(); renderStatebar(); render8a(); sync6(); refreshBars(); }   // the stage is shared: 6–7 follow it too
 ['m4', 'm5'].forEach(k => {
   $(k + '-center').addEventListener('change', e => { stopAll(); selectPair(e.target.value, S4.ctx, k); });
   $(k + '-ctx').addEventListener('change', e => { stopAll(); selectPair(S4.center, e.target.value, k); });
@@ -1842,7 +1876,7 @@ function render6() {
   const opts = contexts6(P6.center).concat(P6.stand ? [P6.stand] : []).sort();   // keep a negative selection in the list
   xs.innerHTML = opts.map(w => `<option value="${w}">${w}</option>`).join(''); xs.value = P6.stand || P6.ctx;
   $('m6-kind').innerHTML = `<span class="badge ${P6.stand ? 'neg' : 'pos'}">${P6.stand ? 'negative pair · label = 0' : 'positive pair · label = 1'}</span>`;   // as in 4 and 5
-  $('m6-moment').querySelectorAll('button').forEach(x => x.classList.toggle('on', x.dataset.v === P6.moment));
+  $('m6-stage').querySelectorAll('button').forEach(x => x.classList.toggle('on', x.dataset.v === S4.stage));
 }
 // the pair section 6 works on: the positive pair, or the selected negative sample within it
 function t6() {
@@ -1869,7 +1903,7 @@ $('m6-center').addEventListener('change', e => { const c = e.target.value; selec
 $('m6-ctx').addEventListener('change', e => selectPair(S4.center, e.target.value, '6'));
 $('m7-center').addEventListener('change', e => { const c = e.target.value; selectPair(c, contexts6(c).includes(S4.ctx) ? S4.ctx : contexts6(c, true), '7'); });
 $('m7-ctx').addEventListener('change', e => selectPair(S4.center, e.target.value, '7'));
-$('m6-moment').addEventListener('click', e => { const x = e.target.closest('button'); if (x) { P6.moment = x.dataset.v; pick6(); } });
+$('m6-stage').addEventListener('click', e => { const x = e.target.closest('button'); if (x) { S4.stage = x.dataset.v; pick4(); } });
 
 // ---------- 7 negative samples ----------
 function render7() {

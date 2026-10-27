@@ -2,7 +2,7 @@
 
 <p class="lede">In 2013 a team at Google released <a href="https://code.google.com/archive/p/word2vec/">word2vec</a>, a small program that reads a lot of text and gives every word a list of numbers. Words used in similar ways end up with similar lists. The idea underlies much of modern language technology, including the first layer of every large language model. This page takes the training procedure apart one step at a time.</p>
 
-<p class="note">Everything on this page is computed live in your browser. A tiny model with 5 dimensions trains on a hand-written corpus of 30 sentences, so the numbers on screen are the real numbers. Each section builds on the last, and they all share one model: the vectors created in section 2 are the ones trained in sections 6 to 9. The bar at the top shows the pair you have selected: click one in section 3, or pick any two words in section 4. Every interactive has the same controls: reset, play, step, and skip to end. The keyboard drives the one you used last: → steps, space plays or pauses, shift + → skips to the end, and shift + ← resets.</p>
+<p class="note">Everything on this page is computed live in your browser. A tiny model with 5 dimensions trains on a hand-written corpus of 30 sentences, so the numbers on screen are the real numbers. Each section builds on the last, and they all share one model: the vectors created in section 2 are the ones trained in sections 6 to 9. From section 3 on, a bar at the top shows the pair you have selected: click one in section 3, or pick any two words in section 4. Every interactive has the same controls: reset, play, step, and skip to end. The keyboard drives the one you used last: → steps, space plays or pauses, shift + → skips to the end, and shift + ← resets.</p>
 
 <!-- toc -->
 
@@ -22,17 +22,19 @@ word2vec has only this kind of evidence: which words appear near which. In the c
 
 The settings below compare the toy model with the real thing. They are small enough to train in under a second, and the training procedure is the same one the real program uses.
 
-| Setting | This page | word2vec (paper / code) |
-|---|---|---|
-| Vocabulary | 36 words | 692K words (paper); 3M words and phrases (Google News vectors) |
-| Corpus | 30 sentences, 156 words | about 1B words (paper); about 100B (Google News vectors) |
-| Dimensions | 5 | 300 (paper, Google News vectors); the code defaults to 100 |
-| Window | up to 5, randomly shrunk | up to 5, randomly shrunk |
-| Negative samples *k* | 5 | 5 by default; the paper suggests 5–20 for small data, 2–5 for large |
-| Learning rate | 0.025, decaying linearly | 0.025 for skip-gram, 0.05 for CBOW |
-| Subsampling threshold *t* | 0.01 | 10⁻⁵ (paper’s formula); 10⁻³ (code’s formula and default) |
-| Minimum count | 1 | 5 |
-| Passes over the corpus | 200 | 5 by default |
+| Setting | This page | Original paper (2013) | Released code and vectors\* |
+|---|---|---|---|
+| Vocabulary | 36 words | 692K words | 3M words and phrases |
+| Corpus | 30 sentences, 156 words | about 1B words | about 100B words |
+| Dimensions | 5 | 300 | 300 (the code defaults to 100) |
+| Window | up to 5, randomly shrunk | — | up to 5, randomly shrunk |
+| Negative samples *k* | 5 | 5–20 for small data, 2–5 for large | 5 |
+| Learning rate | 0.025, decaying linearly | — | 0.025 for skip-gram, 0.05 for CBOW |
+| Subsampling threshold *t* | 0.01 | 10⁻⁵ | 10⁻³ (with a slightly different formula) |
+| Minimum count | 1 | — | 5 |
+| Passes over the corpus | 200 | — | 5 |
+
+<p class="note">* Google released the word2vec program with the paper, along with a pretrained set of vectors, the “Google News” vectors, trained on news articles. That column gives the program’s default settings and the size of those vectors. A “—” means the paper does not give that setting, so the program’s default applies.</p>
 
 ## 2 The vocabulary and two tables
 
@@ -119,7 +121,7 @@ The *update* then moves each vector by the scaling factor times the other vector
 
 <!-- module: m6 -->
 
-Pick any positive pair from the corpus, and a moment in training: the numbers are the model’s actual state just before that pair. Early on, a context word’s *v*′ may still be all zeros, so the change to *v* is zero too and only *v*′ moves. Later the vectors are larger, the error is smaller and α has shrunk, so the steps are finer.
+Pick any pair, positive or negative, and a stage of training (start, middle or end): the numbers are the model’s actual state just before that pair. Early on, a context word’s *v*′ may still be all zeros, so the change to *v* is zero too and only *v*′ moves. Later the vectors are larger, the error is smaller and α has shrunk, so the steps are finer.
 
 ## 7 Negative samples
 
