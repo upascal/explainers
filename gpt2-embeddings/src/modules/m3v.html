@@ -2,11 +2,11 @@
   <h4 class="m3title">One token’s row</h4>
   <div class="row">
     <label class="ctl">token <span class="seg" id="m3v-word"></span></label>
-    <label class="ctl">training <span class="seg" id="m3v-state"><button data-v="start" class="on">start</button><button data-v="middle">middle</button><button data-v="end">end</button></span></label>
+    <span class="stepctl"><span class="lab">training step</span><input type="range" min="0" max="1" step="1" aria-label="training step"><span class="note sv"></span></span>
   </div>
   <div class="cols2 m3vgrid">
     <div><h4>In the toy model: 6 numbers</h4><div id="m3v-vec"></div><p class="note" id="m3v-note" style="margin:10px 0 0"></p></div>
-    <div><h4>In GPT-2: 768 numbers</h4><div id="m3v-real"></div></div>
+    <div><h4>In GPT-2: 768 numbers</h4><div class="row" style="margin-bottom:8px"><span class="seg" id="m3v-gstate"><button data-v="start">random start</button><button data-v="end" class="on">trained</button></span></div><div id="m3v-real"></div></div>
   </div>
   <div class="row" style="margin:14px 0 0">
     <button id="reroll">Re-roll initialization</button>

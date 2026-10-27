@@ -41,27 +41,27 @@ function resetTraining() {
   G.step = 0; G.pca = null; G.rad = null; U.key = ''; S9.key = '';
 }
 const rows = (m, k = 'E') => Array.from({ length: k === 'E' ? V.n : CFG.K }, (_, i) => arr(rowOf(m, k, i)));
-const STAGES = { start: 0, middle: 0.5, end: 1 };
-const snapAt = st => G.snaps[Math.round(STAGES[st] * G.stream.total)];
+// a step's place in training: step s (1-based) is the s-th update, in pass ceil(s / 30)
+const passOfStep = s => Math.ceil(s / V.seqs.length);
 
 // ---------- the selected prediction ----------
 // One prediction is selected for the whole page: in sentence `sent`, the vector at position `pos`
 // predicts the token at pos + 1. Sections 6–9 show it as the model stood just before that
 // sentence's update in the first, middle or last pass.
-const SEL = { sent: 4, pos: 4, stage: 'start' };
+const SEL = { sent: 4, pos: 4, pass: 1 };   // pass: which of the 120 times this sentence is trained
 const seqSel = () => V.seqs[SEL.sent];
 const inTok = () => seqSel()[SEL.pos], tgTok = () => seqSel()[SEL.pos + 1];
-function stepOf(sent, stage) {
-  // "end" is 90% of the way through, where the learning rate hasn't yet shrunk to almost nothing
-  const n = V.seqs.length, ep = { start: 0, middle: Math.floor(CFG.EPOCHS / 2), end: Math.floor(CFG.EPOCHS * 0.9) }[stage];
+// the step (0-based: how many updates came before) at which `sent` is trained in pass `pass`
+function stepOf(sent, pass) {
+  const n = V.seqs.length, ep = pass - 1;
   for (let i = ep * n; i < ep * n + n; i++) if (G.stream.sent(i) === sent) return i;
 }
 // the forward pass and gradients for the selected sentence at the selected stage, cached
 const U = { key: '' };
 function upd() {
-  const key = [G.seed, CFG.ALPHA0, SEL.sent, SEL.stage].join(':');
+  const key = [G.seed, CFG.ALPHA0, SEL.sent, SEL.pass].join(':');
   if (U.key !== key) {
-    const step = stepOf(SEL.sent, SEL.stage), m = G.snaps[step], f = forward(m, V.seqs[SEL.sent]);
+    const step = stepOf(SEL.sent, SEL.pass), m = G.snaps[step], f = forward(m, V.seqs[SEL.sent]);
     Object.assign(U, { key, step, m, f, alpha: alphaAt(step, G.stream.total), full: backward(m, f), one: {} });
   }
   if (!U.one[SEL.pos]) U.one[SEL.pos] = backward(U.m, U.f, SEL.pos);
@@ -145,12 +145,24 @@ document.querySelectorAll('.reveal-btn').forEach(b => b.addEventListener('click'
   body.hidden = !open; b.setAttribute('aria-expanded', open); b.textContent = open ? 'Hide answer' : 'Reveal answer';
 }));
 
-// ---------- the training stage: start, middle or end, shared by every section that has it ----------
-document.querySelectorAll('.seg.stage').forEach(s => {
-  s.innerHTML = Object.keys(STAGES).map(k => `<button data-v="${k}">${k}</button>`).join('');
-  s.addEventListener('click', e => { const b = e.target.closest('button'); if (b) { SEL.stage = b.dataset.v; stopAll(); renderSel(); } });
+// ---------- where in training: a pass (6–9) or a step (3, 4, 10, 11) ----------
+// Sections 6–9 follow the selected sentence's own update, so they pick which of its 120 passes;
+// sections 3, 4 and 10 show the tables as a whole, so they share the training step with 11.
+document.querySelectorAll('.passctl input').forEach(inp => {
+  inp.max = CFG.EPOCHS;
+  inp.addEventListener('input', () => { SEL.pass = +inp.value; stopAll(); renderMix(); render6(); render7(); render8(); renderStatebar(); refreshBars(); });
 });
-const syncStage = () => document.querySelectorAll('.seg.stage button').forEach(b => b.classList.toggle('on', b.dataset.v === SEL.stage));
+function syncPass() {
+  const step = stepOf(SEL.sent, SEL.pass) + 1;
+  document.querySelectorAll('.passctl').forEach(c => { c.querySelector('input').value = SEL.pass; c.querySelector('.pv').textContent = `${SEL.pass} of ${CFG.EPOCHS} · step ${commas(step)} of ${commas(G.stream.total)}`; });
+}
+document.querySelectorAll('.stepctl input').forEach(inp => inp.addEventListener('input', () => { stopAll(); G.step = +inp.value; renderTimeline(); }));
+function syncStep() {
+  const s = G.step, txt = s ? `${commas(s)} of ${commas(G.stream.total)} · pass ${passOfStep(s)}` : `0 of ${commas(G.stream.total)} · before training`;
+  document.querySelectorAll('.stepctl').forEach(c => { const inp = c.querySelector('input'); inp.max = G.stream.total; inp.value = s; c.querySelector('.sv').textContent = txt; });
+}
+// everything that shows the tables at the shared step
+function renderStep() { render3vToy(); render4(); render9(); syncStep(); }
 
 // ---------- a vector equation with "show math" ----------
 // get() returns { left: [items], result: { label, chip, vals, cls } }, items being
@@ -293,7 +305,7 @@ function renderStatebar() {
   const ctx = (from > 0 ? '<span class="sb-more">…</span>' : '') + s.slice(from, SEL.pos + 1).map(t => wchip(t, 'v')).join('');
   $('statebar-in').innerHTML = `<div class="sb-set">
     <span class="sb-pair"><a href="#s5">selected prediction</a> <span class="sb-ctx">${ctx}</span> → ${wchip(tgTok(), 'tg')}</span>
-    <span class="sb-vals"><a href="#s7">training <b>${SEL.stage}</b></a><a href="#s7">probability <b>${(100 * p).toFixed(1)}%</b></a><a href="#s3" title="initialization seed — re-roll it in section 3">seed <b>${G.seed}</b></a></span>
+    <span class="sb-vals"><a href="#s8">pass <b>${SEL.pass}</b></a><a href="#s7">probability <b>${(100 * p).toFixed(1)}%</b></a><a href="#s3" title="initialization seed — re-roll it in section 3">seed <b>${G.seed}</b></a></span>
   </div>`;
 }
 // the header only makes sense once predictions exist: show it from section 5's widget on
@@ -351,24 +363,61 @@ const S2 = (() => {
     cur = cur.map(t => { const o = []; for (let j = 0; j < t.length; j++) { if (j + 1 < t.length && t[j] === a && t[j + 1] === b) { o.push(a + b); j++; } else o.push(t[j]); } return o; });
     states.push(cur);
   }
-  return { k: 0, freq, pieces, index: new Map(pieces.map((p, i) => [p, i])), nChars: chars.size, states, merges, counts };
+  return { s: 0, freq, pieces, index: new Map(pieces.map((p, i) => [p, i])), nChars: chars.size, states, merges, counts };
 })();
+// The loop, as a flowchart that lights up the step the widget is on, one box at a time. Steps:
+// 0 = split into characters; then for each merge: count the pairs, check whether to stop ("no"),
+// merge; at the end: count (no pairs left), check ("yes"), return the merge list.
+function flow2(lit, way) {
+  const on = k => lit === k ? ' on' : '', go = w => way === w ? ' on' : '';
+  const box = (k, x, y, w, h, l1, l2) => `<g class="fb${on(k)}"><rect x="${x}" y="${y}" width="${w}" height="${h}" rx="8"/><text x="${x + w / 2}" y="${y + h / 2 + (l2 ? -9 : 0)}">${l1}</text>${l2 ? `<text class="s" x="${x + w / 2}" y="${y + h / 2 + 11}">${l2}</text>` : ''}</g>`;
+  return `<svg viewBox="0 0 680 450" width="100%" role="img" aria-label="the byte-pair encoding loop"><defs>${['f2a', 'f2b'].map((id, n) => `<marker id="${id}" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse"><path d="M2 1L8 5L2 9" fill="none" stroke="${n ? 'var(--violet)' : 'var(--ink-2)'}" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></marker>`).join('')}</defs>
+    ${box('split', 190, 10, 300, 56, 'Split text into words', 'then each word into characters')}
+    <line class="fa" x1="340" y1="66" x2="340" y2="88"/>
+    ${box('count', 190, 90, 300, 44, 'Count every neighbouring pair')}
+    <line class="fa" x1="340" y1="134" x2="340" y2="154"/>
+    <g class="fb${on('check')}"><polygon points="340,156 480,216 340,276 200,216"/><text x="340" y="206">50,000 merges done,</text><text x="340" y="228">or no pairs left?</text></g>
+    <line class="fa${go('no')}" x1="340" y1="276" x2="340" y2="306"/><text class="fl${go('no')}" x="352" y="294">no</text>
+    ${box('merge', 190, 308, 300, 44, 'Merge the most common pair')}
+    <path class="fa" d="M190 330 L150 330 L150 112 L188 112"/>
+    <path class="fa${go('yes')}" d="M480 216 L560 216 L560 368"/><text class="fl${go('yes')}" x="520" y="206">yes</text>
+    ${box('ret', 440, 370, 220, 56, 'Return the merge list', 'in order')}
+  </svg>`;
+}
+const STEPS2 = () => 3 * S2.merges.length + 4;   // split; count, check, merge per merge; then count, check, return
 function render2() {
-  const k = S2.k, st = S2.states[k], last = k ? S2.merges[k - 1] : null, fresh = last && last.a + last.b;
-  $('m2-corpus').innerHTML = CORPUS.map(s => `<div class="sline m2line">${BPE.pieces(s).map(p => `<span class="m2piece">${st[S2.index.get(p)].map(t => `<span class="m2t${t === fresh ? ' pop' : ''}">${vis(t)}</span>`).join('')}</span>`).join('')}</div>`).join('');
-  const top = S2.counts[k].slice(0, 10), mx = top.length ? top[0][1] : 1;
-  $('m2-pairs').innerHTML = top.length ? `<table class="data vocab"><tbody>${top.map(([p, n], i) => { const [a, b] = p.split('\u0000'); return `<tr class="${i ? '' : 'on'}"><td class="mono"><span class="m2t">${vis(a)}</span> + <span class="m2t">${vis(b)}</span></td><td class="n">${n}</td><td class="bar"><i style="width:${100 * n / mx}%"></i></td></tr>`; }).join('')}</tbody></table>`
+  const s = S2.s, K = S2.merges.length, r = s ? (s - 1) % 3 : -1, k0 = s ? Math.floor((s - 1) / 3) : 0;
+  const phase = s === 0 ? 'split' : r === 0 ? 'count' : r === 1 ? 'check' : k0 < K ? 'merge' : 'ret';
+  const k = phase === 'merge' ? k0 + 1 : k0;   // merges made so far
+  const st = S2.states[k], last = phase === 'merge' ? S2.merges[k0] : null, fresh = last && last.a + last.b;
+  const counted = phase === 'count' || phase === 'check', win = counted && S2.counts[k0].length ? S2.counts[k0][0][0].split('\u0000') : null;
+  $('m2-flow').innerHTML = flow2(phase, phase === 'check' ? (win ? 'no' : 'yes') : null);
+  // the corpus: once counted, the winning pair is marked wherever it sits; after a merge, the new token pops in
+  const piece = toks => { let h = ''; for (let i = 0; i < toks.length; i++) {
+    const w = win && i + 1 < toks.length && toks[i] === win[0] && toks[i + 1] === win[1];
+    if (w) { h += `<span class="m2t win">${vis(toks[i])}</span><span class="m2t win">${vis(toks[i + 1])}</span>`; i++; }
+    else h += `<span class="m2t${toks[i] === fresh ? ' pop' : ''}">${vis(toks[i])}</span>`;
+  } return h; };
+  $('m2-corpus').innerHTML = CORPUS.map(c => `<div class="sline m2line">${BPE.pieces(c).map(p => `<span class="m2piece">${piece(st[S2.index.get(p)])}</span>`).join('')}</div>`).join('');
+  // the counts: shown once counted; after a merge, the counts that chose it
+  const top = s === 0 ? [] : S2.counts[k0].slice(0, 10), mx = top.length ? top[0][1] : 1;
+  $('m2-pairs').innerHTML = s === 0 ? '<p class="note" style="padding:8px 10px;margin:0">Not counted yet.</p>'
+    : top.length ? `<table class="data vocab"><tbody>${top.map(([p, n], i) => { const [a, b] = p.split('\u0000'); const w = !i && counted ? ' win' : ''; return `<tr class="${i ? '' : 'on'}"><td class="mono"><span class="m2t${w}">${vis(a)}</span> + <span class="m2t${w}">${vis(b)}</span></td><td class="n">${n}</td><td class="bar"><i style="width:${100 * n / mx}%"></i></td></tr>`; }).join('')}</tbody></table>`
     : '<p class="note" style="padding:8px 10px;margin:0">No pairs left: every word is a single token.</p>';
-  $('m2-merges').innerHTML = k ? S2.merges.slice(0, k).map((m, i) => `<span class="m2m${i === k - 1 ? ' last' : ''}"><span class="m2t">${vis(m.a)}</span>+<span class="m2t">${vis(m.b)}</span></span>`).reverse().join('') : '<span class="note">none yet</span>';
-  const tokens = st.reduce((s, t, i) => s + t.length * S2.freq.get(S2.pieces[i]), 0);
+  $('m2-merges').innerHTML = k ? S2.merges.slice(0, k).map((m, i) => `<span class="m2m${i === k - 1 && phase === 'merge' ? ' last' : ''}"><span class="m2t">${vis(m.a)}</span>+<span class="m2t">${vis(m.b)}</span></span>`).reverse().join('') : '<span class="note">none yet</span>';
+  const tokens = st.reduce((n, t, i) => n + t.length * S2.freq.get(S2.pieces[i]), 0);
   $('m2-stats').innerHTML = `merges <b>${k}</b> · vocabulary <b>${S2.nChars + k}</b> (${S2.nChars} characters + ${k} merges) · the corpus is <b>${tokens}</b> tokens long`;
-  $('m2-note').innerHTML = k === S2.merges.length ? `Done after ${k} merges: every word in this small corpus is now a single token, so no pairs are left to merge. A large corpus has far too many different words for that. There, merging stops at a chosen number instead: GPT-2 stopped after 50,000, so rarer words are still split into pieces.`
-    : k ? `Merged “${vis(last.a)}” + “${vis(last.b)}”, which sat side by side ${last.n} times. Next: “${vis(S2.merges[k].a)}” + “${vis(S2.merges[k].b)}”.`
-    : `The corpus starts as ${S2.nChars} different characters, spaces included. Step to make the first merge: “${vis(S2.merges[0].a)}” + “${vis(S2.merges[0].b)}”, the most common pair.`;
+  $('m2-note').innerHTML = {
+    split: `The corpus starts as ${S2.nChars} different characters, spaces included. Step to count every pair of neighbours.`,
+    count: win ? `Counted. The most common pair is “${vis(win[0])}” + “${vis(win[1])}”, side by side ${S2.counts[k0][0][1]} times.` : 'Counted: there are no pairs left. Every word is a single token.',
+    check: win ? `${k} merge${k === 1 ? '' : 's'} so far, far from 50,000, and pairs are left: no, not done. So merge.` : 'No pairs left: yes, done.',
+    merge: last && `Merged “${vis(last.a)}” + “${vis(last.b)}” into one token, everywhere it occurs. Then back to counting.`,
+    ret: `Done after ${k} merges: every word in this small corpus is now a single token, so no pairs are left to merge. A large corpus has far too many different words for that. There, merging stops at a chosen number instead: GPT-2 stopped after 50,000, so rarer words are still split into pieces.`,
+  }[phase];
 }
 PlayBar($('m2-bar'), {
-  ms: 450, canStep: () => S2.k < S2.merges.length, canReset: () => S2.k > 0, rewind: () => { S2.k = 0; },
-  step: () => { S2.k++; render2(); }, end: () => { S2.k = S2.merges.length; render2(); }, reset: () => { S2.k = 0; render2(); },
+  ms: 280, canStep: () => S2.s < STEPS2() - 1, canReset: () => S2.s > 0, rewind: () => { S2.s = 0; },
+  step: () => { S2.s++; render2(); }, end: () => { S2.s = STEPS2() - 1; render2(); }, reset: () => { S2.s = 0; render2(); },
 });
 
 // ---------- 2 GPT-2's merges replayed on one word ----------
@@ -419,7 +468,7 @@ $('reroll').addEventListener('click', () => { const prev = snapshotRun(); G.seed
 // Four fixed tokens, plus a fifth slot: a random one at first, then the selected prediction's
 // input token whenever that is not one of the four.
 const FIXED3 = [' coffee', ' tea', ' dog', ' cat'].map(tokIx);
-const S3V = { tok: FIXED3[0], stage: 'start', extra: (o => o[Math.floor(Math.random() * o.length)])(V.ids.map((_, i) => i).filter(i => !FIXED3.includes(i) && V.ids[i] !== EOT)) };
+const S3V = { tok: FIXED3[0], real: 'end', extra: (o => o[Math.floor(Math.random() * o.length)])(V.ids.map((_, i) => i).filter(i => !FIXED3.includes(i) && V.ids[i] !== EOT)) };
 function follow3v() { if (!FIXED3.includes(inTok())) S3V.extra = inTok(); S3V.tok = inTok(); }
 const REAL = (() => {   // GPT-2's own rows for the toy vocabulary and a few more, int8 with one scale per row
   const q = b64(GPT2.rows.q, Int8Array), m = new Map();
@@ -427,23 +476,24 @@ const REAL = (() => {   // GPT-2's own rows for the toy vocabulary and a few mor
   return m;
 })();
 function heatColor(x, top) { const a = Math.min(1, Math.abs(x) / top); return x >= 0 ? `rgba(42,120,214,${(0.06 + 0.9 * a).toFixed(3)})` : `rgba(235,104,52,${(0.06 + 0.9 * a).toFixed(3)})`; }
-function render3v() {
-  const m = snapAt(S3V.stage), v = arr(rowOf(m, 'E', S3V.tok));
+function render3v() { render3vToy(); render3vReal(); syncStep(); }
+function render3vToy() {
+  const m = G.snaps[G.step], v = arr(rowOf(m, 'E', S3V.tok)), N = G.stream.total;
   const top = Math.max(...arr(view(G.snaps[G.snaps.length - 1], 'E')).map(Math.abs));   // one scale for all three stages
   const cell = (x, d) => `<span class="m2v-cell"><span class="d">d${d + 1}</span><span class="v" style="background:${x >= 0 ? 'rgba(42,120,214,' : 'rgba(235,104,52,'}${(0.08 + 0.42 * Math.abs(x) / top).toFixed(3)})">${num(x, 2)}</span></span>`;
   $('m3v-vec').innerHTML = `<div class="m2v-row"><span class="m2v-word"><span>${tstr(S3V.tok)}</span><span class="sub">ID ${V.ids[S3V.tok]}</span></span><span class="m2v-arrow" aria-hidden="true">→</span><span class="m2v-br">${v.map(cell).join('')}</span></div>`;
-  $('m3v-note').innerHTML = {
-    start: `Six random numbers, most within ±0.04. Nothing about “${plain(S3V.tok).trim()}” is in them yet.`,
-    middle: 'Halfway through training the numbers have grown and moved. Switch between the tokens to compare.',
-    end: 'Training nudges the numbers until tokens used alike have alike rows. Compare “ coffee” with “ tea”, then with “ dog”.',
-  }[S3V.stage];
+  $('m3v-note').innerHTML = G.step === 0 ? `Six random numbers, most within ±0.04. Nothing about “${plain(S3V.tok).trim()}” is in them yet.`
+    : G.step < N ? `After ${commas(G.step)} of ${commas(N)} steps, the numbers have grown and moved. Drag on, or switch between the tokens to compare.`
+    : 'Training nudges the numbers until tokens used alike have alike rows. Compare “ coffee” with “ tea”, then with “ dog”.';
+}
+function render3vReal() {
   // GPT-2's row: 768 numbers as a grid of squares, 32 to a line. OpenAI released only the trained
   // table, so "start" is a fresh draw from GPT-2's starting distribution, N(0, 0.02), seeded by the
   // page's initialization seed and the token's ID, so re-rolling draws it again; "middle" has nothing
   // to show. Start and end share one color scale, the trained row's, stated in the key under the
   // grid: the start looks faint because its numbers are about 7 times smaller.
   const id = V.ids[S3V.tok], R = REAL.get(id), C = 32, s = 9;
-  const r0 = rng(G.seed * 65537 + id), Rs = S3V.stage === 'start' ? Float32Array.from({ length: 768 }, () => gauss(r0) * CFG.STD) : S3V.stage === 'end' ? R : null;
+  const r0 = rng(G.seed * 65537 + id), Rs = S3V.real === 'start' ? Float32Array.from({ length: 768 }, () => gauss(r0) * CFG.STD) : R;
   const rtop = Math.max(...R.map(Math.abs)) * 0.6;
   let svg = `<svg viewBox="0 0 ${C * s} ${768 / C * s}" width="100%" style="display:block;max-width:${C * s}px" aria-label="768 numbers">`;
   for (let i = 0; i < 768; i++) svg += `<rect x="${(i % C) * s}" y="${Math.floor(i / C) * s}" width="${s - 1}" height="${s - 1}" rx="1.5" data-i="${i}" fill="${Rs ? heatColor(Rs[i], rtop) : '#f3f2ee'}"/>`;
@@ -452,11 +502,10 @@ function render3v() {
   const lab = x => num(x, rtop < 0.1 ? 3 : 2), key = Rs ? `<div class="m3vkey" aria-label="color scale"><span>+${lab(rtop)}</span><i style="background:linear-gradient(180deg, ${heatColor(rtop, rtop)}, white, ${heatColor(-rtop, rtop)})"></i><span>−${lab(rtop)}</span></div>` : '';
   $('m3v-real').innerHTML = `<div class="m3vheat">${svg}</svg>${key}<span class="m3vtip" hidden></span></div><p class="note" style="margin:8px 0 0">${{
     start: `A random start for row ${id}, ${tstr(S3V.tok)}: 768 numbers drawn with a standard deviation of 0.02, the way GPT-2’s code starts every row. GPT-2’s actual starting numbers were never published.`,
-    middle: 'OpenAI released only the finished table, not any from partway through training, so there is no middle to show.',
     end: `GPT-2’s row ${id}, ${tstr(S3V.tok)}, after training, from its released weights. Blue is positive, orange negative.`,
-  }[S3V.stage]}</p>`;
+  }[S3V.real]}${S3V.real === 'start' ? '' : ' OpenAI released only the finished table, so there is nothing to show from partway through training.'}</p>`;
   $('m3v-word').innerHTML = FIXED3.concat([S3V.extra]).map(i => `<button data-v="${i}" class="${i === S3V.tok ? 'on' : ''}">${tstr(i)}</button>`).join('');
-  document.querySelectorAll('#m3v-state button').forEach(b => b.classList.toggle('on', b.dataset.v === S3V.stage));
+  document.querySelectorAll('#m3v-gstate button').forEach(b => b.classList.toggle('on', b.dataset.v === S3V.real));
 }
 // hovering a square shows its number; a mouse only, since a finger covers the square anyway
 $('m3v-real').addEventListener('pointermove', e => {
@@ -469,7 +518,7 @@ $('m3v-real').addEventListener('pointermove', e => {
 });
 $('m3v-real').addEventListener('pointerleave', () => { const tip = $('m3v-real').querySelector('.m3vtip'); if (tip) tip.hidden = true; });
 $('m3v-word').addEventListener('click', e => { const b = e.target.closest('button'); if (b) { S3V.tok = +b.dataset.v; render3v(); } });
-$('m3v-state').addEventListener('click', e => { const b = e.target.closest('button'); if (b) { S3V.stage = b.dataset.v; render3v(); } });
+$('m3v-gstate').addEventListener('click', e => { const b = e.target.closest('button'); if (b) { S3V.real = b.dataset.v; render3vReal(); } });
 
 // ---------- 4 token row + position row = input vector ----------
 const sentOpts = id => { $(id).innerHTML = V.seqs.map((s, k) => `<option value="${k}">${esc(CORPUS[k])}</option>`).join(''); };
@@ -478,14 +527,16 @@ $('m4-sent').addEventListener('change', e => selectPred(+e.target.value, SEL.pos
 $('m5-sent').addEventListener('change', e => selectPred(+e.target.value, SEL.pos));
 $('m6-sent').addEventListener('change', e => selectPred(+e.target.value, SEL.pos));
 $('mix-sent').addEventListener('change', e => selectPred(+e.target.value, SEL.pos));
+// a lookup, so one fixed moment per stage (start, halfway, end of training), whatever the sentence:
+// changing the sentence changes which rows are looked up, not the tables themselves
 const EQ4 = VecEq($('m4-eq'), () => {
-  const u = upd(), t = inTok(), tok = arr(rowOf(u.m, 'E', t)), pos = arr(rowOf(u.m, 'P', SEL.pos));
+  const m = G.snaps[G.step], t = inTok(), tok = arr(rowOf(m, 'E', t)), pos = arr(rowOf(m, 'P', SEL.pos));
   return { left: [{ t: 'vec', label: 'token row', sym: SV, chip: wchip(t, 'v'), vals: tok, cls: 'cv' }, { t: 'op', s: '+' },
     { t: 'vec', label: 'position row', sym: '<span class="cpos">pos</span>', chip: `<span class="chip pos">position ${SEL.pos}</span>`, vals: pos, cls: 'cpos' }],
     result: { label: 'input vector', chip: `<span class="chip">${tstr(t)} at ${SEL.pos}</span>`, vals: tok.map((x, d) => x + pos[d]), cls: 'cp' } };
 }, 3);
 function render4() {
-  $('m4-sent').value = SEL.sent; syncStage();
+  $('m4-sent').value = SEL.sent; syncStep();
   $('m4-track').innerHTML = seqSel().slice(0, -1).map((t, i) => `<span class="m4tok${i === SEL.pos ? ' on' : ''}" data-p="${i}"><span class="chip ${i === SEL.pos ? 'v' : ''}">${tstr(t)}</span><span class="pn">${i}</span></span>`).join('');
   EQ4.refresh();
 }
@@ -651,7 +702,7 @@ const EQM = VecEq($('mix-eq'), () => {
 }, 3);
 function renderMix() {
   const u = upd(), w = u.f.a[SEL.pos], s = seqSel(), mx = Math.max(...w);
-  TRACKM.render(); syncStage();
+  TRACKM.render(); syncPass();
   $('mix-wh').innerHTML = `How much the vector at ${wchip(inTok(), 'v')} draws on each token`;
   $('mix-w').innerHTML = w.map((x, i) => `<span class="mixc"><span class="mixbar"><i style="height:${(100 * x / Math.max(mx, 1e-9)).toFixed(1)}%"></i></span><span class="mixp">${Math.round(100 * x)}%</span>${wchip(s[i], i === SEL.pos ? 'v' : '')}</span>`).join('');
   const even = 1 / w.length, spread = Math.max(...w.map(x => Math.abs(x - even)));
@@ -686,7 +737,7 @@ const EQ6 = DotEq($('m6-eq'), () => {
 }, 3, 4);
 function render6() {
   const u = upd(), p = u.f.p[SEL.pos], tg = tgTok();
-  TRACK6.render(); $('m7-ctx').innerHTML = ctxChips(); syncStage();
+  TRACK6.render(); $('m7-ctx').innerHTML = ctxChips(); syncPass();
   const vp = $('m6-track').querySelector('.m6vp');
   S6.quiet = true; vp.scrollTop = ORDER6.indexOf(S6.cand) * ROWH;
   requestAnimationFrame(() => { S6.quiet = false; scroll6({ target: vp }); });   // in case it moved meanwhile
@@ -742,7 +793,7 @@ const EQ7U = VecEq($('m7-up'), () => upEq(tgTok(), 'tg')(), 4), EQ7D = VecEq($('
 const EQ7I = VecEq($('m7-in'), () => {
   const u = upd(), t = inTok(), r = arr(rowOf(u.m, 'E', t)), sig = arr(u.one[SEL.pos].dh0[SEL.pos]).map(x => -x);
   return { left: [{ t: 'vec', label: 'token row', sym: SV, chip: wchip(t, 'v'), vals: r, cls: 'cv' }, { t: 'op', s: '+' }, { t: 'paren', s: '(' },
-    { t: 'scal', label: 'α', val: u.alpha.toFixed(4) }, { t: 'op', s: '×' }, { t: 'vec', label: 'from above', sym: '<i class="ch-h">∇</i>', chip: `<span class="chip">from above, at ${SEL.pos}</span>`, vals: sig, cls: 'ch' }, { t: 'paren', s: ')' }],
+    { t: 'scal', label: 'α', val: u.alpha.toFixed(4) }, { t: 'op', s: '×' }, { t: 'vec', label: 'sent back', sym: '<i class="ch-h">∇</i>', chip: `<span class="chip">sent back to ${SEL.pos}</span>`, vals: sig, cls: 'ch' }, { t: 'paren', s: ')' }],
     result: { label: 'moved row', chip: wchip(t, 'v'), vals: r.map((x, d) => x + u.alpha * sig[d]), cls: 'cv' } };
 }, 4);
 function render7() {
@@ -767,7 +818,7 @@ const EQ8A = VecEq($('m8-apply'), () => {
   return { left: [{ t: 'vec', label: 'row', sym: SV, chip: wchip(S8.row, 'v'), vals: r, cls: 'cv' }, { t: 'op', s: '+' }, { t: 'vec', label: `Δ${SV}`, sym: `Δ${SV}`, chip: wchip(S8.row, 'v'), vals: dl, cls: 'cp' }],
     result: { label: `new ${SV}`, chip: wchip(S8.row, 'v'), vals: r.map((x, d) => x + dl[d]), cls: 'cv' } };
 }, 4);
-// a row's parts: one at the top for every position (right or wrong answer there), and one at the
+// a row's parts: one where rows are scored for every position (right or wrong answer there), and one at the
 // bottom for every position where it is the input
 function parts8() {
   const u = upd(), f = u.f, r = S8.row, out = [];
@@ -782,7 +833,7 @@ function parts8() {
 }
 function delta8() { const u = upd(), D0 = LAYOUT.E[0] + S8.row * D; return Array.from({ length: D }, (_, d) => -u.alpha * u.full.g[D0 + d]); }
 function render8() {
-  const u = upd(); if (S8.row == null) S8.row = tgTok(); syncStage();
+  const u = upd(); if (S8.row == null) S8.row = tgTok(); syncPass();
   $('m8-sent').innerHTML = `<span class="lab">sentence</span> ${seqSel().map(t => wchip(t)).join('')}`;
   $('m8-row').innerHTML = V.ids.map((_, i) => `<option value="${i}">${esc(optLabel(i))}</option>`).join(''); $('m8-row').value = S8.row;
   EQ8S.refresh(); EQ8A.refresh();
@@ -812,7 +863,7 @@ function angleSeries(a, b) {   // [step, angle] at log-spaced steps
   S9.series = at.map(s => [s, angle(arr(rowOf(G.snaps[s], 'E', a)), arr(rowOf(G.snaps[s], 'E', b)))]); S9.key = key; return S9.series;
 }
 function render9() {
-  const a = S9.a, b = S9.b === a ? (a === tokIx(' coffee') ? tokIx(' tea') : tokIx(' coffee')) : S9.b, N = G.stream.total, at = Math.round(STAGES[SEL.stage] * N), m = G.snaps[at];
+  const a = S9.a, b = S9.b === a ? (a === tokIx(' coffee') ? tokIx(' tea') : tokIx(' coffee')) : S9.b, N = G.stream.total, at = G.step, m = G.snaps[at];
   $('m9-plane').innerHTML = pairPlane(arr(rowOf(m, 'E', a)), arr(rowOf(m, 'E', b)), { aLabel: plain(a), bLabel: plain(b), bCls: 'a2' });
   const ser = angleSeries(a, b), cur = angle(arr(rowOf(m, 'E', a)), arr(rowOf(m, 'E', b)));
   const cw = 340, ch = 190, cl = 40, cr = 10, ct = 12, cb = 30, X = v => cl + logx(v) * (cw - cl - cr), Y = v => ct + (1 - v / 180) * (ch - ct - cb);
@@ -825,7 +876,7 @@ function render9() {
     <text x="${X(at) + (at > N * 0.8 ? -8 : 8)}" y="${Y(cur) - 10}" text-anchor="${at > N * 0.8 ? 'end' : 'start'}" font-size="11" font-weight="600" fill="var(--violet)">${Math.round(cur)}°</text>
     <text x="${cl + (cw - cl - cr) / 2}" y="${ch - 2}" text-anchor="middle" font-size="10" fill="var(--ink-2)">training steps (log scale)</text></svg>`;
   ['m9-a', 'm9-b'].forEach(id => { if (!$(id).options.length) V.ids.forEach((_, i) => $(id).add(new Option(optLabel(i), i))); });
-  $('m9-a').value = a; $('m9-b').value = b; syncStage();
+  $('m9-a').value = a; $('m9-b').value = b; syncStep();
 }
 $('m9-a').addEventListener('change', e => { S9.a = +e.target.value; render9(); });
 $('m9-b').addEventListener('change', e => { S9.b = +e.target.value; render9(); });
@@ -888,7 +939,7 @@ function render10() {
   const sc = $('m10-scrub'); sc.max = G.stream.total; sc.value = G.step;
   $('m10-at').textContent = `${commas(G.step)} of ${commas(G.stream.total)} steps · pass ${Math.min(CFG.EPOCHS, G.stream.epoch(Math.max(0, G.step - 1)) + 1)} of ${CFG.EPOCHS}`;
 }
-function renderTimeline() { render10l(); render10(); refreshBars(); }
+function renderTimeline() { render10l(); render10(); renderStep(); refreshBars(); }
 const bar10 = PlayBar($('m10-bar'), {
   ms: 40, canStep: () => G.step < G.stream.total, canReset: () => G.step > 0, rewind: () => { G.step = 0; },
   step: () => { G.step = Math.min(G.stream.total, G.step + S10.speed); renderTimeline(); }, end: () => { G.step = G.stream.total; renderTimeline(); },

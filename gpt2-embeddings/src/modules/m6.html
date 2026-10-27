@@ -2,7 +2,7 @@
   <h4 class="m3title">Score every token</h4>
   <div class="row">
     <label class="m3pick"><span class="lab">sentence</span><select id="m6-sent"></select></label>
-    <label class="ctl">training <span class="seg stage" id="m6-stage"></span></label>
+    <span class="passctl"><span class="lab">pass</span><input type="range" min="1" max="1" step="1" aria-label="which pass over the corpus"><span class="note pv"></span></span>
   </div>
   <div class="m3scroll m6road"><div class="m3track m5track" id="m6-track"></div></div>
   <p class="note" style="margin:2px 0 14px">The stack holds every token that could come next, in the token table’s order. Scroll it, or click a token, to score that one against h.</p>

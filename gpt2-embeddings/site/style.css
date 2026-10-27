@@ -781,3 +781,19 @@ table.m6real tr.on td.bar i { background: var(--blue); }
 .m6slot { position: absolute; left: 0; right: 0; top: 64px; height: 32px; border: 2px solid var(--aqua); border-radius: 9px; pointer-events: none; }
 .m6vp:focus-visible + .m6slot { box-shadow: 0 0 0 3px var(--aqua-100); }
 .m6x { width: 108px; } .m6vp { padding-left: 0; padding-right: 0; } .m6c .chip { min-width: 72px; text-align: center; }
+/* 2: the merge loop as a flowchart; the box for the current step lights up */
+.m2flow { max-width: 420px; margin: 4px auto 12px; }
+.m2flow .fb rect, .m2flow .fb polygon { fill: white; stroke: var(--axis); stroke-width: 1; transition: fill 0.2s, stroke 0.2s; }
+.m2flow .fb text { font-family: var(--sans); font-size: 15px; font-weight: 600; fill: var(--ink-2); text-anchor: middle; dominant-baseline: central; }
+.m2flow .fb text.s { font-size: 13px; font-weight: 400; fill: var(--muted); }
+.m2flow .fb.on rect, .m2flow .fb.on polygon { fill: var(--violet-100); stroke: var(--violet); stroke-width: 2; }
+.m2flow .fb.on text { fill: var(--violet); }
+.m2flow .fa { fill: none; stroke: var(--ink-2); stroke-width: 1.3; marker-end: url(#f2a); }
+.m2flow .fl { font-family: var(--sans); font-size: 13px; fill: var(--muted); }
+.m2t.win { background: #fbe9b7; color: #7a5405; box-shadow: inset 0 0 0 1px #e8c76a; }
+.m2flow .fa.on { stroke: var(--violet); stroke-width: 2.2; marker-end: url(#f2b); }
+.m2flow .fl.on { fill: var(--violet); font-weight: 600; }
+/* where in training: a pass slider (6–9) or the shared step slider (3, 4, 10) */
+.stepctl, .passctl { display: inline-flex; align-items: center; gap: 10px; flex-wrap: wrap; font-size: 0.9rem; color: var(--ink-2); min-width: 0; }
+.stepctl input, .passctl input { width: 200px; max-width: 46vw; }
+.stepctl .note, .passctl .note { font-variant-numeric: tabular-nums; white-space: nowrap; }
