@@ -40,10 +40,12 @@ Training begins with bookkeeping. The program splits the corpus into words, coun
 
 <!-- module: m2 -->
 
-Then every word gets **two** vectors, each a row of numbers, one per dimension:
+Then every word gets **two** vectors, each a row of numbers, one per dimension. This page uses 5 dimensions, so each vector holds 5 numbers. The original paper used 300.
 
-- The **input vector *v*** describes the word when it is the center of attention. It starts out random, with each number drawn uniformly from the range ±0.5/*d*, where *d* is the number of dimensions. That is ±0.1 here, and ±0.0017 at 300 dimensions.
-- The **output vector *v*′** describes the word when it appears as someone else’s context. It starts out as all zeros.
+The two vectors are:
+
+- The **input vector *v*** describes the word when it is the center of attention. Each number in the vector starts out random, drawn uniformly from the range ±0.5/*d*, where *d* is the number of dimensions. That is ±0.1 here, and ±0.0017 at 300 dimensions.
+- The **output vector *v*′** describes the word when it appears in another word’s context. It starts out as all zeros.
 
 Here is one input vector, as it starts and as it ends up after training.
 
