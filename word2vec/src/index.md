@@ -27,11 +27,11 @@ The settings below compare the toy model with the real thing. They are small eno
 | Vocabulary | 36 words | 692K words | 3M words and phrases |
 | Corpus | 30 sentences, 156 words | about 1B words | about 100B words |
 | Dimensions | 5 | 300 | 300 (the code defaults to 100) |
-| Window | up to 5, randomly shrunk | — | up to 5, randomly shrunk |
+| Window | up to 5, randomly shrunk | 5 | up to 5, randomly shrunk |
 | Negative samples *k* | 5 | 5–20 for small data, 2–5 for large | 5 |
 | Learning rate | 0.025, decaying linearly | — | 0.025 for skip-gram, 0.05 for CBOW |
 | Subsampling threshold *t* | 0.01 | 10⁻⁵ | 10⁻³ (with a slightly different formula) |
-| Minimum count | 1 | — | 5 |
+| Minimum count | 1 | 5 | 5 |
 | Passes over the corpus | 200 | — | 5 |
 
 <p class="note">* Google released the word2vec program with the paper, along with a pretrained set of vectors, the “Google News” vectors, trained on news articles. That column gives the program’s default settings and the size of those vectors. A “—” means the paper does not give that setting, so the program’s default applies.</p>
