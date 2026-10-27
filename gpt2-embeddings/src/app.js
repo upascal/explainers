@@ -444,18 +444,28 @@ function render3v() {
   const r0 = rng(G.seed * 65537 + id), Rs = S3V.stage === 'start' ? Float32Array.from({ length: 768 }, () => gauss(r0) * CFG.STD) : S3V.stage === 'end' ? R : null;
   const rtop = Math.max(...R.map(Math.abs)) * 0.6;
   let svg = `<svg viewBox="0 0 ${C * s} ${768 / C * s}" width="100%" style="display:block;max-width:${C * s}px" aria-label="768 numbers">`;
-  for (let i = 0; i < 768; i++) svg += `<rect x="${(i % C) * s}" y="${Math.floor(i / C) * s}" width="${s - 1}" height="${s - 1}" rx="1.5" fill="${Rs ? heatColor(Rs[i], rtop) : '#f3f2ee'}">${Rs ? `<title>d${i + 1}: ${num(Rs[i], 3)}</title>` : ''}</rect>`;
-  const first = Rs ? ` The first numbers: ${arr(Rs.slice(0, 4)).map(x => num(x, 3)).join(', ')}, …` : '';
+  for (let i = 0; i < 768; i++) svg += `<rect x="${(i % C) * s}" y="${Math.floor(i / C) * s}" width="${s - 1}" height="${s - 1}" rx="1.5" data-i="${i}" fill="${Rs ? heatColor(Rs[i], rtop) : '#f3f2ee'}"/>`;
+  S3V.vals = Rs;   // for the hover readout
   // a vertical color bar beside the grid: positive at the top, 0 in the middle, negative at the bottom
   const lab = x => num(x, rtop < 0.1 ? 3 : 2), key = Rs ? `<div class="m3vkey" aria-label="color scale"><span>+${lab(rtop)}</span><i style="background:linear-gradient(180deg, ${heatColor(rtop, rtop)}, white, ${heatColor(-rtop, rtop)})"></i><span>−${lab(rtop)}</span></div>` : '';
-  $('m3v-real').innerHTML = `<div class="m3vheat">${svg}</svg>${key}</div><p class="note" style="margin:8px 0 0">${{
+  $('m3v-real').innerHTML = `<div class="m3vheat">${svg}</svg>${key}<span class="m3vtip" hidden></span></div><p class="note" style="margin:8px 0 0">${{
     start: `A random start for row ${id}, ${tstr(S3V.tok)}: 768 numbers drawn with a standard deviation of 0.02, the way GPT-2’s code starts every row. GPT-2’s actual starting numbers were never published.`,
     middle: 'OpenAI released only the finished table, not any from partway through training, so there is no middle to show.',
     end: `GPT-2’s row ${id}, ${tstr(S3V.tok)}, after training, from its released weights. Blue is positive, orange negative.`,
-  }[S3V.stage]}${first}</p>`;
+  }[S3V.stage]}</p>`;
   $('m3v-word').innerHTML = FIXED3.concat([S3V.extra]).map(i => `<button data-v="${i}" class="${i === S3V.tok ? 'on' : ''}">${tstr(i)}</button>`).join('');
   document.querySelectorAll('#m3v-state button').forEach(b => b.classList.toggle('on', b.dataset.v === S3V.stage));
 }
+// hovering a square shows its number; a mouse only, since a finger covers the square anyway
+$('m3v-real').addEventListener('pointermove', e => {
+  const tip = $('m3v-real').querySelector('.m3vtip'), sq = e.target.closest('[data-i]');
+  if (!tip) return;
+  if (e.pointerType !== 'mouse' || !sq || !S3V.vals) { tip.hidden = true; return; }
+  const i = +sq.dataset.i, box = tip.parentElement.getBoundingClientRect(), r = sq.getBoundingClientRect();
+  tip.innerHTML = `d${i + 1} <b>${num(S3V.vals[i], 3)}</b>`; tip.hidden = false;
+  tip.style.left = (r.left + r.width / 2 - box.left) + 'px'; tip.style.top = (r.top - box.top) + 'px';
+});
+$('m3v-real').addEventListener('pointerleave', () => { const tip = $('m3v-real').querySelector('.m3vtip'); if (tip) tip.hidden = true; });
 $('m3v-word').addEventListener('click', e => { const b = e.target.closest('button'); if (b) { S3V.tok = +b.dataset.v; render3v(); } });
 $('m3v-state').addEventListener('click', e => { const b = e.target.closest('button'); if (b) { S3V.stage = b.dataset.v; render3v(); } });
 
