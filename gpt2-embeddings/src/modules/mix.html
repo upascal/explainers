@@ -1,0 +1,14 @@
+<div class="module" id="mix">
+  <h4 class="m3title">Build h from the prior context</h4>
+  <div class="row">
+    <label class="m3pick"><span class="lab">sentence</span><select id="mix-sent"></select></label>
+    <label class="ctl">training <span class="seg stage" id="mix-stage"></span></label>
+  </div>
+  <div class="m3scroll"><div class="m3track m5track" id="mix-track"></div></div>
+  <h4 id="mix-wh"></h4>
+  <div class="mixw" id="mix-w"></div>
+  <p class="note" id="mix-wnote" style="margin:6px 0 14px"></p>
+  <h4>h, as a sum</h4>
+  <div id="mix-eq"></div>
+  <p class="note" style="margin:8px 0 0">The attention part’s mix is a weighted blend of the context’s vectors, using the weights above, passed through the layer’s own small tables. Section 7 scores this h against every token.</p>
+</div>

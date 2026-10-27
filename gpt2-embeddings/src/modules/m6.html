@@ -1,14 +1,13 @@
 <div class="module" id="m6">
   <h4 class="m3title">Score every token</h4>
   <div class="row">
-    <span class="m6ctx" id="m6-ctx"></span>
+    <label class="m3pick"><span class="lab">sentence</span><select id="m6-sent"></select></label>
     <label class="ctl">training <span class="seg stage" id="m6-stage"></span></label>
   </div>
+  <div class="m3scroll m6road"><div class="m3track m5track" id="m6-track"></div></div>
+  <p class="note" style="margin:2px 0 14px">The stack holds every token that could come next, in the token table’s order. Scroll it, or click a token, to score that one against h.</p>
+  <h4 id="m6-eqh"></h4>
   <div id="m6-eq"></div>
-  <h4>Scores and probabilities for all 41 tokens</h4>
-  <div id="m6-chart"></div>
-  <div class="legend"><span><i style="background:var(--blue)"></i>the token that really comes next</span><span><i style="background:#f6c3ad"></i>every other token</span></div>
+  <p class="note" id="m6-p" style="margin:8px 0 0"></p>
   <div id="m6-err" style="margin-top:16px"></div>
-  <h4 style="margin-top:16px">Real GPT-2, after the same text</h4>
-  <div id="m6-real"></div>
 </div>

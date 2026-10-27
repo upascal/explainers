@@ -46,7 +46,7 @@ const snapAt = st => G.snaps[Math.round(STAGES[st] * G.stream.total)];
 
 // ---------- the selected prediction ----------
 // One prediction is selected for the whole page: in sentence `sent`, the vector at position `pos`
-// predicts the token at pos + 1. Sections 6–8 show it as the model stood just before that
+// predicts the token at pos + 1. Sections 6–9 show it as the model stood just before that
 // sentence's update in the first, middle or last pass.
 const SEL = { sent: 4, pos: 4, stage: 'start' };
 const seqSel = () => V.seqs[SEL.sent];
@@ -72,7 +72,7 @@ function selectPred(sent, pos) {
   S8.row = tgTok(); follow3v(); S9.a = inTok() === V.index.get(EOT) ? S9.a : inTok();
   stopAll(); renderSel();
 }
-function renderSel() { render3(); render3v(); render4(); render5(); render6(); render7(); render8(); render9(); renderStatebar(); refreshBars(); }
+function renderSel() { render3(); render3v(); render4(); render5(); renderMix(); render6(); render7(); render8(); render9(); renderStatebar(); refreshBars(); }
 
 // ---------- the shared play bar ----------
 // reset · play/pause · step · skip to end, the same in every section. The keyboard drives the
@@ -192,16 +192,17 @@ function VecEq(host, get, dec = 2, cls = '') {
     ms: 800, canStep: () => me.step <= D, canReset: () => me.step > 0, rewind: () => { me.step = 0; },
     step: () => { me.step++; me.render(); }, end: () => { me.step = D + 1; me.render(); }, reset: () => { me.step = 0; me.render(); },
   });
-  me.play = () => { me.bar.stop(); me.step = 0; me.render(); refreshBars(); me.bar.act('play'); };
-  me.refresh = () => { if (me.math) me.play(); else me.render(); };
-  eq.addEventListener('click', e => { if (e.target.closest('.m4math')) { me.math = !me.math; if (me.math) me.play(); else { me.bar.stop(); me.render(); } } });
+  // "show math" opens the finished working; the play bar steps through it from the start
+  me.done = () => { me.bar.stop(); me.step = D + 1; me.render(); refreshBars(); };
+  me.refresh = () => { if (me.math) me.done(); else me.render(); };
+  eq.addEventListener('click', e => { if (e.target.closest('.m4math')) { me.math = !me.math; if (me.math) me.done(); else { me.bar.stop(); me.render(); } } });
   return me;
 }
 
 // ---------- a dot product with "show math" (used in 6) ----------
 // get() returns { a: { label, sym, chip, vals, cls }, b: { … }, scoreLabel }. "Show math" opens both
 // vectors into columns and works through them: multiply each dimension, then add the products.
-function DotEq(host, get) {
+function DotEq(host, get, dec = 2, pdec = dec) {   // dec: decimal places for the two vectors; pdec: for the products
   const me = { math: false, step: 0 };
   host.innerHTML = `<div class="m4wrap"><div class="m5eq m4eq"></div><div class="m4ctl" hidden><span></span></div></div>`;
   const eq = host.querySelector('.m4eq'), ctl = host.querySelector('.m4ctl');
@@ -212,7 +213,7 @@ function DotEq(host, get) {
     const col = (a, cls, isProd) => `<span class="m4br ${cls}">${a.map((x, d) => {
       const shown = !isProd || d < st, on = me.math && mult && d === cur ? ' on' : '', summed = isProd && k >= 1 && k <= D && d < k ? (d === k - 1 ? ' on' : ' sumd') : '';
       const fresh = isProd && mult && d === cur ? ' cur' : '';
-      return `<span class="c${on}${summed}${fresh}">${shown ? num(x, 2) : '·'}</span>`;
+      return `<span class="c${on}${summed}${fresh}">${shown ? num(x, isProd ? pdec : dec) : '·'}</span>`;
     }).join('')}</span>`;
     const term = (l, v, f, cls = '') => `<div class="term ${cls}"><div class="l">${l}</div><div class="v">${v}</div><div class="f">${f}</div></div>`;
     const done = st > 2 * D, adding = k >= 1 && k <= D, sofar = adding ? sum(prod.slice(0, k)) : run;
@@ -220,7 +221,7 @@ function DotEq(host, get) {
       ? term(g.a.chip, col(A, g.a.cls), '', 'sym open') + '<div class="op"><span class="dotch">·</span></div>' + term(g.b.chip, col(B, g.b.cls), '', 'sym open')
         + `<div class="m4scoregrp"><div class="op"><span class="eqch">=</span> <span class="sumw">sum</span></div>${term('products', `<span class="m4paren">${col(prod, 'cp', true)}</span>`, '', 'sym open')}</div>`
       : term(g.a.label, g.a.sym, g.a.chip, 'sym') + '<div class="op"><span class="dotch">·</span></div>' + term(g.b.label, g.b.sym, g.b.chip, 'sym'))
-      + `<div class="m4scoregrp"><div class="op">=</div>${term(adding ? 'sum so far' : g.scoreLabel || 'score', done || adding ? num(sofar, 3) : '?', adding ? `${k} of ${D} products` : '', 'score' + (adding ? ' adding' : ''))}</div>`
+      + `<div class="m4scoregrp"><div class="op">=</div>${term(adding ? 'sum so far' : g.scoreLabel || 'score', done || adding ? num(sofar, pdec) : '?', adding ? `${k} of ${D} products` : '', 'score' + (adding ? ' adding' : ''))}</div>`
       + `<button class="m4math">${me.math ? 'Hide math' : 'Show math'}</button>`;
     ctl.hidden = !me.math; eq.classList.toggle('mathon', me.math);
     eq.classList.toggle('working', me.math && !done); eq.classList.toggle('mult', me.math && mult); eq.classList.toggle('adding', me.math && adding);
@@ -243,9 +244,10 @@ function DotEq(host, get) {
     ms: () => me.step < D ? 700 : 600, canStep: () => me.step <= 2 * D, canReset: () => me.step > 0, rewind: () => { me.step = 0; },
     step: () => { me.step++; me.render(); }, end: () => { me.step = 2 * D + 1; me.render(); }, reset: () => { me.step = 0; me.render(); },
   });
-  me.play = () => { me.bar.stop(); me.step = 0; me.render(); refreshBars(); me.bar.act('play'); };
-  me.refresh = () => { if (me.math) me.play(); else me.render(); };
-  eq.addEventListener('click', e => { if (e.target.closest('.m4math')) { me.math = !me.math; if (me.math) me.play(); else { me.bar.stop(); me.render(); } } });
+  // "show math" opens the finished working; the play bar steps through it from the start
+  me.done = () => { me.bar.stop(); me.step = 2 * D + 1; me.render(); refreshBars(); };
+  me.refresh = () => { if (me.math) me.done(); else me.render(); };
+  eq.addEventListener('click', e => { if (e.target.closest('.m4math')) { me.math = !me.math; if (me.math) me.done(); else { me.bar.stop(); me.render(); } } });
   return me;
 }
 
@@ -291,7 +293,7 @@ function renderStatebar() {
   const ctx = (from > 0 ? '<span class="sb-more">…</span>' : '') + s.slice(from, SEL.pos + 1).map(t => wchip(t, 'v')).join('');
   $('statebar-in').innerHTML = `<div class="sb-set">
     <span class="sb-pair"><a href="#s5">selected prediction</a> <span class="sb-ctx">${ctx}</span> → ${wchip(tgTok(), 'tg')}</span>
-    <span class="sb-vals"><a href="#s6">training <b>${SEL.stage}</b></a><a href="#s6">probability <b>${(100 * p).toFixed(1)}%</b></a><a href="#s3" title="initialization seed — re-roll it in section 3">seed <b>${G.seed}</b></a></span>
+    <span class="sb-vals"><a href="#s7">training <b>${SEL.stage}</b></a><a href="#s7">probability <b>${(100 * p).toFixed(1)}%</b></a><a href="#s3" title="initialization seed — re-roll it in section 3">seed <b>${G.seed}</b></a></span>
   </div>`;
 }
 // the header only makes sense once predictions exist: show it from section 5's widget on
@@ -471,9 +473,11 @@ $('m3v-state').addEventListener('click', e => { const b = e.target.closest('butt
 
 // ---------- 4 token row + position row = input vector ----------
 const sentOpts = id => { $(id).innerHTML = V.seqs.map((s, k) => `<option value="${k}">${esc(CORPUS[k])}</option>`).join(''); };
-sentOpts('m4-sent'); sentOpts('m5-sent');
+sentOpts('m4-sent'); sentOpts('m5-sent'); sentOpts('m6-sent'); sentOpts('mix-sent');
 $('m4-sent').addEventListener('change', e => selectPred(+e.target.value, SEL.pos));
 $('m5-sent').addEventListener('change', e => selectPred(+e.target.value, SEL.pos));
+$('m6-sent').addEventListener('change', e => selectPred(+e.target.value, SEL.pos));
+$('mix-sent').addEventListener('change', e => selectPred(+e.target.value, SEL.pos));
 const EQ4 = VecEq($('m4-eq'), () => {
   const u = upd(), t = inTok(), tok = arr(rowOf(u.m, 'E', t)), pos = arr(rowOf(u.m, 'P', SEL.pos));
   return { left: [{ t: 'vec', label: 'token row', sym: SV, chip: wchip(t, 'v'), vals: tok, cls: 'cv' }, { t: 'op', s: '+' },
@@ -593,71 +597,129 @@ $('m4g-pc').addEventListener('pointermove', e => {
 $('m4g-pc').addEventListener('pointerleave', () => { if (S4G.hover != null) { S4G.hover = null; renderDims4g(); } });
 
 // ---------- 5 each position predicts the next ----------
-function render5() {
-  const s = seqSel(), n = s.length - 1;
-  $('m5-sent').value = SEL.sent;
-  $('m5-track').innerHTML = s.map((t, i) => `<span class="chip ${i <= SEL.pos ? 'v' : i === SEL.pos + 1 ? 'tg' : ''}" data-i="${i}">${tstr(t)}</span>`).join('')
-    + `<span class="m3band" id="m5-band"><span class="m3lbl">context</span><span class="m3grip" aria-hidden="true"><svg viewBox="0 0 16 6" width="16" height="6"><g fill="currentColor"><circle cx="2" cy="1.2" r="1.1"/><circle cx="8" cy="1.2" r="1.1"/><circle cx="14" cy="1.2" r="1.1"/><circle cx="2" cy="4.8" r="1.1"/><circle cx="8" cy="4.8" r="1.1"/><circle cx="14" cy="4.8" r="1.1"/></g></svg></span></span><span class="m5next" id="m5-next">next</span>`;
-  place5();
-  $('m5-preds').innerHTML = Array.from({ length: n }, (_, p) => `<span class="pairchip m5p${p === SEL.pos ? ' on' : ''}" data-p="${p}">${p > 0 ? '<span class="m5more">…</span>' : ''}${wchip(s[p], 'v')}<span class="m5ar">→</span>${wchip(s[p + 1], 'tg')}</span>`).join('');
-}
-function place5() {
-  const chips = [...$('m5-track').querySelectorAll('.chip')], band = $('m5-band'), lo = chips[0], hi = chips[SEL.pos], nx = chips[SEL.pos + 1];
-  band.style.left = (lo.offsetLeft - 5) + 'px'; band.style.width = (hi.offsetLeft + hi.offsetWidth - lo.offsetLeft + 10) + 'px';
-  const lab = $('m5-next'); lab.style.left = (nx.offsetLeft + nx.offsetWidth / 2) + 'px';
-  chips.forEach((ch, i) => ch.className = 'chip ' + (i <= SEL.pos ? 'v' : i === SEL.pos + 1 ? 'tg' : ''));
-  const sc = $('m5-track').parentElement, R = nx.offsetLeft + nx.offsetWidth + 8;
-  if (R > sc.scrollLeft + sc.clientWidth) sc.scrollLeft = R - sc.clientWidth;
-}
-$('m5-preds').addEventListener('click', e => { const el = e.target.closest('[data-p]'); if (el) selectPred(SEL.sent, +el.dataset.p); });
-(function drag5() {
+// The sentence and its context box, used in 5 and again in 6: `k` is the module's id prefix. Both
+// copies show the page's selected prediction, and dragging either one changes it.
+// stack(): in 7, the next position is a vertical stack of every candidate token, crossing the sentence
+// like an intersection; the positions after it are blank, since the model hasn't got there yet
+function ContextTrack(k, stack = null) {
+  const track = $(k + '-track'), me = {};
+  me.render = () => {
+    $(k + '-sent').value = SEL.sent;
+    track.innerHTML = seqSel().map((t, i) => stack && i > SEL.pos ? (i === SEL.pos + 1 ? stack() : `<span class="chip ph" data-i="${i}">&nbsp;&nbsp;&nbsp;</span>`) : `<span class="chip" data-i="${i}">${tstr(t)}</span>`).join('')
+      + `<span class="m3band"><span class="m3lbl">context</span><span class="m3grip" aria-hidden="true"><svg viewBox="0 0 16 6" width="16" height="6"><g fill="currentColor"><circle cx="2" cy="1.2" r="1.1"/><circle cx="8" cy="1.2" r="1.1"/><circle cx="14" cy="1.2" r="1.1"/><circle cx="2" cy="4.8" r="1.1"/><circle cx="8" cy="4.8" r="1.1"/><circle cx="14" cy="4.8" r="1.1"/></g></svg></span></span>${stack ? '' : '<span class="m5next">next</span>'}`;
+    me.place();
+  };
+  me.place = () => {
+    const chips = [...track.querySelectorAll('[data-i]')]; if (!chips.length) return;
+    const band = track.querySelector('.m3band'), lo = chips[0], hi = chips[SEL.pos], nx = chips[SEL.pos + 1];
+    band.style.left = (lo.offsetLeft - 5) + 'px'; band.style.width = (hi.offsetLeft + hi.offsetWidth - lo.offsetLeft + 10) + 'px';
+    if (stack) { band.style.top = (hi.offsetTop - 8) + 'px'; band.style.height = (hi.offsetHeight + 16) + 'px'; band.style.bottom = 'auto'; }
+    else track.querySelector('.m5next').style.left = (nx.offsetLeft + nx.offsetWidth / 2) + 'px';
+    chips.forEach((ch, i) => { if (!ch.classList.contains('m6x')) ch.className = 'chip ' + (i <= SEL.pos ? 'v' : stack ? 'ph' : i === SEL.pos + 1 ? 'tg' : ''); });
+    const sc = track.parentElement, R = nx.offsetLeft + nx.offsetWidth + 8;
+    if (R > sc.scrollLeft + sc.clientWidth) sc.scrollLeft = R - sc.clientWidth;
+  };
   // drag the context's right edge along the sentence; a press that doesn't move picks the token
-  const track = $('m5-track'); let g = null;
-  const chipsOf = () => [...track.querySelectorAll('.chip')];
-  const nearest = x => { let best = 0, d = Infinity; chipsOf().forEach((ch, i) => { const e = Math.abs(ch.offsetLeft + ch.offsetWidth / 2 - x); if (e < d) { d = e; best = i; } }); return best; };
+  let g = null;
+  const nearest = x => { let best = 0, d = Infinity; track.querySelectorAll('[data-i]').forEach((ch, i) => { const e = Math.abs(ch.offsetLeft + ch.offsetWidth / 2 - x); if (e < d) { d = e; best = i; } }); return best; };
   const xOf = e => e.clientX - track.getBoundingClientRect().left;
   const setPos = i => { const p = Math.max(0, Math.min(seqSel().length - 2, i)); if (p !== SEL.pos) selectPred(SEL.sent, p); };
-  track.addEventListener('pointerdown', e => { const chip = e.target.closest('.chip'); g = { x0: xOf(e), chip: chip ? +chip.dataset.i : null, moved: false }; track.setPointerCapture(e.pointerId); track.classList.add('dragging'); e.preventDefault(); });
+  track.addEventListener('pointerdown', e => { if (e.target.closest('.m6x')) return; const chip = e.target.closest('[data-i]'); g = { x0: xOf(e), chip: chip ? +chip.dataset.i : null, moved: false }; track.setPointerCapture(e.pointerId); track.classList.add('dragging'); e.preventDefault(); });
   track.addEventListener('pointermove', e => { if (!g) return; const x = xOf(e); if (!g.moved && Math.abs(x - g.x0) < 5) return; g.moved = true; setPos(nearest(x)); });
   const end = e => { if (g && !g.moved && g.chip != null && e.type === 'pointerup') setPos(g.chip); g = null; track.classList.remove('dragging'); };
   track.addEventListener('pointerup', end); track.addEventListener('pointercancel', end);
-})();
-addEventListener('resize', () => { place5(); render10(); render11g(); });
+  return me;
+}
+const TRACK5 = ContextTrack('m5'), TRACK6 = ContextTrack('m6', () => stack6()), TRACKM = ContextTrack('mix');
+function render5() {
+  const s = seqSel(), n = s.length - 1;
+  TRACK5.render();
+  $('m5-preds').innerHTML = Array.from({ length: n }, (_, p) => `<span class="pairchip m5p${p === SEL.pos ? ' on' : ''}" data-p="${p}">${p > 0 ? '<span class="m5more">…</span>' : ''}${wchip(s[p], 'v')}<span class="m5ar">→</span>${wchip(s[p + 1], 'tg')}</span>`).join('');
+}
+$('m5-preds').addEventListener('click', e => { const el = e.target.closest('[data-p]'); if (el) selectPred(SEL.sent, +el.dataset.p); });
+addEventListener('resize', () => { TRACK5.place(); TRACK6.place(); TRACKM.place(); render10(); render11g(); });
+
+// ---------- 6 mixing in the context ----------
+// The toy's one layer, for the selected prediction: how much the vector at that position draws on
+// each token of its context, and h as the exact sum input vector + attention's mix + MLP's change.
+const EQM = VecEq($('mix-eq'), () => {
+  const u = upd(), f = u.f, t = SEL.pos, x = arr(f.h0[t]), att = arr(f.h1[t]).map((v, d) => v - x[d]), mlp = arr(f.h2[t]).map((v, d) => v - f.h1[t][d]);
+  return { left: [{ t: 'vec', label: 'input vector', sym: '<i class="cv">x</i>', chip: `<span class="chip v">${tstr(inTok())} (${t})</span>`, vals: x, cls: 'cv' }, { t: 'op', s: '+' },
+    { t: 'vec', label: 'attention’s mix', sym: '<span class="mixsym">attn</span>', chip: `<span class="chip">from 0 to ${t}</span>`, vals: att, cls: 'cp' }, { t: 'op', s: '+' },
+    { t: 'vec', label: 'MLP’s change', sym: '<span class="mixsym">mlp</span>', chip: '<span class="chip">this position</span>', vals: mlp, cls: 'cp' }],
+    result: { label: 'h', chip: hChip(), vals: arr(f.h2[t]), cls: 'ch' } };
+}, 3);
+function renderMix() {
+  const u = upd(), w = u.f.a[SEL.pos], s = seqSel(), mx = Math.max(...w);
+  TRACKM.render(); syncStage();
+  $('mix-wh').innerHTML = `How much the vector at ${wchip(inTok(), 'v')} draws on each token`;
+  $('mix-w').innerHTML = w.map((x, i) => `<span class="mixc"><span class="mixbar"><i style="height:${(100 * x / Math.max(mx, 1e-9)).toFixed(1)}%"></i></span><span class="mixp">${Math.round(100 * x)}%</span>${wchip(s[i], i === SEL.pos ? 'v' : '')}</span>`).join('');
+  const even = 1 / w.length, spread = Math.max(...w.map(x => Math.abs(x - even)));
+  const hiI = w.indexOf(Math.max(...w)), loI = w.indexOf(Math.min(...w));
+  $('mix-wnote').innerHTML = w.length === 1 ? 'The first position has only itself to draw on: 100%.'
+    : spread < 0.03 ? `Nearly even: ${w.length} tokens at about ${Math.round(100 * even)}% each. The layer hasn’t learned yet which earlier tokens matter.`
+    : `The weights add up to 100%. Most from ${wchip(s[hiI], hiI === SEL.pos ? 'v' : '')} (${Math.round(100 * w[hiI])}%), least from ${wchip(s[loI], loI === SEL.pos ? 'v' : '')} (${Math.round(100 * w[loI])}%).`;
+  EQM.refresh();
+}
 
 // ---------- 6 score every token ----------
 const ctxChips = () => { const s = seqSel(), from = Math.max(0, SEL.pos - 4); return `<span class="lab">prediction</span> ${from > 0 ? '<span class="m5more">…</span>' : ''}${s.slice(from, SEL.pos + 1).map(t => wchip(t, 'v')).join('')} <span class="m5ar">→</span> ${wchip(tgTok(), 'tg')}`; };
 const H_SYM = '<i class="ch-h">h</i>';
-const EQ6 = DotEq($('m6-eq'), () => {
-  const u = upd(), t = tgTok();
-  return { a: { label: 'top vector', sym: H_SYM, chip: `<span class="chip">h at ${SEL.pos}</span>`, vals: arr(u.f.h2[SEL.pos]), cls: 'ch' },
-    b: { label: 'row', sym: '<span class="cvo">row</span>', chip: wchip(t, 'vo'), vals: arr(rowOf(u.m, 'E', t)), cls: 'cvo' } };
-});
-function render6() {
-  const u = upd(), p = u.f.p[SEL.pos], lg = u.f.logits[SEL.pos], tg = tgTok();
-  $('m6-ctx').innerHTML = ctxChips(); $('m7-ctx').innerHTML = ctxChips(); syncStage();
-  EQ6.refresh();
-  // all 41 tokens, most likely first
-  const ord = V.ids.map((_, i) => i).sort((a, b) => p[b] - p[a]), W0 = 700, H0 = 220, l = 40, bt = 74, top = 14, bw = (W0 - l - 6) / V.n;
-  const step = [0.02, 0.05, 0.1, 0.25].find(s => s * 4 >= Math.max(...p)) || 0.25, mx = 4 * step, Y = v => top + (1 - v / mx) * (H0 - bt - top);
-  const yt = [0, 1, 2, 3, 4].map(k => k * step).map(v => `<line x1="${l}" x2="${W0}" y1="${Y(v)}" y2="${Y(v)}" stroke="var(--grid)"/><text x="${l - 6}" y="${Y(v)}" text-anchor="end" dominant-baseline="middle" font-size="10">${Math.round(v * 100)}%</text>`).join('');
-  let svg = `<svg viewBox="0 0 ${W0} ${H0}" width="100%" style="display:block">${yt}`;
-  ord.forEach((i, r) => {
-    const x = l + r * bw, isT = i === tg;
-    svg += `<g><title>${esc(plain(i))}: score ${num(lg[i], 3)}, probability ${(100 * p[i]).toFixed(2)}%</title><rect x="${x + 1.5}" y="${Y(p[i])}" width="${bw - 3}" height="${Y(0) - Y(p[i])}" fill="${isT ? 'var(--blue)' : '#f6c3ad'}"/>
-      ${isT || r < 3 ? `<text x="${x + bw / 2}" y="${Y(p[i]) - 4}" text-anchor="middle" font-size="9" font-weight="${isT ? 700 : 400}" fill="${isT ? 'var(--blue)' : 'var(--ink-2)'}">${Math.round(100 * p[i])}%</text>` : ''}
-      <text transform="translate(${x + bw / 2 + 3},${Y(0) + 6}) rotate(60)" font-size="10" font-family="var(--mono)" fill="${isT ? 'var(--blue)' : 'var(--ink-2)'}" font-weight="${isT ? 700 : 400}">${esc(optLabel(i).replace('<|endoftext|>', '<eot>'))}</text></g>`;
-  });
-  $('m6-chart').innerHTML = svg + `<line x1="${l}" x2="${W0}" y1="${Y(0)}" y2="${Y(0)}" stroke="var(--axis)"/></svg>`;
-  // the error for the right answer, as in word2vec's section 5
-  const term = (cls, l, v, f) => `<div class="term ${cls}"><div class="l">${l}</div><div class="v">${v}</div><div class="f">${f}</div></div>`;
-  $('m6-err').innerHTML = `<div class="m5eq">${term('lab1', 'label', 1, wchip(tg, 'tg') + ' came next')}<div class="op">−</div>
-    ${term('', 'probability p', p[tg].toFixed(3), `of ${wchip(tg, 'tg')}`)}<div class="op">=</div>${term('err', 'error', num(1 - p[tg], 3), '&nbsp;')}</div>
-    <p class="note" style="margin:-4px 0 0">Every other token has label 0, so its error is −p: for ${wchip(ord.find(i => i !== tg), 'neg')}, ${num(-p[ord.find(i => i !== tg)], 3)}.</p>`;
-  // the real GPT-2, given the same text
-  const real = GPT2.next[SEL.sent][SEL.pos], tgId = V.ids[tg], rmx = real[0][1];
-  $('m6-real').innerHTML = `<table class="data m6real"><tbody>${real.map(([id, q]) => `<tr class="${id === tgId ? 'on' : ''}"><td class="mono">${gstr(id)}</td><td class="n">${(100 * q).toFixed(1)}%</td><td class="bar"><i style="width:${100 * q / rmx}%"></i></td></tr>`).join('')}</tbody></table>
-    <p class="note" style="margin:6px 0 0">GPT-2’s 8 most likely next tokens, out of 50,257, after <span class="mono">${esc(BPE.encode(CORPUS[SEL.sent]).slice(0, SEL.pos).map(i => BPE.str(i)).join('')) || '&lt;|endoftext|&gt;'}</span>. ${real.some(([id]) => id === tgId) ? 'The corpus’s next token is among them.' : 'The corpus’s next token is not among them: GPT-2 learned from far more varied text.'}</p>`;
+// h belongs to one position: name it by that position's token as well as its number
+// on two lines: "h at", then the token as a chip with its position
+const hChip = () => `<span class="hlab"><span>h at</span><span>${wchip(inTok(), 'v')} <span class="hpos">(${SEL.pos})</span></span></span>`;
+// The candidates for the next token, as a vertical stack at the next position, in the token table's
+// own order (by token ID: the toy stores its rows most common first, so they're listed by their GPT-2
+// IDs instead). Scrolling the stack picks which candidate is scored against h below.
+const S6 = { cand: null };
+const ORDER6 = V.ids.map((_, i) => i).sort((a, b) => V.ids[a] - V.ids[b]);
+const ROWH = 32, PAD6 = 2;   // the stack shows 2 × 2 + 1 candidates, the picked one in line with the sentence
+function stack6() {
+  if (S6.cand == null) S6.cand = ORDER6[0];
+  return `<span class="m6x" data-i="${SEL.pos + 1}"><span class="m6vp" tabindex="0" aria-label="candidates for the next token; scroll to pick one">${ORDER6.map(i =>
+    `<span class="m6c${i === S6.cand ? ' sel' : ''}" data-t="${i}">${wchip(i, i === S6.cand ? 'vo' : '')}</span>`).join('')}</span><span class="m6slot"></span></span>`;
 }
+const EQ6 = DotEq($('m6-eq'), () => {
+  const u = upd(), t = S6.cand;
+  return { a: { label: 'after the layers', sym: H_SYM, chip: hChip(), vals: arr(u.f.h2[SEL.pos]), cls: 'ch' },
+    b: { label: 'a candidate’s row', sym: '<span class="cvo">row</span>', chip: wchip(t, 'vo'), vals: arr(rowOf(u.m, 'E', t)), cls: 'cvo' } };
+}, 3, 4);
+function render6() {
+  const u = upd(), p = u.f.p[SEL.pos], tg = tgTok();
+  TRACK6.render(); $('m7-ctx').innerHTML = ctxChips(); syncStage();
+  const vp = $('m6-track').querySelector('.m6vp');
+  S6.quiet = true; vp.scrollTop = ORDER6.indexOf(S6.cand) * ROWH;
+  requestAnimationFrame(() => { S6.quiet = false; scroll6({ target: vp }); });   // in case it moved meanwhile
+  vp.addEventListener('scroll', scroll6, { passive: true });
+  vp.addEventListener('keydown', e => { if (e.key !== 'ArrowDown' && e.key !== 'ArrowUp') return; e.preventDefault(); pick6(ORDER6.indexOf(S6.cand) + (e.key === 'ArrowDown' ? 1 : -1)); });
+  render6eq();
+}
+function render6eq() {
+  const u = upd(), c = S6.cand, p = u.f.p[SEL.pos][c];
+  $('m6-eqh').innerHTML = `One of the ${V.n} scores: h · the row of ${wchip(c, 'vo')}`;
+  EQ6.refresh();
+  $('m6-p').innerHTML = `After the softmax over all ${V.n} scores, ${wchip(c, 'vo')} gets a probability of <b>${p < 0.001 ? (100 * p).toFixed(3) : (100 * p).toFixed(1)}%</b>.`;
+  // the error for the same candidate: label 1 if it really came next, 0 if not
+  const tg = tgTok(), lab = c === tg ? 1 : 0, pc = lab ? 'tg' : 'neg';
+  const term = (cls, l, v, f) => `<div class="term ${cls}"><div class="l">${l}</div><div class="v">${v}</div><div class="f">${f}</div></div>`;
+  $('m6-err').innerHTML = `<div class="m5eq">${term(lab ? 'lab1' : 'lab0', 'label', lab, wchip(c, pc) + (lab ? ' came next' : ' didn’t come next'))}<div class="op">−</div>
+    ${term('', 'probability p', p.toFixed(3), `of ${wchip(c, pc)}`)}<div class="op">=</div>${term('err', 'error', num(lab - p, 3), '&nbsp;')}</div>
+    <p class="note" style="margin:-4px 0 0">${lab ? `Only ${wchip(c, pc)} came next, so it is the only candidate with label 1. Every other candidate has label 0, and an error of −p.`
+      : `${wchip(tg, 'tg')} came next, so it has label 1. ${wchip(c, pc)} and every other candidate have label 0, so their error is −p.`}</p>`;
+}
+// scrolling the stack: the candidate in line with the sentence is the one scored
+function scroll6(e) {
+  if (S6.quiet || S6.raf) return;
+  S6.raf = requestAnimationFrame(() => {
+    S6.raf = 0; const vp = e.target, k = Math.max(0, Math.min(ORDER6.length - 1, Math.round(vp.scrollTop / ROWH))), c = ORDER6[k];
+    if (c === S6.cand) return;
+    S6.cand = c;
+    vp.querySelectorAll('.m6c').forEach(r => { const on = +r.dataset.t === c; r.classList.toggle('sel', on); r.querySelector('.chip').classList.toggle('vo', on); });
+    render6eq();
+  });
+}
+const pick6 = k => { const vp = $('m6-track').querySelector('.m6vp'); vp.scrollTo({ top: Math.max(0, Math.min(ORDER6.length - 1, k)) * ROWH, behavior: 'smooth' }); };
+$('m6-track').addEventListener('click', e => { const r = e.target.closest('.m6c'); if (r) pick6(ORDER6.indexOf(+r.dataset.t)); });
 
 // ---------- 7 one prediction's updates ----------
 // the parts of one prediction: its right answer's row pulled toward h, a wrong answer's pushed
@@ -673,7 +735,7 @@ const gchain = (i, cls) => {
 const upEq = (i, cls) => () => {
   const u = upd(), r = arr(rowOf(u.m, 'E', i)), h = arr(u.f.h2[SEL.pos]), { g } = g7(i);
   return { left: [{ t: 'vec', label: 'row', sym: '<span class="cvo">row</span>', chip: wchip(i, cls), vals: r, cls: 'cvo' }, { t: 'op', s: '+' }, { t: 'paren', s: '(' },
-    { t: 'scal', label: '<span class="cg">g</span>', val: num(g, 4), cls: 'cg' }, { t: 'op', s: '×' }, { t: 'vec', label: 'top vector', sym: H_SYM, chip: `<span class="chip">h at ${SEL.pos}</span>`, vals: h, cls: 'ch' }, { t: 'paren', s: ')' }],
+    { t: 'scal', label: '<span class="cg">g</span>', val: num(g, 4), cls: 'cg' }, { t: 'op', s: '×' }, { t: 'vec', label: 'after the layers', sym: H_SYM, chip: hChip(), vals: h, cls: 'ch' }, { t: 'paren', s: ')' }],
     result: { label: 'moved row', chip: wchip(i, cls), vals: r.map((x, d) => x + g * h[d]), cls: 'cvo' } };
 };
 const EQ7U = VecEq($('m7-up'), () => upEq(tgTok(), 'tg')(), 4), EQ7D = VecEq($('m7-down'), () => upEq(S7.wrong, 'neg')(), 4);

@@ -12,7 +12,7 @@ Two kinds of numbers are on the page:
 - **Precomputed from GPT-2 small** (`src/gpt2data.js`): the merge list, a few real rows, nearest
   neighbours for 14,940 word tokens, every row's distance from the average row, the position
   table's similarity and main directions, GPT-2's next-token guesses for the corpus, and the
-  layer-by-layer "plot" / "cell" / … minimal pairs of section 12.
+  layer-by-layer "plot" / "cell" / … minimal pairs of section 13.
 
 | path | what |
 |---|---|
@@ -37,5 +37,5 @@ python precompute/precompute.py                    # ~1 min; uses the cached `gp
 The training stream (sentence order) uses a fixed seed; the initialization seed can be re-rolled
 on the page. `CFG` in `src/model.js` holds the toy settings. Learning rates above about 0.06 make
 the toy blow up, which is why the page offers 0.05 at most. Changing the corpus or settings can
-change whether the clusters form, so re-check the outcomes quoted in the prose (§10 and the last footnote)
+change whether the clusters form, so re-check the outcomes quoted in the prose (§11 and the last footnote)
 after editing them.

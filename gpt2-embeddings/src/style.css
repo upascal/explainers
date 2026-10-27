@@ -755,3 +755,29 @@ table.m6real tr.on td.bar i { background: var(--blue); }
 .m4gslide .note { white-space: nowrap; min-width: 5.5em; }
 .m4gread { max-width: 320px; margin: 2px 0 8px; padding: 8px 10px; border: 1px solid var(--grid); border-radius: 8px; background: white; font-size: 0.8rem; line-height: 1.45; color: var(--ink-2); min-height: 4.4em; }
 .m4gread b { color: var(--ink); font-variant-numeric: tabular-nums; }
+/* 6: attention weights, one bar over each context token */
+.mixw { display: flex; flex-wrap: wrap; gap: 8px 6px; align-items: flex-end; }
+.mixc { display: inline-flex; flex-direction: column; align-items: center; gap: 3px; }
+.mixbar { display: flex; align-items: flex-end; width: 26px; height: 64px; border-bottom: 1px solid var(--axis); }
+.mixbar i { display: block; width: 100%; border-radius: 3px 3px 0 0; background: #b3a9e6; }
+.mixp { font-size: 0.7rem; color: var(--ink-2); font-variant-numeric: tabular-nums; }
+.mixc .chip { font-size: 0.8rem; padding: 2px 6px; }
+.mixsym { font-family: var(--sans); font-size: 1.05rem; font-weight: 600; color: var(--ink-2); }
+.module h4 .chip { text-transform: none; letter-spacing: 0; font-weight: 500; }
+.hlab { display: inline-flex; flex-direction: column; align-items: center; gap: 3px; font-family: var(--sans); font-size: 0.78rem; color: var(--ink-2); white-space: nowrap; }
+.hlab .chip { font-size: 0.78rem; padding: 1px 6px; }
+.hpos { font-size: 0.74rem; color: var(--muted); }
+#mix-wnote .chip { font-size: 0.78rem; padding: 0 5px; }
+/* 7: the next position as a stack of candidates, crossing the sentence */
+.m6road .m3track { align-items: center; padding-top: 14px; padding-bottom: 14px; }
+.m3track .chip.ph { color: var(--muted); background: #f3f2ee; border: 1px dashed var(--axis); min-width: 34px; text-align: center; }
+.m6x { position: relative; display: inline-block; flex: 0 0 auto; }
+.m6vp { display: block; height: 160px; overflow-y: auto; scroll-snap-type: y mandatory; padding: 64px 4px; scrollbar-width: none; outline: none;
+  -webkit-mask-image: linear-gradient(transparent, #000 34%, #000 66%, transparent); mask-image: linear-gradient(transparent, #000 34%, #000 66%, transparent); }
+.m6vp::-webkit-scrollbar { display: none; }
+.m6c { display: flex; align-items: center; justify-content: center; height: 32px; scroll-snap-align: center; cursor: pointer; }
+.m6c .chip { font-size: 0.88rem; padding: 5px 8px; }
+.m6c:not(.sel) .chip { background: #f3f2ee; color: var(--ink-2); }
+.m6slot { position: absolute; left: 0; right: 0; top: 64px; height: 32px; border: 2px solid var(--aqua); border-radius: 9px; pointer-events: none; }
+.m6vp:focus-visible + .m6slot { box-shadow: 0 0 0 3px var(--aqua-100); }
+.m6x { width: 108px; } .m6vp { padding-left: 0; padding-right: 0; } .m6c .chip { min-width: 72px; text-align: center; }

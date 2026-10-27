@@ -53,11 +53,11 @@ Here is the toy corpus, cut into GPT-2’s tokens, and its vocabulary.
 
 <!-- module: m3 -->
 
-Before training, every number in the table is random, drawn from a normal distribution with a standard deviation of 0.02. Training then adjusts the rows, as sections 6 to 8 show. Here is one toy row, at the start, middle and end of training, next to the same token’s real row from GPT-2.
+Before training, every number in the table is random, drawn from a normal distribution with a standard deviation of 0.02. Training then adjusts the rows, as sections 7 to 9 show. Here is one toy row, at the start, middle and end of training, next to the same token’s real row from GPT-2.
 
 <!-- module: m3v -->
 
-word2vec gave every word two vectors, an input vector and an output vector, kept in two tables. GPT-2 has one token table, and uses it twice: at the bottom to look up each token, and at the top to score which token comes next (section 6). Sharing one table this way is called *weight tying*.
+word2vec gave every word two vectors, an input vector and an output vector, kept in two tables. GPT-2 has one token table, and uses it twice: at the bottom to look up each token, and at the top to score which token comes next (section 7). Sharing one table this way is called *weight tying*.
 
 <div class="callout reveal">
   <div class="t">Why can GPT-2 get away with one table, when word2vec needed two?</div>
@@ -67,9 +67,7 @@ word2vec gave every word two vectors, an input vector and an output vector, kept
 
 ## 4 Position
 
-The layers that come next, attention layers, see the text as a set of vectors with nothing to say which came first. “the dog walks” and “walks the dog” would look the same. So GPT-2 has a second table, with one row for each position from 0 to 1,023, and adds the position’s row to the token’s row. The sum is the vector that goes into the first layer.
-
-<!-- module: m4 -->
+The layers that come next, attention layers, see the text as a set of vectors with nothing to say which came first. “the dog walks” and “walks the dog” would look the same. So GPT-2 has a second table, with one row for each position from 0 to 1,023.
 
 These position rows are learned, just like the token rows. Nobody told GPT-2 that position 10 is close to position 11. But after training, the rows of nearby positions are nearly the same, and they drift apart smoothly with distance.
 
@@ -77,17 +75,35 @@ These position rows are learned, just like the token rows. Nobody told GPT-2 tha
 
 The table holds position this precisely, but GPT-2 seems to use only a rough version of it. Averaging the rows of every 10 neighbouring positions, so that they share one row, barely changes GPT-2’s predictions. Its precise sense of order seems to come from the attention layers that follow, which can see which tokens came before.
 
+For each token in the text, GPT-2 adds its position’s row to the token’s row. The sum is the vector that goes into the first layer. Here is that addition in the toy model, which has 8 positions.
+
+<!-- module: m4 -->
+
 ## 5 Predicting the next token
 
-GPT-2 learns its tables from one task: predict the next token. Every position in a text is one prediction. The vector at position *t* can look at the tokens up to *t*, never ahead, and has to say which token comes next. Each sentence here starts and ends with <code>&lt;|endoftext|&gt;</code>, as documents do in GPT-2’s training text, so a sentence of 7 tokens makes 8 predictions: its first token, from <code>&lt;|endoftext|&gt;</code> alone, each token after that, and the end. All of them are trained at once.
+GPT-2 learns its tables from one task: predict the next token from the prior context, every token up to that point. Every token in a text ends one such context, and makes one prediction. The vector at position *t* can look at the tokens up to *t*, never ahead, and has to say which token comes next. Each sentence here starts and ends with <code>&lt;|endoftext|&gt;</code>, as documents do in GPT-2’s training text, so a sentence of 7 tokens makes 8 predictions: its first token, from <code>&lt;|endoftext|&gt;</code> alone, each token after that, and the end. All of them are trained at once.
 
 <!-- module: m5 -->
 
 Compare word2vec’s window from the other page: it made pairs of neighbouring words, in both directions. Here the context is everything that came before, and the order matters.
 
-## 6 Scoring every token
+## 6 Mixing in the context
 
-At the top of GPT-2, after the last layer, each position has one vector of 768 numbers. Call it *h*. To predict the next token, GPT-2 scores *h* against **every row of the token table**, the same table as in section 3, with the dot product, as word2vec did. That makes 50,257 scores, one for each token. The *softmax* turns them into probabilities that add up to 1:
+The input vector at a position only knows its own token and where it sits. To predict what comes next, it needs the rest of the prior context: after “ hot”, it matters whether “a cup of” came before. That is what the layers between the bottom and the top do.
+
+Each layer has two parts. An *attention* part lets each position draw on the vectors at its own and every earlier position, more on some than on others, and adds the mix to its own vector. An *MLP* part then works on each position’s vector by itself and adds its result too. Because each part adds to the vector instead of replacing it, the vector at the top, *h*, is exactly a sum:
+
+<div class="formula fxblock"><span class="fx"><span class="w"><span class="t">h</span><span class="g"><span class="o">=</span><span class="t tv">input vector</span></span><span class="g"><span class="o">+</span><span class="t">attention’s mix</span></span><span class="g"><span class="o">+</span><span class="t">MLP’s change</span></span></span><span class="s"><i>h</i> = <span class="sv"><i>x</i></span> + attn(<i>x</i><sub>0</sub> … <i>x</i><sub><i>t</i></sub>) + mlp(…)</span></span><span class="fxsw seg" role="group" aria-label="show formulas as"><button data-fx="w">words</button><button data-fx="s">symbols</button></span></div>
+
+The toy has one such layer, so here it is in full for the selected prediction.
+
+<!-- module: mix -->
+
+GPT-2 repeats this 12 times, with 12 attention parts working side by side in each layer, and normalizes the result once more at the top. This page doesn’t open those layers up; what matters here is that *h* is built from the input vectors of the whole prior context, so training can reach every one of their rows.
+
+## 7 Scoring every token
+
+At the top of GPT-2, after the last layer, each position has one vector of 768 numbers. Call it *h*. As section 6 showed, it starts as the input vector of the token at that position, and the layers mix into it information from all the tokens before it. It belongs to one position but carries the whole context. To predict the next token, GPT-2 scores *h* against **every row of the token table**, the same table as in section 3, with the dot product, as word2vec did. That makes 50,257 scores, one for each token. The *softmax* turns them into probabilities that add up to 1:
 
 <div class="formula">p<sub><i>j</i></sub> = e<sup>score<sub><i>j</i></sub></sup> / (e<sup>score<sub>1</sub></sup> + e<sup>score<sub>2</sub></sup> + … + e<sup>score<sub><i>n</i></sub></sup>)</div>
 
@@ -97,7 +113,7 @@ A higher score means a higher probability, and raising one token’s probability
 
 As in word2vec, the **error** is the right answer minus the guess. Now there is one for every token: the label is 1 for the token that really came next and 0 for every other token, so the error is label − p. At the start of training every probability is about 1/41, the model’s best guess when it knows nothing.
 
-## 7 One update
+## 8 One update
 
 Now the table learns from the error. Each token gets a scaling factor, its error times the learning rate, exactly as in word2vec:
 
@@ -114,7 +130,7 @@ That is the top end. The rows at the bottom learn too. The prediction’s error 
 
 <!-- module: m7 -->
 
-## 8 Adding up an update
+## 9 Adding up an update
 
 A sentence makes several predictions, and every one of them moves every row of the table a little. The model works out all of these parts first, with the table as it stands, then adds them up and changes each row once. This is one training step.
 
@@ -122,7 +138,7 @@ A sentence makes several predictions, and every one of them moves every row of t
 
 A row gets parts from three roles: as the right answer at some positions, as a wrong answer at all the others, and as an input wherever its token appears in the sentence. One GPT-2 step adds up the parts from 512 × 1,024 = 524,288 predictions.
 
-## 9 Two tokens drawing together
+## 10 Two tokens drawing together
 
 “coffee” and “tea” never appear in the same sentence. But the same tokens come before them, <span class="tok"><span class="sp">·</span>hot</span>, <span class="tok"><span class="sp">·</span>the</span> and <span class="tok"><span class="sp">·</span>my</span>, and the same tokens follow, <span class="tok"><span class="sp">·</span>with</span>, <span class="tok"><span class="sp">·</span>every</span> and <span class="tok"><span class="sp">·</span>is</span>. So the vectors *h* that should predict them are alike, which pulls both rows the same way at the top, and as inputs both rows should lead to the same predictions. Their rows drift together, through the same kind of shared company word2vec used.
 
@@ -130,7 +146,7 @@ Any two rows lie together in one flat plane, so they can be drawn at their true 
 
 <!-- module: m9 -->
 
-## 10 Training at scale
+## 11 Training at scale
 
 Now run the toy over the whole corpus, 120 times, one sentence per step: 3,600 steps. The *loss* is the error as the model measures it: −log p of the token that really came next, averaged over the sentence’s predictions. It starts at log 41 ≈ 3.7, a uniform guess among 41 tokens.
 
@@ -144,7 +160,7 @@ To see the table itself, the map below projects the 6-number rows down to 2 numb
 
 Watch <span class="tok"><span class="sp">·</span>coffee</span> and <span class="tok"><span class="sp">·</span>tea</span>, and <span class="tok"><span class="sp">·</span>dog</span> and <span class="tok"><span class="sp">·</span>cat</span>. The sentence-starting tokens “the”, “a”, “i”, “my” and “pour” also gather, apart from <span class="tok"><span class="sp">·</span>the</span>, <span class="tok"><span class="sp">·</span>a</span> and <span class="tok"><span class="sp">·</span>my</span> with their spaces: they are different tokens, used in different places. Turn on the position rows to see where the 8 positions sit among the tokens.
 
-## 11 Inside GPT-2’s table
+## 12 Inside GPT-2’s table
 
 The real table, after training on 40 GB of text, holds the same kind of structure at a far larger scale. Here are the nearest neighbours of any word in it, by the angle between rows. The rows themselves come straight from GPT-2’s released weights.
 
@@ -156,7 +172,7 @@ The table has other habits. Its rows are not spread evenly in every direction: t
 
 <!-- module: m11g -->
 
-## 12 The table is static
+## 13 The table is static
 
 A token’s row is the same wherever the token appears. “plot” gets the same numbers in “the garden plot” and in “the secret plot”. Telling the two apart is the job of the 12 layers that follow: each layer mixes information from the other tokens into each vector. At the bottom the two “plot” vectors are identical; layer by layer they move apart.
 
@@ -173,7 +189,7 @@ So the first layer is a starting point. It gives each token what is true of it e
     <li>Wang and Chen, <a href="https://arxiv.org/abs/2010.04903">“What Do Position Embeddings Learn? An Empirical Study of Pre-Trained Language Model Positional Encoding”</a>, EMNLP (2020). The same comparison of every pair of positions as in section 4, for GPT-2, BERT and RoBERTa: only GPT-2’s shows clear periodic patterns. A weighted sum of GPT-2’s position rows recovers the position to within about 1 on average, as the readout in section 4 does.</li>
     <li>Yedidia, <a href="https://www.lesswrong.com/posts/qvWP3aBDBaqXvPNhS/gpt-2-s-positional-embedding-matrix-is-a-helix">“GPT-2’s positional embedding matrix is a helix”</a> (2023): three directions hold about 90% of the position rows’ variation, and plotted in them the 1,024 rows trace a helix, with positions 0 and 1,023 as outliers. And <a href="https://www.lesswrong.com/posts/zRA8B2FJLtTYRgie6/the-positional-embedding-matrix-and-previous-token-heads-how">“The positional embedding matrix and previous-token heads: how do they actually work?”</a> (2023), on averaging neighbouring position rows with little effect on GPT-2’s predictions.</li>
     <li>Rumbelow and Watkins, <a href="https://www.lesswrong.com/posts/aPeJE8bSo6rAFoLqg/solidgoldmagikarp-plus-prompt-generation">“SolidGoldMagikarp (plus, prompt generation)”</a> (2023), on GPT-2 and GPT-3’s “glitch tokens”, such as <span class="tok"><span class="sp">·</span>SolidGoldMagikarp</span> (a single token, as section 2 shows), and their rows near the centre of the table.</li>
-    <li>Ethayarajh, <a href="https://arxiv.org/abs/1909.00512">“How Contextual are Contextualized Word Representations?”</a>, EMNLP (2019), on how GPT-2’s vectors share a common direction and grow more context-specific in higher layers. Section 12 subtracts each layer’s average vector, taken over a dozen ordinary sentences, before comparing, so the shared offset doesn’t make every pair look alike. Its layer 12 is the last layer’s output before GPT-2’s final LayerNorm.</li>
-    <li>The toy model, corpus and seeds are this page’s own. The toy adds up its loss over a sentence’s predictions, where GPT-2 averages over a batch; that only changes the scale of the learning rate. It uses GELU in its MLP, as GPT-2 does, and no LayerNorm. Sections 6 to 8 look at the model just before the selected sentence’s update in the first pass (start), the 60th (middle) and the 108th of 120 (end), where the learning rate has not yet shrunk to almost nothing. Across 100 initialization seeds, <span class="tok"><span class="sp">·</span>coffee</span> and <span class="tok"><span class="sp">·</span>tea</span> ended up as each other’s nearest neighbours 99 times, and <span class="tok"><span class="sp">·</span>dog</span> and <span class="tok"><span class="sp">·</span>cat</span> 99 times too.</li>
+    <li>Ethayarajh, <a href="https://arxiv.org/abs/1909.00512">“How Contextual are Contextualized Word Representations?”</a>, EMNLP (2019), on how GPT-2’s vectors share a common direction and grow more context-specific in higher layers. Section 13 subtracts each layer’s average vector, taken over a dozen ordinary sentences, before comparing, so the shared offset doesn’t make every pair look alike. Its layer 12 is the last layer’s output before GPT-2’s final LayerNorm.</li>
+    <li>The toy model, corpus and seeds are this page’s own. The toy adds up its loss over a sentence’s predictions, where GPT-2 averages over a batch; that only changes the scale of the learning rate. It uses GELU in its MLP, as GPT-2 does, and no LayerNorm. Sections 6 to 9 look at the model just before the selected sentence’s update in the first pass (start), the 60th (middle) and the 108th of 120 (end), where the learning rate has not yet shrunk to almost nothing. Across 100 initialization seeds, <span class="tok"><span class="sp">·</span>coffee</span> and <span class="tok"><span class="sp">·</span>tea</span> ended up as each other’s nearest neighbours 99 times, and <span class="tok"><span class="sp">·</span>dog</span> and <span class="tok"><span class="sp">·</span>cat</span> 99 times too.</li>
   </ol>
 </footer>
