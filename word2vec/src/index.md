@@ -102,24 +102,24 @@ At the start of training every score is 0, so σ is 0.5 and the first error is e
   The natural question is “which word, out of the whole vocabulary, is the context?” That calls for a <em>softmax</em>, which scores every word in the vocabulary, millions of them, for every training pair. The first word2vec paper avoided that cost with <em>hierarchical softmax</em>, a chain of sigmoids down a binary tree of the vocabulary. The second paper replaced it with <em>negative sampling</em>, the approach on this page: one sigmoid for the real word and one for each of a handful of randomly drawn ones.
 </div>
 
-## 6 One positive update
+## 6 One update
 
 Now the model learns from its error. Each pair gets one *scaling factor*: the error from section 5, times the learning rate.
 
 <div class="formula fxblock"><span class="fx"><span class="w"><span class="t tg">scaling factor</span><span class="g"><span class="o">=</span><span class="t terr">error</span></span><span class="g"><span class="o">×</span><span class="t">learning rate</span></span></span><span class="s"><span class="sg"><i>g</i></span> = <span class="serr">(label − σ)</span> × α</span></span><span class="fxsw seg" role="group" aria-label="show formulas as"><button data-fx="w">words</button><button data-fx="s">symbols</button></span></div>
 
-The error is the right answer minus the guess: label − σ, where the label is 1 for a positive pair. The *learning rate* α sets the overall step size. It starts at 0.025 and shrinks linearly to almost zero over the course of training, so early steps are large and late steps are fine adjustments. The scaling factor combines the two: big when the model was very wrong early on, tiny when it was nearly right.
+The error is the right answer minus the guess: label − σ, where the label is 1 for a positive pair and 0 for a negative one. The same update rule covers both: only the sign of the error, and so of the scaling factor, differs. The *learning rate* α sets the overall step size. It starts at 0.025 and shrinks linearly to almost zero over the course of training, so early steps are large and late steps are fine adjustments. The scaling factor combines the two: big when the model was very wrong early on, tiny when it was nearly right.
 
 The *update* then moves each vector by the scaling factor times the other vector:
 
 <div class="formula fxblock"><span class="fx"><span class="w"><span class="t tvo">new output vector</span><span class="g"><span class="o">=</span><span class="t tvo">output vector</span></span><span class="g"><span class="o">+</span><span class="t tg">scaling factor</span></span><span class="g"><span class="o">×</span><span class="t tv">input vector</span></span></span><span class="s"><span class="svo"><i>v</i>′</span> ← <span class="svo"><i>v</i>′</span> + <span class="sg"><i>g</i></span> · <span class="sv"><i>v</i></span></span></span><span class="fxsw seg" role="group" aria-label="show formulas as"><button data-fx="w">words</button><button data-fx="s">symbols</button></span></div>
 
-- The output vector *v*′ of the context word moves toward the center word’s input vector. This is applied right away.
-- The input vector *v* should also move toward the output vector, by <span class="fx"><span class="w"><span class="t tg">scaling factor</span><span class="g"><span class="o">×</span><span class="t tvo">output vector</span></span></span><span class="s"><span class="sg"><i>g</i></span> · <span class="svo"><i>v</i>′</span></span></span>, using *v*′ as it was before the update. But this change is **not applied yet**. It goes into a pending row, for reasons that section 7 makes clear.
+- The output vector *v*′ of the context word moves toward the center word’s input vector for a positive pair, and away from it for a negative one. This is applied right away.
+- The input vector *v* should also move toward the output vector, by <span class="fx"><span class="w"><span class="t tg">scaling factor</span><span class="g"><span class="o">×</span><span class="t tvo">output vector</span></span></span><span class="s"><span class="sg"><i>g</i></span> · <span class="svo"><i>v</i>′</span></span></span>, using *v*′ as it was before the update. But this change is **not applied yet**. It is kept as *Δv so far*, for reasons that section 7 makes clear.
 
 <!-- module: m6 -->
 
-Pick any positive pair from the corpus, and a moment in training: the numbers are the model’s actual state just before that pair. Early on, a context word’s *v*′ may still be all zeros, so the pending change to *v* is zero too and only *v*′ moves. Later the vectors are larger, the error is smaller and α has shrunk, so the steps are finer.
+Pick any positive pair from the corpus, and a moment in training: the numbers are the model’s actual state just before that pair. Early on, a context word’s *v*′ may still be all zeros, so the change to *v* is zero too and only *v*′ moves. Later the vectors are larger, the error is smaller and α has shrunk, so the steps are finer.
 
 ## 7 Negative samples
 
@@ -127,7 +127,7 @@ A positive update alone would be useless. The easiest way to score every pair hi
 
 Negative sampling makes them up. For each real pair, word2vec draws *k* = 5 “noise” words at random and treats each as a *negative pair* with the center word. A word’s chance of being drawn is its frequency raised to the power 0.75. This flattens the distribution: common words are still drawn most often, but rare words get more of a chance than their raw frequency would give them. If a draw happens to be the real context word, it is skipped.
 
-For a negative pair the label is 0, so *g* = (0 − σ) × α is negative, and the same update rule pushes the two vectors apart. Each noise word’s output vector moves at once, and each adds its share to the center word’s pending row. Only after the real pair and all the noise words is **the accumulated pending change applied to the input vector, once**. Every target in a pair is scored against the same, unchanged *v*.
+For a negative pair the label is 0, so *g* = (0 − σ) × α is negative, and the same update rule pushes the two vectors apart. Each noise word’s output vector moves at once, and each adds its part to the center word’s *Δv so far*. Only after the real pair and all the noise words is **Δv so far added to the input vector, once**. Every pair is scored against the same, unchanged *v*.
 
 <!-- module: m7 -->
 
@@ -151,7 +151,7 @@ The first word2vec paper proposed a second model, *continuous bag-of-words* (CBO
 
 <!-- module: m9 -->
 
-That makes one update per center word instead of one per pair, so CBOW trains faster. The cost is that every context word receives the same nudge, whatever its distance or role. The machinery is otherwise identical: the same sigmoid, the same negative samples, the same pending row. The fill-in-the-blank framing makes CBOW a distant ancestor of the masked language modelling later used to train BERT.
+That makes one update per center word instead of one per pair, so CBOW trains faster. The cost is that every context word receives the same nudge, whatever its distance or role. The machinery is otherwise identical: the same sigmoid, the same negative samples, the same Δv so far. The fill-in-the-blank framing makes CBOW a distant ancestor of the masked language modelling later used to train BERT.
 
 ## 10 The bridge to LLMs
 

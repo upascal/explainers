@@ -2,11 +2,19 @@
   <div class="row">
     <label class="ctl">center <select id="m6-center"></select></label>
     <label class="ctl">context <select id="m6-ctx"></select></label>
+    <span id="m6-kind"></span>
     <label class="ctl">moment in training <span class="seg" id="m6-moment"><button data-v="early" class="on">early</button><button data-v="middle">middle</button><button data-v="late">late</button></span></label>
   </div>
-  <div class="row"><span id="m6-bar"></span><span class="note">one step per stage of the update</span></div>
+  <p class="note m6neg" id="m6-neg" hidden></p>
+  <div id="m6-body">
   <div id="m6-head"></div>
-  <div class="m5chain m6chain" id="m6-chain"></div>
-  <div class="tscroll" id="m6-table"></div>
-  <p class="note" id="m6-note" style="margin:12px 0 0"></p>
+  <h4>The scaling factor</h4>
+  <div class="m5eq m6g" id="m6-g"></div>
+  <h4>Update to the output vector</h4>
+  <div id="m6-upd"></div>
+  <h4>Update to the input vector</h4>
+  <div id="m6-pend"></div>
+  <p class="note" style="margin:8px 0 0">The input vector requires a positive and a negative update. This is only the first part of the update. Section 7 shows how negative samples complete the update.</p>
+  <p class="note" id="m6-zero" hidden style="margin:6px 0 0"><span class="cvo">v′</span> is still all zeros at this point in training, so the input vector’s change is zero too.</p>
+  </div>
 </div>

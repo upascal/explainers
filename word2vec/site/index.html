@@ -23,7 +23,7 @@
   <a href="#s3">3. The window</a>
   <a href="#s4">4. The dot product</a>
   <a href="#s5">5. The sigmoid</a>
-  <a href="#s6">6. One positive update</a>
+  <a href="#s6">6. One update</a>
   <a href="#s7">7. Negative samples</a>
   <a href="#s8">8. Training at scale</a>
   <a href="#s9">9. Aside: CBOW</a>
@@ -195,43 +195,63 @@
   <div class="t">Why not ask about every word at once?</div>
   The natural question is “which word, out of the whole vocabulary, is the context?” That calls for a <em>softmax</em>, which scores every word in the vocabulary, millions of them, for every training pair. The first word2vec paper avoided that cost with <em>hierarchical softmax</em>, a chain of sigmoids down a binary tree of the vocabulary. The second paper replaced it with <em>negative sampling</em>, the approach on this page: one sigmoid for the real word and one for each of a handful of randomly drawn ones.
 </div>
-<h2 id="s6"><span class="num">6</span>One positive update</h2>
+<h2 id="s6"><span class="num">6</span>One update</h2>
 <p>Now the model learns from its error. Each pair gets one <em>scaling factor</em>: the error from section 5, times the learning rate.</p>
 <div class="formula fxblock"><span class="fx"><span class="w"><span class="t tg">scaling factor</span><span class="g"><span class="o">=</span><span class="t terr">error</span></span><span class="g"><span class="o">×</span><span class="t">learning rate</span></span></span><span class="s"><span class="sg"><i>g</i></span> = <span class="serr">(label − σ)</span> × α</span></span><span class="fxsw seg" role="group" aria-label="show formulas as"><button data-fx="w">words</button><button data-fx="s">symbols</button></span></div>
-<p>The error is the right answer minus the guess: label − σ, where the label is 1 for a positive pair. The <em>learning rate</em> α sets the overall step size. It starts at 0.025 and shrinks linearly to almost zero over the course of training, so early steps are large and late steps are fine adjustments. The scaling factor combines the two: big when the model was very wrong early on, tiny when it was nearly right.</p>
+<p>The error is the right answer minus the guess: label − σ, where the label is 1 for a positive pair and 0 for a negative one. The same update rule covers both: only the sign of the error, and so of the scaling factor, differs. The <em>learning rate</em> α sets the overall step size. It starts at 0.025 and shrinks linearly to almost zero over the course of training, so early steps are large and late steps are fine adjustments. The scaling factor combines the two: big when the model was very wrong early on, tiny when it was nearly right.</p>
 <p>The <em>update</em> then moves each vector by the scaling factor times the other vector:</p>
 <div class="formula fxblock"><span class="fx"><span class="w"><span class="t tvo">new output vector</span><span class="g"><span class="o">=</span><span class="t tvo">output vector</span></span><span class="g"><span class="o">+</span><span class="t tg">scaling factor</span></span><span class="g"><span class="o">×</span><span class="t tv">input vector</span></span></span><span class="s"><span class="svo"><i>v</i>′</span> ← <span class="svo"><i>v</i>′</span> + <span class="sg"><i>g</i></span> · <span class="sv"><i>v</i></span></span></span><span class="fxsw seg" role="group" aria-label="show formulas as"><button data-fx="w">words</button><button data-fx="s">symbols</button></span></div>
 <ul>
-<li>The output vector <em>v</em>′ of the context word moves toward the center word’s input vector. This is applied right away.</li>
-<li>The input vector <em>v</em> should also move toward the output vector, by <span class="fx"><span class="w"><span class="t tg">scaling factor</span><span class="g"><span class="o">×</span><span class="t tvo">output vector</span></span></span><span class="s"><span class="sg"><i>g</i></span> · <span class="svo"><i>v</i>′</span></span></span>, using <em>v</em>′ as it was before the update. But this change is <strong>not applied yet</strong>. It goes into a pending row, for reasons that section 7 makes clear.</li>
+<li>The output vector <em>v</em>′ of the context word moves toward the center word’s input vector for a positive pair, and away from it for a negative one. This is applied right away.</li>
+<li>The input vector <em>v</em> should also move toward the output vector, by <span class="fx"><span class="w"><span class="t tg">scaling factor</span><span class="g"><span class="o">×</span><span class="t tvo">output vector</span></span></span><span class="s"><span class="sg"><i>g</i></span> · <span class="svo"><i>v</i>′</span></span></span>, using <em>v</em>′ as it was before the update. But this change is <strong>not applied yet</strong>. It is kept as <em>Δv so far</em>, for reasons that section 7 makes clear.</li>
 </ul>
 <div class="module" id="m6">
   <div class="row">
     <label class="ctl">center <select id="m6-center"></select></label>
     <label class="ctl">context <select id="m6-ctx"></select></label>
+    <span id="m6-kind"></span>
     <label class="ctl">moment in training <span class="seg" id="m6-moment"><button data-v="early" class="on">early</button><button data-v="middle">middle</button><button data-v="late">late</button></span></label>
   </div>
-  <div class="row"><span id="m6-bar"></span><span class="note">one step per stage of the update</span></div>
+  <p class="note m6neg" id="m6-neg" hidden></p>
+  <div id="m6-body">
   <div id="m6-head"></div>
-  <div class="m5chain m6chain" id="m6-chain"></div>
-  <div class="tscroll" id="m6-table"></div>
-  <p class="note" id="m6-note" style="margin:12px 0 0"></p>
+  <h4>The scaling factor</h4>
+  <div class="m5eq m6g" id="m6-g"></div>
+  <h4>Update to the output vector</h4>
+  <div id="m6-upd"></div>
+  <h4>Update to the input vector</h4>
+  <div id="m6-pend"></div>
+  <p class="note" style="margin:8px 0 0">The input vector requires a positive and a negative update. This is only the first part of the update. Section 7 shows how negative samples complete the update.</p>
+  <p class="note" id="m6-zero" hidden style="margin:6px 0 0"><span class="cvo">v′</span> is still all zeros at this point in training, so the input vector’s change is zero too.</p>
+  </div>
 </div>
-<p>Pick any positive pair from the corpus, and a moment in training: the numbers are the model’s actual state just before that pair. Early on, a context word’s <em>v</em>′ may still be all zeros, so the pending change to <em>v</em> is zero too and only <em>v</em>′ moves. Later the vectors are larger, the error is smaller and α has shrunk, so the steps are finer.</p>
+<p>Pick any positive pair from the corpus, and a moment in training: the numbers are the model’s actual state just before that pair. Early on, a context word’s <em>v</em>′ may still be all zeros, so the change to <em>v</em> is zero too and only <em>v</em>′ moves. Later the vectors are larger, the error is smaller and α has shrunk, so the steps are finer.</p>
 <h2 id="s7"><span class="num">7</span>Negative samples</h2>
 <p>A positive update alone would be useless. The easiest way to score every pair high is to make every vector point the same way, and then the vectors carry no information. The model also needs examples of words that do <em>not</em> belong together.</p>
 <p>Negative sampling makes them up. For each real pair, word2vec draws <em>k</em> = 5 “noise” words at random and treats each as a <em>negative pair</em> with the center word. A word’s chance of being drawn is its frequency raised to the power 0.75. This flattens the distribution: common words are still drawn most often, but rare words get more of a chance than their raw frequency would give them. If a draw happens to be the real context word, it is skipped.</p>
-<p>For a negative pair the label is 0, so <em>g</em> = (0 − σ) × α is negative, and the same update rule pushes the two vectors apart. Each noise word’s output vector moves at once, and each adds its share to the center word’s pending row. Only after the real pair and all the noise words is <strong>the accumulated pending change applied to the input vector, once</strong>. Every target in a pair is scored against the same, unchanged <em>v</em>.</p>
+<p>For a negative pair the label is 0, so <em>g</em> = (0 − σ) × α is negative, and the same update rule pushes the two vectors apart. Each noise word’s output vector moves at once, and each adds its part to the center word’s <em>Δv so far</em>. Only after the real pair and all the noise words is <strong>Δv so far added to the input vector, once</strong>. Every pair is scored against the same, unchanged <em>v</em>.</p>
 <div class="module" id="m7">
-  <h4>How often each word is drawn as noise</h4>
+  <div class="row">
+    <label class="ctl">center <select id="m7-center"></select></label>
+    <label class="ctl">context <select id="m7-ctx"></select></label>
+    <span id="m7-kind"></span>
+  </div>
+  <p class="note m6neg" id="m7-neg" hidden></p>
+  <div id="m7-body">
+  <h4>How likely each word is to be picked as a negative sample</h4>
   <div id="m7-chart"></div>
-  <div class="legend"><span><i style="background:var(--axis)"></i>share of the corpus (raw frequency)</span><span><i style="background:#f6c3ad"></i>share of noise draws (frequency<sup>0.75</sup>)</span><span><i style="background:var(--orange)"></i>drawn for this pair</span></div>
+  <div class="legend"><span><i style="background:var(--axis)"></i>how common the word is in the corpus</span><span><i style="background:#f6c3ad"></i>chance of being picked (frequency<sup>0.75</sup>)</span><span><i style="background:var(--orange)"></i>picked for this pair</span></div>
   <div class="row" style="margin:16px 0 10px">
     <span id="m7-bar"></span>
     <span class="draws" id="m7-draws"></span>
   </div>
-  <div id="m7-table"></div>
-  <p class="note" id="m7-note" style="margin:12px 0 0"></p>
+  <p class="note" id="m7-note" style="margin:0 0 14px"></p>
+  <h4>Adding up the parts of the update to the input vector</h4>
+  <div id="m7-sum"></div>
+  <h4>Applying the update</h4>
+  <div id="m7-apply"></div>
+  <p class="note" id="m7-applied" style="margin:6px 0 0"></p>
+  </div>
 </div>
 <p>This is the whole of training. Every pair, in every pass, gets one positive update and up to five negative ones.</p>
 <h2 id="s8"><span class="num">8</span>Training at scale</h2>
@@ -275,7 +295,7 @@
 <div class="module" id="m9">
   <div id="m9-body"></div>
 </div>
-<p>That makes one update per center word instead of one per pair, so CBOW trains faster. The cost is that every context word receives the same nudge, whatever its distance or role. The machinery is otherwise identical: the same sigmoid, the same negative samples, the same pending row. The fill-in-the-blank framing makes CBOW a distant ancestor of the masked language modelling later used to train BERT.</p>
+<p>That makes one update per center word instead of one per pair, so CBOW trains faster. The cost is that every context word receives the same nudge, whatever its distance or role. The machinery is otherwise identical: the same sigmoid, the same negative samples, the same Δv so far. The fill-in-the-blank framing makes CBOW a distant ancestor of the masked language modelling later used to train BERT.</p>
 <h2 id="s10"><span class="num">10</span>The bridge to LLMs</h2>
 <p>The first layer of a large language model is the same kind of object as word2vec’s input table: a lookup table with one vector per token, started at random and learned by gradient descent. Three things differ.</p>
 <ul>

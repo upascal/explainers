@@ -80,7 +80,7 @@ const END = () => P6.PL.length - 1;
 
 // Every number shown in 6 and 7, recomputed from the model as it stood before the pair.
 // Updates are applied in word2vec.c's order: each target's v′ moves at once, while the
-// change to v collects in a pending row that is added at the very end.
+// change to v collects in “Δv so far”, which is added at the very end.
 function replay(upto = P6.phase) {
   const p = P6.pair, PL = P6.PL, m = cloneModel(P6.snap), alpha = alphaAt(p.wordsDone);
   const v = m.Win[p.center], pend = zeros(); let loss = 0;
@@ -113,10 +113,14 @@ function contexts6(c, best) {
 }
 // find the pair in the stream at the chosen moment and load the model just before it
 function loadPair6() {
-  const ci = V.index.get(P6.center), xi = V.index.get(P6.ctx), N = G.stream.total, from = Math.floor(MOMENTS[P6.moment] * N);
+  const ci = V.index.get(P6.center), xi = V.index.get(P6.ctx), ni = P6.stand ? V.index.get(P6.stand) : -1, N = G.stream.total, from = Math.floor(MOMENTS[P6.moment] * N);
+  // a positive pair occurs as itself; a negative one as a negative draw for some positive pair with that center
+  const hit = p => p.center === ci && (ni >= 0 ? p.negs.some(n => n.w === ni && !n.skip) : p.ctx === xi);
   let idx = -1;
-  for (let k = 0; k < N && idx < 0; k++) { const i = (from + k) % N, p = G.stream.get(i); if (p.center === ci && p.ctx === xi) idx = i; }
-  P6.idx = idx; P6.pair = G.stream.get(idx); P6.PL = phaseList(P6.pair); P6.snap = modelAt(idx); setPhase(0);
+  for (let k = 0; k < N && idx < 0; k++) { const i = (from + k) % N, p = G.stream.get(i); if (hit(p)) idx = i; }
+  if (idx < 0) { const k = (from + N) % N; idx = [...Array(N).keys()].map(j => (k + j) % N).find(i => G.stream.get(i).center === ci); }
+  if (ni >= 0) P6.ctx = W[G.stream.get(idx).ctx];   // section 7 shows the positive pair it was drawn for
+  P6.idx = idx; P6.pair = G.stream.get(idx); P6.PL = phaseList(P6.pair); P6.snap = modelAt(idx); setPhase(POS_END);
 }
 function setPhase(ph) { P6.phase = ph; P6.R = replay(); }
 
@@ -558,9 +562,10 @@ function render4() {
   const sofar = adding ? prod.slice(0, k).reduce((a, b) => a + b, 0) : run;
   $('m4-eq').innerHTML = (S4.math
     ? term(cc, col(S4.v, 'cv'), '', 'sym open') + '<div class="op"><span class="dotch">·</span></div>' + term(xc, col(S4.u, 'cvo'), '', 'sym open')
-      + '<div class="op"><span class="eqch">=</span> <span class="sumw">sum</span></div>' + term('products', `<span class="m4paren">${col(prod, 'cp', true)}</span>`, '', 'sym open')
+      + `<div class="m4scoregrp"><div class="op"><span class="eqch">=</span> <span class="sumw">sum</span></div>${term('products', `<span class="m4paren">${col(prod, 'cp', true)}</span>`, '', 'sym open')}</div>`   // breaks before the =, never after
     : term('center', SV, cc, 'sym') + '<div class="op"><span class="dotch">·</span></div>' + term('context', SVO, xc, 'sym'))
-    + '<div class="op">=</div>' + term(adding ? 'sum so far' : 'score', done || adding ? num(adding ? sofar : run, 3) : '?', adding ? `${k} of ${D} products` : '', 'score' + (adding ? ' adding' : ''))
+    // "= score" travels as one piece, so on a narrow screen it wraps onto its own line
+    + `<div class="m4scoregrp"><div class="op">=</div>${term(adding ? 'sum so far' : 'score', done || adding ? num(adding ? sofar : run, 3) : '?', adding ? `${k} of ${D} products` : '', 'score' + (adding ? ' adding' : ''))}</div>`
     + `<button class="m4math" id="m4-math">${S4.math ? 'Hide math' : 'Show math'}</button>`;
   $('m4-ctl').hidden = !S4.math; $('m4-eq').classList.toggle('mathon', S4.math);
   // on the row being worked on, a × and an = sit between its three numbers
@@ -631,76 +636,129 @@ function render5() {
     <path d="${path}" fill="none" stroke="var(--ink)" stroke-width="2"/>
     <line x1="${X(x)}" y1="${Y(s)}" x2="${X(x)}" y2="${Y(lab)}" stroke="var(--orange)" stroke-width="2"/>
     <line x1="${l}" y1="${Y(s)}" x2="${X(x)}" y2="${Y(s)}" stroke="var(--ink-2)" stroke-dasharray="3 3"/>
+    <line x1="${X(x)}" y1="${Y(s)}" x2="${X(x)}" y2="${Y(0)}" stroke="var(--ink-2)" stroke-dasharray="3 3"/>
+    <rect x="${X(x) - 27}" y="${Y(0) + 5}" width="54" height="18" rx="9" fill="var(--ink)"/>
+    <text x="${X(x)}" y="${Y(0) + 15}" text-anchor="middle" dominant-baseline="middle" font-size="11" font-weight="600" fill="white">${num(x, 3)}</text>
     <circle cx="${X(x)}" cy="${Y(s)}" r="7" fill="var(--ink)" stroke="white" stroke-width="2"/>
     <circle cx="${X(x)}" cy="${Y(lab)}" r="6" fill="${lab ? '#1d5fae' : '#8a3a1a'}" stroke="white" stroke-width="2"/>
     <text x="${X(x) + (x > 5 ? 11 : -11)}" y="${Y(lab) + (lab ? 4 : -2)}" font-size="11" font-weight="600" fill="${lab ? '#1d5fae' : '#8a3a1a'}" text-anchor="${x > 5 ? 'start' : 'end'}">label = ${lab}</text>
     <text x="${X(x) + (x > 5 ? -12 : 12)}" y="${Y(lab) + (Y(s) - Y(lab)) / 2}" font-size="11" font-weight="600" fill="var(--orange)" text-anchor="${x > 5 ? 'end' : 'start'}" dominant-baseline="middle">error = ${num(lab - s, 3)}</text>
-    <text x="${l + (W0 - l - r) / 2}" y="${H0 - 6}" text-anchor="middle" font-size="12" font-weight="600" fill="var(--ink-2)">score (v · v′)${off ? ' — off the chart' : ''}</text>
-    <text transform="translate(16,${t + (Y(0) - t) / 2}) rotate(-90)" text-anchor="middle" font-size="12" font-weight="600" fill="var(--ink-2)">probability σ(score)</text>
+    <text x="${l + (W0 - l - r) / 2}" y="${H0 - 6}" text-anchor="middle" font-size="12" font-weight="600" fill="var(--ink-2)">score = v · v′${off ? ' — off the chart' : ''}</text>
+    <text transform="translate(16,${t + (Y(0) - t) / 2}) rotate(-90)" text-anchor="middle" font-size="12" font-weight="600" fill="var(--ink-2)">probability = σ(score)</text>
   </svg>`;
   // the pair and its score, then one equation read left to right: label − σ(score) = error
-  const who = S4.edited ? 'edited vectors' : `${wchip(S4.center, 'v')} · ${wchip(S4.ctx, isReal(S4.center, S4.ctx) ? 'vo' : 'neg')}`;
   const term = (cls, l, v, f) => `<div class="term ${cls}"><div class="l">${l}</div><div class="v">${v}</div><div class="f">${f}</div></div>`;
-  $('m5-chain').innerHTML = `<div class="m5pair">${who}<span>score (${SV} · ${SVO}) = <b>${num(x, 3)}</b></span></div>
-    <div class="m5eq">${term(lab ? 'lab1' : 'lab0', 'label', lab, lab ? 'positive pair' : 'negative pair')}<div class="op">−</div>
+  $('m5-chain').innerHTML = `<div class="m5eq">${term(lab ? 'lab1' : 'lab0', 'label', lab, lab ? 'positive pair' : 'negative pair')}<div class="op">−</div>
       ${term('prob', 'σ(score)', s.toFixed(3), `σ(${num(x, 3)})`)}<div class="op">=</div>
       ${term('err', 'error', num(lab - s, 3), '&nbsp;')}</div>`;
 }
 
 
+// ---------- a vector equation with "show math" (used in 6) ----------
+// get() returns { left: [items], result: { label, chip, vals, cls } }, items being
+// { t: 'vec', label, chip, vals, cls }, { t: 'scal', label, val, f, cls } or { t: 'op', s }.
+// Collapsed, the vectors on the left show as symbols and the result as its column; "show math"
+// opens them into columns and works out the result one row at a time on a play bar.
+function VecEq(host, get, dec = 2, cls = '') {   // dec: decimal places shown in the columns; cls: extra class
+  const me = { math: false, step: 0 };
+  host.innerHTML = `<div class="m4wrap"><div class="m5eq m4eq vq ${cls}"></div><div class="m4ctl" hidden><span></span></div></div>`;
+  const eq = host.querySelector('.m4eq'), ctl = host.querySelector('.m4ctl');
+  const col = (vals, cls, rowOf) => `<span class="m4br ${cls}">${vals.map((x, d) => `<span class="c${rowOf(d)}">${x == null ? '·' : num(x, dec)}</span>`).join('')}</span>`;
+  const term = (l, v, f, cls = '') => `<div class="term ${cls}"><div class="l">${l}</div><div class="v">${v}</div><div class="f">${f}</div></div>`;
+  me.render = () => {
+    const g = get(); if (!g) { eq.innerHTML = ''; ctl.hidden = true; return; }
+    const st = me.math ? me.step : D + 1, cur = st - 1, work = me.math && st >= 1 && st <= D;
+    const rowOf = d => work && d === cur ? ' on' : '';
+    const res = g.result, resVals = res.vals.map((x, d) => d < st ? x : null);
+    let h = g.left.map(it => it.t === 'op' ? `<div class="op">${it.s}</div>` : it.t === 'paren' ? `<div class="paren">${it.s}</div>`
+      : it.t === 'scal' ? term(it.label, `<span class="${it.cls || ''}">${it.val}</span>`, it.f || '', 'scal')
+      : me.math ? term(it.chip, col(it.vals, it.cls, rowOf), '', 'sym open') : term(it.label, it.sym, it.chip, 'sym')).join('');
+    h += '<div class="op">=</div>' + term(me.math ? res.chip : res.label, col(resVals, res.cls + ' res', d => (work && d === cur ? ' on cur' : '')), me.math ? '' : res.chip, 'sym open');
+    h += `<button class="m4math">${me.math ? 'Hide math' : 'Show math'}</button>`;
+    eq.innerHTML = h; ctl.hidden = !me.math;
+    eq.classList.toggle('mathon', me.math); eq.classList.toggle('working', work); eq.classList.toggle('mult', work);
+    if (work) {   // one band across the row being worked out
+      const box = eq.getBoundingClientRect(), cells = [...eq.querySelectorAll('.m4br')].map(b => b.querySelectorAll('.c')[cur].getBoundingClientRect());
+      const a = cells[0], z = cells[cells.length - 1];
+      const firstScal = eq.querySelector(':scope > .term.scal > .v'), sr = firstScal && firstScal.getBoundingClientRect();
+      const left = sr && sr.left < a.left ? sr.left - 6 : a.left;
+      const y = a.top + a.height / 2 - box.top, cx = el => { const r = el.getBoundingClientRect(); return r.left + r.width / 2 - box.left; };
+      let h2 = `<span class="m4band" style="left:${left - 14 - box.left}px;top:${a.top - 5 - box.top}px;width:${z.right - left + 28}px;height:${a.height + 10}px"></span>`;
+      // the whole row's sum on the band: each sign over its faded one, and the scalar as a small pill
+      eq.querySelectorAll(':scope > .op').forEach(o => { h2 += `<span class="m4op" style="left:${cx(o)}px;top:${y}px">${o.textContent.trim()}</span>`; });
+      eq.querySelectorAll(':scope > .term.scal').forEach(t => { const v = t.querySelector(':scope > .v'); h2 += `<span class="m4pill" style="left:${cx(v)}px;top:${y}px">${v.textContent}</span>`; });
+      eq.insertAdjacentHTML('beforeend', h2);
+    }
+  };
+  me.bar = PlayBar(ctl.querySelector('span'), {
+    ms: 800, canStep: () => me.step <= D, canReset: () => me.step > 0, rewind: () => { me.step = 0; },
+    step: () => { me.step++; me.render(); }, end: () => { me.step = D + 1; me.render(); }, reset: () => { me.step = 0; me.render(); },
+  });
+  me.play = () => { me.bar.stop(); me.step = 0; me.render(); refreshBars(); me.bar.act('play'); };
+  eq.addEventListener('click', e => { if (e.target.closest('.m4math')) { me.math = !me.math; if (me.math) me.play(); else { me.bar.stop(); me.render(); } } });
+  return me;
+}
+
 // ---------- 6 one positive update ----------
 function render6() {
-  const p = P6.pair, R = P6.R, ph = Math.min(P6.phase, POS_END), t = R.T[0], fresh = k => P6.phase === k ? ' new' : '';
-  const stand = P6.stand ? `<p class="note" style="margin:0 0 8px">${wchip(P6.center, 'v')} · ${wchip(P6.stand, 'neg')} is a negative pair, so it never gets a positive update. Showing ${wchip(P6.center, 'v')} · ${wchip(P6.ctx, 'vo')}, a positive pair.</p>` : '';
-  $('m6-head').innerHTML = stand + `<div class="pairhead">center ${wchip(W[p.center], 'v')} context ${wchip(W[p.ctx], 'vo')} <span class="badge pos">positive pair · label 1</span><span class="note">pair ${commas(P6.idx + 1)} of ${commas(G.stream.total)}, pass ${p.epoch + 1} · α = ${R.alpha.toFixed(5)}</span></div>`;
-  // single numbers first, as a chain: score → probability → error → scaling factor
-  const card = (k, l, f, v, cls = '') => `<div class="ch${cls}${ph >= k ? '' : ' wait'}${fresh(k)}"><div class="l">${l}</div><div class="f">${ph >= k ? f : '&nbsp;'}</div><div class="v">${ph >= k ? v : '·'}</div></div>`;
-  // each operator travels with the card after it, so the chain wraps cleanly
-  const step = (op, c) => `<div class="grp"><div class="op">${op}</div>${c}</div>`;
-  $('m6-chain').innerHTML =
-    `<div class="grp">${card(1, `score (${SV} · ${SVO})`, 'as in section 4', num(t.f, 3))}</div>`
-    + step('σ →', card(2, 'probability', `σ(${num(t.f, 2)})`, t.s.toFixed(3)))
-    + step('1 − →', card(2, 'error', `1 − ${t.s.toFixed(3)}`, num(1 - t.s, 3), ' err'))
-    + step('× α →', card(3, `scaling factor ${SG}`, `× ${R.alpha.toFixed(4)}`, num(t.g, 5), ' gcard'));
-  // then the vectors, one row per dimension, one column per vector (as in 4)
-  const cell = (k, x, n, cls) => ph >= k ? `<td class="n ${cls}${fresh(k)}">${num(x, n)}</td>` : '<td class="n dim">·</td>';
-  const rows = Array.from({ length: D }, (_, d) => `<tr><th class="n">d${d + 1}</th>
-      <td class="n c-v">${num(R.v0[d], 4)}</td><td class="n c-vo">${num(t.vo0[d], 4)}</td>
-      ${cell(4, t.dvo[d], 5, 'chg')}${cell(4, t.vo1[d], 4, 'chg c-vo')}${cell(5, t.contrib[d], 5, 'chg c-v')}</tr>`).join('');
-  const hd = (k, top, sub, cls = '') => `<th class="${cls}">${top}${sub ? `<br><span class="sub">${sub}</span>` : ''}</th>`;
-  $('m6-table').innerHTML = `<table class="data vec m6t"><thead><tr><th></th>
-      ${hd(0, `center ${SV}<br>${wchip(W[p.center], 'v')}`, '', 'c-v')}${hd(0, `context ${SVO}<br>${wchip(W[p.ctx], 'vo')}`, '', 'c-vo')}
-      ${hd(4, `Δ${SVO}`, `${SG} · ${SV}`)}${hd(4, `new ${SVO}`, 'applied now', 'c-vo')}${hd(5, `pending Δ${SV}`, `${SG} · ${SVO}`, 'c-v')}</tr></thead>
-    <tbody>${rows}</tbody></table>`;
-  const msg = [
-    'Press play to score this pair and update it.',
-    `The score is the dot product of v and v′, ${num(t.f, 4)}.`,
-    `σ turns it into the model’s probability that the pair is real: ${t.s.toFixed(4)}. The pair is real, so the error is 1 − σ = ${(1 - t.s).toFixed(4)}.`,
-    `g scales the error by the learning rate. It is positive, so both vectors will move toward each other.`,
-    `v′ moves by g times v: a small step in v’s direction. It is changed straight away.`,
-    P6.phase > POS_END ? 'The positive update is done. Section 7 now works through the negative samples for this pair.' : `v’s change, g times the old v′, is only written into the pending row. Section 7 adds negative samples before it is applied.`,
-  ];
-  $('m6-note').textContent = msg[ph] + (norm(t.vo0) === 0 && ph >= 3 ? ' (v′ is still all zeros at this point, so v’s pending change is zero too.)' : '');
+  $('m6-neg').hidden = true; $('m6-body').hidden = false;
+  const p = P6.pair, R = P6.R, t = t6(); if (!t) return;
+  const lab = t.label, where = `pair ${commas(P6.idx + 1)} of ${commas(G.stream.total)}, pass ${p.epoch + 1} of ${CFG.EPOCHS}`;
+  $('m6-head').innerHTML = `<p class="note" style="margin:0 0 10px">${lab ? where
+    : `Here ${wchip(W[t.w], 'neg')} is drawn as a negative sample for the positive pair ${wchip(W[p.center], 'v')} · ${wchip(W[p.ctx], 'vo')} (${where}). Its right answer is 0, so the same update pushes the vectors apart.`}</p>`;
+  // the scaling factor: error × learning rate = g
+  const sc = (cls, l, v, f) => `<div class="term ${cls}"><div class="l">${l}</div><div class="v">${v}</div><div class="f">${f}</div></div>`;
+  $('m6-g').innerHTML = sc('err', 'error', num(lab - t.s, 3), `${lab} − σ(${num(t.f, 2)}), as in section 5`) + '<div class="op">×</div>'
+    + sc('', 'learning rate α', R.alpha.toFixed(4), 'at this point in training') + '<div class="op">=</div>'
+    + sc('gval', `scaling factor ${SG}`, num(t.g, 5), t.g > 0 ? 'positive: pull together' : 'negative: push apart');
+  EQ6U.render(); EQ6P.render();
+  $('m6-zero').hidden = norm(t.vo0) !== 0;
   // pickers
   const cs = $('m6-center'), xs = $('m6-ctx');
   if (!cs.options.length) W.slice().sort().forEach(w => cs.add(new Option(w, w)));
   cs.value = P6.center;
-  xs.innerHTML = contexts6(P6.center).map(w => `<option>${w}</option>`).join(''); xs.value = P6.ctx;
+  const opts = contexts6(P6.center).concat(P6.stand ? [P6.stand] : []).sort();   // keep a negative selection in the list
+  xs.innerHTML = opts.map(w => `<option value="${w}">${w}</option>`).join(''); xs.value = P6.stand || P6.ctx;
+  $('m6-kind').innerHTML = `<span class="badge ${P6.stand ? 'neg' : 'pos'}">${P6.stand ? 'negative pair · label = 0' : 'positive pair · label = 1'}</span>`;   // as in 4 and 5
   $('m6-moment').querySelectorAll('button').forEach(x => x.classList.toggle('on', x.dataset.v === P6.moment));
 }
-const bar6 = PlayBar($('m6-bar'), {
-  ms: 900, canStep: () => P6.phase < POS_END, canReset: () => P6.phase > 0,
-  step: () => { setPhase(P6.phase + 1); render6(); render7(); }, end: () => { setPhase(POS_END); render6(); render7(); },
-  reset: () => { setPhase(0); render6(); render7(); },
-});
+// the pair section 6 works on: the positive pair, or the selected negative sample within it
+function t6() {
+  if (!P6.R) return null;
+  if (!P6.stand) return P6.R.T[0];
+  const ni = V.index.get(P6.stand); return P6.R.T.find(t => t.label === 0 && !t.skip && t.w === ni) || null;
+}
+// the two updates, each with its own "show math"
+const EQ6U = VecEq($('m6-upd'), () => {
+  const t = t6(); if (!t) return null; const c = W[P6.pair.center], x = W[t.w], xc = t.label ? 'vo' : 'neg';
+  // v′ + (g × v): start from v′ and add the scaled v; the parentheses say the multiplication comes first
+  return { left: [{ t: 'vec', label: 'context', sym: SVO, chip: wchip(x, xc), vals: t.vo0, cls: 'cvo' }, { t: 'op', s: '+' }, { t: 'paren', s: '(' },
+    { t: 'scal', label: SG, val: num(t.g, 4), cls: 'cg' }, { t: 'op', s: '×' }, { t: 'vec', label: 'center', sym: SV, chip: wchip(c, 'v'), vals: P6.R.v0, cls: 'cv' }, { t: 'paren', s: ')' }],
+    result: { label: `new ${SVO}`, chip: wchip(x, xc), vals: t.vo0.map((y, d) => y + t.dvo[d]), cls: 'cvo' } };
+}, 4);
+const EQ6P = VecEq($('m6-pend'), () => {
+  const t = t6(); if (!t) return null; const x = W[t.w], c = W[P6.pair.center];
+  return { left: [{ t: 'scal', label: SG, val: num(t.g, 4), cls: 'cg' }, { t: 'op', s: '×' }, { t: 'vec', label: 'context', sym: SVO, chip: wchip(x, t.label ? 'vo' : 'neg'), vals: t.vo0, cls: 'cvo' }],
+    result: { label: `Δ${SV} so far`, chip: wchip(c, 'v'), vals: t.contrib, cls: 'cp' } };
+}, 4);
 function pick6() { stopAll(); loadPair6(); render6(); render7(); refreshBars(); }
 // the pickers here change the page's selected pair, like those in 3–5
 $('m6-center').addEventListener('change', e => { const c = e.target.value; selectPair(c, contexts6(c).includes(S4.ctx) ? S4.ctx : contexts6(c, true), '6'); });
 $('m6-ctx').addEventListener('change', e => selectPair(S4.center, e.target.value, '6'));
+$('m7-center').addEventListener('change', e => { const c = e.target.value; selectPair(c, contexts6(c).includes(S4.ctx) ? S4.ctx : contexts6(c, true), '7'); });
+$('m7-ctx').addEventListener('change', e => selectPair(S4.center, e.target.value, '7'));
 $('m6-moment').addEventListener('click', e => { const x = e.target.closest('button'); if (x) { P6.moment = x.dataset.v; pick6(); } });
 
 // ---------- 7 negative samples ----------
 function render7() {
+  // pickers, as in 6: they change the page's selected pair
+  const cs = $('m7-center'), xs = $('m7-ctx');
+  if (!cs.options.length) W.slice().sort().forEach(w => cs.add(new Option(w, w)));
+  cs.value = P6.center;
+  xs.innerHTML = contexts6(P6.center).concat(P6.stand ? [P6.stand] : []).sort().map(w => `<option value="${w}">${w}</option>`).join(''); xs.value = P6.stand || P6.ctx;
+  $('m7-kind').innerHTML = `<span class="badge ${P6.stand ? 'neg' : 'pos'}">${P6.stand ? 'negative pair' : 'positive pair'}</span>`;
+  const neg = P6.stand ? `${wchip(P6.center, 'v')} · ${wchip(P6.stand, 'neg')} is one of the negative samples drawn for the positive pair ${wchip(P6.center, 'v')} · ${wchip(P6.ctx, 'vo')}. Here is that whole set of positive and negative pairs.` : '';
+  $('m7-neg').innerHTML = neg; $('m7-neg').hidden = !neg; $('m7-body').hidden = false;
   const p = P6.pair, R = P6.R, ph = P6.phase, cur = P6.PL[ph];
   // frequency vs frequency^0.75
   const drawnUpTo = R.T.filter(t => t.label === 0 && ph >= t.drawAt);
@@ -711,7 +769,7 @@ function render7() {
   [0, 0.05, 0.1].filter(v => v <= mx).forEach(v => { svg += `<line x1="${l}" x2="${W0}" y1="${Y(v)}" y2="${Y(v)}" stroke="var(--grid)"/><text x="${l - 6}" y="${Y(v)}" text-anchor="end" dominant-baseline="middle" font-size="10">${Math.round(v * 100)}%</text>`; });
   W.forEach((w, i) => {
     const x = l + i * bw, h = hits.get(i) || 0, isCtx = i === p.ctx;
-    svg += `<g><title>${w}: ${(100 * V.raw[i]).toFixed(1)}% of words, ${(100 * V.noise[i]).toFixed(1)}% of noise draws</title>
+    svg += `<g><title>${w}: ${(100 * V.raw[i]).toFixed(1)}% of words, ${(100 * V.noise[i]).toFixed(1)}% chance of being picked as a negative sample</title>
       <rect x="${x + 1}" y="${Y(V.raw[i])}" width="${bw / 2 - 1}" height="${Y(0) - Y(V.raw[i])}" fill="var(--axis)"/>
       <rect x="${x + bw / 2}" y="${Y(V.noise[i])}" width="${bw / 2 - 1}" height="${Y(0) - Y(V.noise[i])}" fill="${h ? 'var(--orange)' : '#f6c3ad'}"/>
       ${h ? `<text x="${x + bw * 0.75}" y="${Y(V.noise[i]) - 4}" text-anchor="middle" font-size="10" fill="var(--orange)">${h > 1 ? '×' + h : '●'}</text>` : ''}
@@ -723,46 +781,35 @@ function render7() {
   $('m7-draws').innerHTML = negs.map(t => ph >= t.drawAt
     ? (t.skip ? `<span class="chip skip" title="same word as the context: skipped">${W[t.w]}</span>` : `<span class="chip neg">${W[t.w]}</span>`)
     : '<span class="dempty"></span>').join('');
-  // targets: single numbers only, one row per target word
-  const shown = R.T.filter(t => t.label === 1 || ph >= t.drawAt);
-  // the target being worked on: the latest draw, or the positive one before any draws, or the last one once applied
-  const focus = cur && (cur.k === 'neg' || cur.k === 'draw') ? R.T[cur.j + 1]
-    : cur && cur.k === 'apply' ? R.T.filter(t => !t.skip).pop() : R.T[0];
-  const row = t => {
-    const lab = t.label ? `<span class="badge pos">positive</span>` : `<span class="badge neg">negative</span>`;
-    if (t.skip) return `<tr class="skipped"><th>${wchip(W[t.w], 'neg')}</th><td>${lab}</td><td colspan="4" class="note">same word as the context, so this draw is skipped</td></tr>`;
-    const doneT = ph >= t.pendAt, on = t === focus && ph >= POS_END && !R.applied ? ' newrow' : '';
-    const c = (x, n, cls = '') => `<td class="n ${cls}">${doneT ? num(x, n) : '·'}</td>`;
-    return `<tr class="${doneT ? '' : 'wait'}${on}"><th>${wchip(W[t.w], t.label ? 'vo' : 'neg')}</th><td>${lab}</td>
-      ${c(t.f, 3)}${c(t.s, 3)}${c(t.label - t.s, 3, 'err')}${c(t.g, 5, 'gcol')}</tr>`;
-  };
-  // vectors: one row per dimension (as in 4 and 6) — v, the focus target's v′ and its share, the running pending row, and new v
-  const fv = focus && !focus.skip && ph >= focus.drawAt ? focus : null, fs = fv && ph >= fv.pendAt, applied = R.applied;
-  const vrows = Array.from({ length: D }, (_, d) => `<tr><th class="n">d${d + 1}</th>
-      <td class="n c-v">${num(R.v0[d], 4)}</td>
-      <td class="n ${fv && fv.label ? 'c-vo' : 'c-neg'}">${fv ? num(fv.vo0[d], 4) : '·'}</td>
-      <td class="n chg">${fs ? num(fv.contrib[d], 5) : '·'}</td>
-      <td class="n chg c-v">${num(R.pend[d], 5)}</td>
-      <td class="n c-v ${applied ? 'chg new' : 'dim'}">${applied ? num(R.v1[d], 4) : '·'}</td></tr>`).join('');
-  $('m7-table').innerHTML = `<h4>Each target, scored against the same v</h4>
-    <div class="tscroll"><table class="data m7t"><thead><tr><th>target</th><th></th><th class="n">score</th><th class="n">probability σ</th><th class="n">error</th><th class="n">scaling factor ${SG}</th></tr></thead>
-    <tbody>${shown.map(row).join('')}</tbody></table></div>
-    <h4 style="margin-top:16px">The vectors, by dimension</h4>
-    <div class="tscroll"><table class="data vec m6t m7v"><thead><tr><th></th>
-      <th class="c-v">center ${SV}<br>${wchip(W[p.center], 'v')}</th>
-      <th class="${fv && !fv.label ? 'c-neg' : 'c-vo'}">target ${SVO}<br>${fv ? wchip(W[fv.w], fv.label ? 'vo' : 'neg') : '<span class="sub">—</span>'}</th>
-      <th>its share<br><span class="sub">${SG} · ${SVO}</span></th>
-      <th class="c-v">pending Δ${SV}<br><span class="sub">sum of shares</span></th>
-      <th class="c-v">new ${SV}<br><span class="sub">${applied ? `${SV} + pending Δ${SV}` : 'not yet applied'}</span></th></tr></thead>
-    <tbody>${vrows}</tbody></table></div>`;
+  EQ7S.render();
+  EQ7.render();
+  $('m7-applied').textContent = R.applied ? 'All the parts are in, so the update is applied to the input vector, once.' : 'Not applied yet: it waits until every negative sample has added its part.';
   let msg;
   if (ph < POS_END) msg = 'The positive update from section 6 comes first. Step to complete it.';
   else if (!cur || cur.k === 'pend') msg = `Next: draw ${CFG.K} noise words from the orange distribution.`;
-  else if (cur.k === 'draw') { const t = R.T[cur.j + 1]; msg = t.skip ? `Drew “${W[t.w]}”, the context word itself. word2vec skips such draws.` : `Drew “${W[t.w]}”. It is treated as a negative pair: label 0.`; }
-  else if (cur.k === 'neg') { const t = R.T[cur.j + 1]; msg = `Negative pair with “${W[t.w]}”: σ = ${t.s.toFixed(4)}, so g = (0 − σ) × α = ${num(t.g, 6)} is negative. Its v′ is pushed away from v, and g·v′ joins the pending row.`; }
-  else msg = `All ${CFG.K} draws done. The pending row is added to v once. That finishes this pair; training moves on to the next one.`;
+  else if (cur.k === 'draw') { const t = R.T[cur.j + 1]; msg = t.skip ? `Drew “${W[t.w]}”, the context word itself. word2vec skips such draws.` : `Drew “${W[t.w]}”. It is treated as a negative pair: label = 0.`; }
+  else if (cur.k === 'neg') { const t = R.T[cur.j + 1]; msg = `Negative pair with “${W[t.w]}”: σ = ${t.s.toFixed(4)}, so g = (0 − σ) × α = ${num(t.g, 6)} is negative. Its v′ is pushed away from v, and g·v′ is added to Δv so far.`; }
+  else msg = `All ${CFG.K} draws done. Δv so far is added to v, once. That finishes this pair; training moves on to the next one.`;
   $('m7-note').textContent = msg;
 }
+// the parts added up: what each part is (g × v′ of its word), and "show math" for the numbers
+const EQ7S = VecEq($('m7-sum'), () => {
+  const R = P6.R; if (!R) return null; const ph = P6.phase, c = W[P6.pair.center], sel = P6.stand ? V.index.get(P6.stand) : -1;
+  const parts = R.T.filter(t => !t.skip && ph >= t.pendAt), left = [];
+  parts.forEach((t, i) => {
+    if (i) left.push({ t: 'op', s: '+' });
+    left.push({ t: 'vec', label: t.label ? 'positive' : 'negative', sym: `${SG}<span class="gx">·</span>${SVO}`, chip: wchip(W[t.w], t.label ? 'vo' : 'neg'),
+      vals: t.contrib, cls: 'cp' + (!t.label && t.w === sel ? ' selpart' : '') });
+  });
+  return { left, result: { label: `Δ${SV} so far`, chip: wchip(c, 'v'), vals: R.pend, cls: 'cv' } };
+}, 4, 'compact');
+// v + Δv so far = new v, with "show math"
+const EQ7 = VecEq($('m7-apply'), () => {
+  const R = P6.R; if (!R) return null; const c = W[P6.pair.center];
+  return { left: [{ t: 'vec', label: 'center', sym: SV, chip: wchip(c, 'v'), vals: R.v0, cls: 'cv' }, { t: 'op', s: '+' },
+    { t: 'vec', label: `Δ${SV} so far`, sym: `Δ${SV}`, chip: wchip(c, 'v'), vals: R.pend, cls: 'cp' }],
+    result: { label: `new ${SV}`, chip: wchip(c, 'v'), vals: R.v0.map((x, d) => x + R.pend[d]), cls: 'cv' } };
+}, 4);
 const bar7 = PlayBar($('m7-bar'), {
   ms: 900, canStep: () => P6.phase < END(), canReset: () => P6.phase > POS_END,
   step: () => { setPhase(P6.phase < POS_END ? POS_END : P6.phase + 1); render6(); render7(); },

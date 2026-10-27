@@ -1,11 +1,23 @@
 <div class="module" id="m7">
-  <h4>How often each word is drawn as noise</h4>
+  <div class="row">
+    <label class="ctl">center <select id="m7-center"></select></label>
+    <label class="ctl">context <select id="m7-ctx"></select></label>
+    <span id="m7-kind"></span>
+  </div>
+  <p class="note m6neg" id="m7-neg" hidden></p>
+  <div id="m7-body">
+  <h4>How likely each word is to be picked as a negative sample</h4>
   <div id="m7-chart"></div>
-  <div class="legend"><span><i style="background:var(--axis)"></i>share of the corpus (raw frequency)</span><span><i style="background:#f6c3ad"></i>share of noise draws (frequency<sup>0.75</sup>)</span><span><i style="background:var(--orange)"></i>drawn for this pair</span></div>
+  <div class="legend"><span><i style="background:var(--axis)"></i>how common the word is in the corpus</span><span><i style="background:#f6c3ad"></i>chance of being picked (frequency<sup>0.75</sup>)</span><span><i style="background:var(--orange)"></i>picked for this pair</span></div>
   <div class="row" style="margin:16px 0 10px">
     <span id="m7-bar"></span>
     <span class="draws" id="m7-draws"></span>
   </div>
-  <div id="m7-table"></div>
-  <p class="note" id="m7-note" style="margin:12px 0 0"></p>
+  <p class="note" id="m7-note" style="margin:0 0 14px"></p>
+  <h4>Adding up the parts of the update to the input vector</h4>
+  <div id="m7-sum"></div>
+  <h4>Applying the update</h4>
+  <div id="m7-apply"></div>
+  <p class="note" id="m7-applied" style="margin:6px 0 0"></p>
+  </div>
 </div>

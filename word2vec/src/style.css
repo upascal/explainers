@@ -468,8 +468,8 @@ table.m6t thead th { white-space: normal; max-width: 92px; line-height: 1.25; } 
 .m4op { position: absolute; z-index: 3; transform: translate(-50%, -50%); width: 20px; height: 20px; display: flex; align-items: center; justify-content: center; border-radius: 50%; background: var(--ink); color: white; font-size: 0.85rem; font-weight: 700; line-height: 1; animation: m4op 0.25s ease both; }
 @keyframes m4op { from { opacity: 0; transform: translate(-50%, -50%) scale(0.5); } to { opacity: 1; transform: translate(-50%, -50%) scale(1); } }
 @media (prefers-reduced-motion: reduce) { .m4op { animation: none; } }
-.m4eq > .op { transition: opacity 0.2s; }
-.m4eq.working > .op { opacity: 0.4; }
+.m4eq .op { transition: opacity 0.2s; }
+.m4eq.working .op { opacity: 0.4; }
 .m4eq.working > .op .sumw { opacity: 1; }
 .m4br.cp .c.sumd { background: #e2e0d8; }
 .m4eq .term.adding > .v { color: var(--ink-2); }
@@ -480,7 +480,7 @@ table.m6t thead th { white-space: normal; max-width: 92px; line-height: 1.25; } 
 .m4wrap .m4eq { justify-content: flex-start; padding-left: 28px; flex-wrap: nowrap; }
 .m4eq .term.sym, .m4eq .term.sym.open { width: 68px; min-width: 68px; flex: 0 0 68px; }
 .m4eq .term.score { width: 112px; min-width: 112px; flex: 0 0 112px; }
-.m4eq > .op { flex: 0 0 auto; }
+.m4eq .op { flex: 0 0 auto; }
 @media (max-width: 560px) { .m4wrap .m4eq { padding-left: 8px; flex-wrap: wrap; } }
 .m4wrap .m4eq.mathon { padding-left: 28px; } @media (max-width: 560px) { .m4wrap .m4eq.mathon { padding-left: 8px; } }
 /* while working: everything but the numbers in play is dimmed */
@@ -515,3 +515,58 @@ table.m6t thead th { white-space: normal; max-width: 92px; line-height: 1.25; } 
 .m4band { transition: height 0.25s ease; }
 .m4eq.adding .m4br.cp .c.on, .m4eq.adding .m4br.cp .c.sumd { outline: none; position: relative; z-index: 3; }
 .m4eq.adding .m4br.cp .c:not(.on):not(.sumd) { opacity: 0.3; }
+
+.m4scoregrp { display: flex; align-items: center; gap: 8px; flex: 0 0 auto; }
+/* phones: smaller columns, centred, and "= score" on its own line */
+@media (max-width: 560px) {
+  .m4wrap .m4eq, .m4wrap .m4eq.mathon { flex-wrap: wrap; justify-content: center; padding-left: 8px; padding-right: 8px; column-gap: 5px; }
+  .m4wrap .m4eq.mathon { row-gap: 34px; }
+  .m4eq .term.sym, .m4eq .term.sym.open { width: 54px; min-width: 54px; flex: 0 0 54px; }
+  .m4eq .term.sym.open:has(.m4paren) { width: 70px; min-width: 70px; flex: 0 0 70px; }
+  .m4eq .term.sym > .v { font-size: 1.7rem; }
+  .m4br { padding: 3px 6px; }
+  .m4br .c, .m4br.cp .c { min-width: 0; font-size: 0.68rem; padding: 1px 2px; }
+  .m4paren { padding: 0 7px; }
+  .m4eq .eqch { margin: 0 6px 0 4px; }
+  .m4eq .dotch { margin: 0 2px; }
+  .m4eq .term.score { width: auto; min-width: 84px; flex: 0 0 auto; }
+}
+.m6neg { font-size: 0.95rem; margin: 4px 0 2px; } .m6neg .chip { font-size: 0.82rem; }
+/* 6: g = error × α, then the two updates */
+.m6g { margin: 0 0 16px; }
+.m6g .term { min-width: 96px; }
+.m6g .gval > .v { color: var(--pink); }
+.vq .term.scal { min-width: 56px; text-align: center; }
+.vq .term.scal > .v { font-size: 1.15rem; }
+.vq .term.scal > .l .cg { text-transform: none; }
+.m4br.cp .c { min-width: 40px; }
+.vq .m4br.res .c { min-width: 40px; }
+#m6-upd .m4wrap, #m6-pend .m4wrap { margin-bottom: 6px; }
+.vq .term.sym.open { width: 82px; min-width: 82px; flex: 0 0 82px; } .vq .term.sym { width: 82px; min-width: 82px; flex: 0 0 82px; }
+.m4pill { position: absolute; z-index: 3; transform: translate(-50%, -50%); padding: 1px 7px; border-radius: 9px; background: var(--pink); color: white; font-family: "JetBrains Mono", var(--mono); font-size: 0.72rem; font-weight: 600; white-space: nowrap; animation: m4op 0.25s ease both; }
+@media (prefers-reduced-motion: reduce) { .m4pill { animation: none; } }
+.vq.working .term.scal > .v, .vq.working .term.scal > .l { opacity: 0.35; transition: opacity 0.2s; }
+.vq .paren { font-family: var(--serif); font-size: 2.6rem; font-weight: 300; color: var(--muted); line-height: 1; flex: 0 0 auto; transition: opacity 0.2s; }
+.vq.mathon .paren { font-size: 5.6rem; transform: scaleX(0.6); margin: 0 -6px; }
+.vq.working .paren { opacity: 0.4; }
+/* 7: the parts of the update to v, added up */
+.m7sum { flex-wrap: wrap; justify-content: flex-start; gap: 18px 6px; padding: 30px 12px 14px; }
+.m7sum .grp { display: flex; align-items: center; gap: 6px; }
+.m7sum .term { position: relative; }
+.m7sum .term > .l { position: absolute; left: 0; right: 0; bottom: calc(100% + 6px); text-align: center; white-space: nowrap; }
+.m7sum .term > .f { font-size: 0.66rem; white-space: nowrap; text-align: center; }
+.m7sum .term > .f .cg { text-transform: none; }
+.m7sum .m4br .c { font-size: 0.7rem; min-width: 0; padding: 1px 2px; }
+.m7sum .op { font-size: 1.1rem; }
+.m7sum .tot > .l { color: var(--violet); font-size: 0.76rem; }
+.m7sum .term.sym.open { width: auto; min-width: 0; flex: 0 0 auto; }
+.m7sum .selpart .m4br { outline: 2px solid var(--orange); outline-offset: 3px; border-radius: 4px; }
+/* 7: the parts, compact: each is g · v′ of its word */
+.vq.compact .term.sym, .vq.compact .term.sym.open { width: auto; min-width: 46px; flex: 0 0 auto; }
+.vq.compact .term.sym > .v { font-size: 1.35rem; }
+.vq.compact .term.sym > .v .gx { margin: 0 1px; color: var(--muted); font-style: normal; }
+.vq.compact .term.sym > .l { font-size: 0.7rem; }
+.vq.compact .m4br .c { font-size: 0.7rem; padding: 1px 2px; min-width: 0; }
+.vq.compact .op { font-size: 1.2rem; }
+.vq.compact { gap: 4px 6px; }
+.m4br.selpart { outline: 2px solid var(--orange); outline-offset: 3px; border-radius: 4px; }
