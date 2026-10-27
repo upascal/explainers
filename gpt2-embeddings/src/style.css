@@ -741,3 +741,7 @@ table.m6real tr.on td.bar i { background: var(--blue); }
 .m1box #m1-text + .m1badge { right: 22px; }
 .m1box + .m1arrow + .m1box { margin-top: 0; }
 .m1arrow { display: flex; justify-content: center; color: var(--muted); padding: 4px 0; }
+.m3vheat { display: flex; align-items: stretch; gap: 8px; max-width: 340px; }
+.m3vheat svg { flex: 1 1 auto; min-width: 0; }
+.m3vkey { display: flex; flex-direction: column; align-items: center; gap: 4px; font-size: 0.68rem; color: var(--ink-2); font-variant-numeric: tabular-nums; }
+.m3vkey i { display: block; flex: 1; width: 10px; border-radius: 2px; border: 1px solid var(--grid); }
