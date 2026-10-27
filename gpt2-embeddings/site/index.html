@@ -183,9 +183,10 @@
 <p>These position rows are learned, just like the token rows. Nobody told GPT-2 that position 10 is close to position 11. But after training, the rows of nearby positions are nearly the same, and they drift apart smoothly with distance.</p>
 <div class="module" id="m4g">
   <h4 class="m3title">GPT-2’s 1,024 position rows</h4>
+  <div class="row"><label class="ctl">training <span class="seg" id="m4g-stage"><button data-v="start">start</button><button data-v="end" class="on">end</button></span></label></div>
   <div class="cols2">
     <div><h4>How alike each pair of positions is</h4><div id="m4g-heat"></div><p class="note" id="m4g-read" style="margin:6px 0 0"></p></div>
-    <div><h4>The rows’ three main directions, by position</h4><div id="m4g-pc"></div><p class="note" style="margin:6px 0 0">Each line follows one direction through all 1,024 rows. Smooth curves mean neighbouring positions get similar rows.</p></div>
+    <div><h4 id="m4g-pchead"></h4><div id="m4g-pc"></div><div class="m4gslide"><input type="range" id="m4g-k" min="0" max="7" step="1" value="2" aria-label="how many dimensions"><span class="note" id="m4g-kval"></span></div><p class="m4gread" id="m4g-readout" aria-live="polite"></p><p class="note" id="m4g-pcnote" style="margin:6px 0 0"></p></div>
   </div>
 </div>
 <h2 id="s5"><span class="num">5</span>Predicting the next token</h2>

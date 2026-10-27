@@ -749,3 +749,9 @@ table.m6real tr.on td.bar i { background: var(--blue); }
 .m3vheat rect[data-i]:hover { stroke: var(--ink); stroke-width: 1; }
 .m3vtip { position: absolute; transform: translate(-50%, calc(-100% - 6px)); padding: 2px 7px; border-radius: 5px; background: var(--ink); color: white; font-size: 0.72rem; white-space: nowrap; pointer-events: none; font-variant-numeric: tabular-nums; }
 .m3vtip b { font-weight: 600; }
+#m4g .cols2 h4 { min-height: 3.1em; display: flex; align-items: flex-end; }
+.m4gslide { display: flex; align-items: center; gap: 10px; max-width: 320px; margin: 6px 0 4px; padding-left: 30px; }
+.m4gslide input { flex: 1; min-width: 0; }
+.m4gslide .note { white-space: nowrap; min-width: 5.5em; }
+.m4gread { max-width: 320px; margin: 2px 0 8px; padding: 8px 10px; border: 1px solid var(--grid); border-radius: 8px; background: white; font-size: 0.8rem; line-height: 1.45; color: var(--ink-2); min-height: 4.4em; }
+.m4gread b { color: var(--ink); font-variant-numeric: tabular-nums; }

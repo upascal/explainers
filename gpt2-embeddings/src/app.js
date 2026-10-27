@@ -488,11 +488,32 @@ function render4() {
 $('m4-track').addEventListener('click', e => { const el = e.target.closest('[data-p]'); if (el) selectPred(SEL.sent, +el.dataset.p); });
 
 // ---------- 4 GPT-2's position rows ----------
-function render4g() {
-  const n = GPT2.pos.n, q = b64(GPT2.pos.cos, Uint8Array), cv = document.createElement('canvas');
+// the heatmap at the start or end of training. GPT-2's starting rows weren't published, so "start" is a
+// fresh draw from its starting distribution, N(0, 0.01), seeded by the page's initialization seed
+const S4G = { stage: 'end', key: '', rand: null, dims: null, k: 2 };   // k: which stop of the dimensions slider
+// the second-to-last stop is every dimension that changes much with position; the last adds the flat rest
+const K4G = [1, 2, 4, 8, 16, 32, GPT2.pos.moving, 768];
+// all 1,024 random rows for this seed; the heatmap and the dimensions chart both use every 8th, as
+// for the trained table, with the dimensions in the trained table's order
+function rand4g() {
+  if (S4G.key === G.seed) return;
+  const n = 1024, d = 768, r = rng(G.seed * 7919 + 3), X = new Float64Array(n * d);
+  for (let i = 0; i < X.length; i++) X[i] = gauss(r) * 0.01;
+  const m = GPT2.pos.n, step = GPT2.pos.step, U = Array.from({ length: m }, (_, k) => { const v = X.subarray(k * step * d, k * step * d + d), l = norm(v); return Float64Array.from(v, x => x / l); });
+  S4G.rand = new Float32Array(m * m); for (let i = 0; i < m; i++) for (let j = 0; j < m; j++) S4G.rand[i * m + j] = dot(U[i], U[j]);
+  S4G.dims = new Float32Array(m * d); for (let k = 0; k < m; k++) GPT2.pos.order.forEach((dd, c) => { S4G.dims[k * d + c] = X[k * step * d + dd]; });
+  S4G.key = G.seed;
+}
+const TRAINED4G = (() => { const q = b64(GPT2.pos.all, Int8Array); return Float32Array.from(q, x => x * GPT2.pos.allScale); })();
+function cos4g() {
+  if (S4G.stage === 'end') { const q = b64(GPT2.pos.cos, Uint8Array); return Float32Array.from(q, x => x / 255 * 2 - 1); }
+  rand4g(); return S4G.rand;
+}
+function renderHeat4g() {
+  const n = GPT2.pos.n, q = cos4g(), cv = document.createElement('canvas');
   cv.width = n; cv.height = n; const cx = cv.getContext('2d'), img = cx.createImageData(n, n);
   for (let i = 0; i < n * n; i++) {
-    const c = q[i] / 255 * 2 - 1, a = Math.min(1, Math.abs(c));
+    const c = q[i], a = Math.min(1, Math.abs(c));
     const [r, g, b] = c >= 0 ? [42, 120, 214] : [235, 104, 52];   // blue alike, orange opposite, on white
     img.data[4 * i] = 255 + (r - 255) * a; img.data[4 * i + 1] = 255 + (g - 255) * a; img.data[4 * i + 2] = 255 + (b - 255) * a; img.data[4 * i + 3] = 255;
   }
@@ -500,21 +521,74 @@ function render4g() {
   const ticks = [0, 256, 512, 768, 1023];
   $('m4g-heat').innerHTML = `<div class="m4gwrap"><div class="m4gy">${ticks.map(t => `<span style="top:${t / 1024 * 100}%">${t}</span>`).join('')}</div><div class="m4gbox"></div><div class="m4gx">${ticks.map(t => `<span style="left:${t / 1024 * 100}%">${t}</span>`).join('')}</div></div>`;
   cv.className = 'm4gcv'; $('m4g-heat').querySelector('.m4gbox').appendChild(cv);
-  const read = () => $('m4g-read').innerHTML = 'Each square compares two positions: blue where their rows point the same way, white where they are unrelated, orange where opposite. Hover to read one.';
+  const read = () => $('m4g-read').innerHTML = S4G.stage === 'end'
+    ? 'This shows GPT-2’s learned position rows by comparing every pair of them. Each square is two positions: blue where their rows point the same way, white where they are unrelated, orange where opposite. Hover to read a square.'
+    : 'Before training: random rows, drawn the way GPT-2’s code starts them. Every position is unrelated to every other, so all but the diagonal, each position compared with itself, is nearly white. GPT-2’s actual starting rows were never published. Hover to read a square.';
   read();
   cv.addEventListener('pointermove', e => {
     const r = cv.getBoundingClientRect(), i = Math.max(0, Math.min(n - 1, Math.floor((e.clientX - r.left) / r.width * n))), j = Math.max(0, Math.min(n - 1, Math.floor((e.clientY - r.top) / r.height * n)));
-    $('m4g-read').innerHTML = `positions <b>${j * GPT2.pos.step}</b> and <b>${i * GPT2.pos.step}</b>: cosine similarity <b>${num(q[j * n + i] / 255 * 2 - 1, 2)}</b>`;
+    $('m4g-read').innerHTML = `positions <b>${j * GPT2.pos.step}</b> and <b>${i * GPT2.pos.step}</b>: cosine similarity <b>${num(q[j * n + i], 2)}</b>`;
   });
   cv.addEventListener('pointerleave', read);
-  // the three main directions
-  const pc = b64(GPT2.pos.pc, Int8Array), W0 = 340, H0 = 200, l = 30, r = 8, t = 10, b = 28, mx = 127;
-  const X = p => l + p / 1023 * (W0 - l - r), Y = v => t + (1 - (v / mx + 1) / 2) * (H0 - t - b), cols = ['var(--violet)', 'var(--aqua)', 'var(--gold)'];
-  let svg = `<svg viewBox="0 0 ${W0} ${H0}" width="100%" style="display:block"><line x1="${l}" x2="${W0 - r}" y1="${Y(0)}" y2="${Y(0)}" stroke="var(--grid)"/>`;
-  for (let c = 0; c < 3; c++) { let d = ''; for (let p = 0; p < 1024; p += 2) d += (p ? 'L' : 'M') + X(p).toFixed(1) + ',' + Y(pc[p * 3 + c]).toFixed(1); svg += `<path d="${d}" fill="none" stroke="${cols[c]}" stroke-width="1.6"/>`; }
-  svg += ticks.map(p => `<text x="${X(p)}" y="${H0 - 12}" text-anchor="middle" font-size="10">${p}</text>`).join('') + `<text x="${l + (W0 - l - r) / 2}" y="${H0 - 1}" text-anchor="middle" font-size="10">position</text></svg>`;
-  $('m4g-pc').innerHTML = svg;
+  document.querySelectorAll('#m4g-stage button').forEach(b => b.classList.toggle('on', b.dataset.v === S4G.stage));
 }
+$('m4g-stage').addEventListener('click', e => { const b = e.target.closest('button'); if (b) { S4G.stage = b.dataset.v; render4g(); } });
+function render4g() { renderHeat4g(); renderDims4g(); }
+// the k dimensions that change most with position, traced across positions, plus one typical
+// dimension in grey for reference. Start and end share one scale, so the random start is as flat as it is.
+function renderDims4g() {
+  const end = S4G.stage === 'end', k = K4G[S4G.k], m = GPT2.pos.n, d = 768, step = GPT2.pos.step, mov = GPT2.pos.moving;
+  if (!end) rand4g();
+  const V4 = end ? TRAINED4G : S4G.dims, val = (p, c) => V4[p * d + c], typ = GPT2.pos.order.indexOf(GPT2.pos.typical);
+  const mx = 1.5, W0 = 320, l = 30, r = 0, t = 0, b = 28, H0 = W0 - l - r + t + b;   // the same frame as the heatmap beside it
+  const X = p => l + p * step / 1023 * (W0 - l - r), Y = v => t + (1 - (Math.max(-mx, Math.min(mx, v)) / mx + 1) / 2) * (H0 - t - b);
+  const few = ['var(--violet)', 'var(--aqua)', 'var(--gold)', 'var(--blue)'];
+  const line = (c, col, w, op = 1) => { let s = ''; for (let p = 0; p < m; p++) s += (p ? 'L' : 'M') + X(p).toFixed(1) + ',' + Y(val(p, c)).toFixed(1); return `<path d="${s}" fill="none" stroke="${col}" stroke-width="${w}" opacity="${op}"/>`; };
+  let svg = `<svg viewBox="0 0 ${W0} ${H0}" width="100%" style="display:block;max-width:${W0}px"><rect x="${l}" y="${t}" width="${W0 - l - r}" height="${H0 - t - b}" fill="white" stroke="var(--grid)"/>`;
+  svg += [-1, 0, 1].map(v => `<line x1="${l}" x2="${W0 - r}" y1="${Y(v)}" y2="${Y(v)}" stroke="var(--grid)"/><text x="${l - 6}" y="${Y(v)}" text-anchor="end" dominant-baseline="middle" font-size="10">${num(v, 0)}</text>`).join('');
+  // hovering a position: the shown waves that change fastest there, the ones that best tell it from its
+  // neighbours, stand out; the slope is measured across the neighbouring samples (8 positions apart)
+  const hi = end && S4G.hover != null ? S4G.hover : null, shown = Math.min(k, mov);
+  const steep = hi == null ? [] : Array.from({ length: shown }, (_, c) => c).filter(c => c !== typ)
+    .map(c => [c, Math.abs(val(Math.min(m - 1, hi + 1), c) - val(Math.max(0, hi - 1), c))]).sort((x, y) => y[1] - x[1]).slice(0, 3).map(([c]) => c);
+  const fade = hi == null ? 1 : 0.25;
+  // the moving ones first, then the flat ones on top, so they show as a grey band along 0
+  for (let c = 0; c < shown; c++) if (c !== typ && !steep.includes(c)) svg += k <= 4 ? line(c, few[c], 1.6, fade) : line(c, 'var(--violet)', 1, 0.5 * fade);
+  for (let c = mov; c < k; c++) if (c !== typ) svg += line(c, '#a9a69d', 0.7, 0.35 * fade);
+  svg += line(typ, 'var(--ink-2)', 1.6, fade);
+  const hcol = (c, r) => k <= 4 ? few[c] : few[r];
+  if (hi != null) {
+    svg += `<line x1="${X(hi)}" x2="${X(hi)}" y1="${t}" y2="${H0 - b}" stroke="var(--ink)" stroke-dasharray="3 3"/>`;
+    steep.forEach((c, r) => { svg += line(c, hcol(c, r), 2.2); });
+    steep.forEach((c, r) => { svg += `<circle cx="${X(hi)}" cy="${Y(val(hi, c))}" r="4" fill="${hcol(c, r)}" stroke="white" stroke-width="1.5"/>`; });
+  }
+  svg += [0, 256, 512, 768, 1023].map(p => `<text x="${l + p / 1023 * (W0 - l - r)}" y="${H0 - 15}" text-anchor="${p ? p === 1023 ? 'end' : 'middle' : 'start'}" font-size="10">${p}</text>`).join('') + `<text x="${l + (W0 - l - r) / 2}" y="${H0 - 2}" text-anchor="middle" font-size="10">position</text></svg>`;
+  $('m4g-pc').innerHTML = svg;
+  const dn = c => 'd' + (GPT2.pos.order[c] + 1);
+  $('m4g-pchead').textContent = `${k === d ? 'All 768' : `${k} of the 768`} dimensions, by position`;
+  const leg = k <= 4 ? Array.from({ length: k }, (_, c) => `<span><i style="background:${few[c]}"></i>${dn(c)}</span>`).join('')
+    : `<span><i style="background:var(--violet)"></i>change with position</span>${k > mov ? '<span><i style="background:#b6b4ad"></i>don’t</span>' : ''}`;
+  // reading the position back from these dimensions (precomputed: a weighted sum fitted on the even positions, tested on the odd)
+  const R4 = GPT2.pos.read, err = R4[end ? 'end' : 'start'][S4G.k], these = k === 1 ? 'this dimension' : `these ${k === d ? 768 : k} dimensions`;
+  $('m4g-readout').innerHTML = !end ? `Reading the position back: from random rows, a weighted sum of ${these} is off by about <b>${Math.round(err)}</b> positions, no better than guessing.`
+    : err > 200 ? `Reading the position back: a weighted sum of ${these} is off by about <b>${Math.round(err)}</b> positions, no better than guessing. A slow wave passes through the same height at many positions.`
+    : k > mov ? `Reading the position back: a weighted sum of all 768 is off by about <b>${err}</b> positions, worse than the ${mov} alone. The flat dimensions add more noise than information.`
+    : `Reading the position back: a weighted sum of ${these} finds the position to within about <b>${err >= 10 ? Math.round(err) : err}</b> positions${err < 1 ? ': the right position, or its neighbour' : ''}.`;
+  if (hi != null) $('m4g-readout').innerHTML = `At position <b>${hi * step}</b>, ${steep.map((c, r) => `<b style="color:${hcol(c, r)}">${dn(c)}</b>`).join(steep.length > 2 ? ', ' : ' and ').replace(/, ([^,]*)$/, ' and $1')} change${steep.length === 1 ? 's' : ''} fastest, so ${steep.length === 1 ? 'it tells' : 'they best tell'} it from its neighbours. Flatter waves here only say roughly where it is.`;
+  $('m4g-kval').textContent = k === d ? 'all 768' : k === mov ? `all ${mov} that move` : `the top ${k}`;
+  $('m4g-pcnote').innerHTML = `<div class="legend" style="margin-top:0">${leg}<span><i style="background:var(--ink-2)"></i>${dn(typ)}, a typical one</span></div>` + (end
+    ? `Each line follows one dimension across all 1,024 positions, ranked by how much it changes. Only ${mov} of the 768 change much, in smooth waves${k === mov ? ': these are all of them' : ''}${k > mov ? '; the rest stay in a flat band near 0, like the typical one' : ''}.`
+    : 'The same dimensions in the random rows: tiny, and no pattern from one position to the next.');
+}
+$('m4g-k').addEventListener('input', e => { S4G.k = +e.target.value; renderDims4g(); });
+// hover (or touch) the chart to pick a position; the frame is 320 wide with the plot from x = 30
+$('m4g-pc').addEventListener('pointermove', e => {
+  if (S4G.stage !== 'end') return;
+  const r = $('m4g-pc').querySelector('svg').getBoundingClientRect(), x = (e.clientX - r.left) / r.width * 320;
+  const i = x < 30 ? null : Math.max(0, Math.min(GPT2.pos.n - 1, Math.round((x - 30) / 290 * 1023 / GPT2.pos.step)));
+  if (i !== S4G.hover) { S4G.hover = i; renderDims4g(); }
+});
+$('m4g-pc').addEventListener('pointerleave', () => { if (S4G.hover != null) { S4G.hover = null; renderDims4g(); } });
 
 // ---------- 5 each position predicts the next ----------
 function render5() {
@@ -862,7 +936,7 @@ function render12() {
 $('m12-word').addEventListener('click', e => { const b = e.target.closest('button'); if (b) { S12.k = +b.dataset.k; render12(); } });
 
 // ---------- everything ----------
-function renderAll() { renderSel(); render10l(); render10(); }
+function renderAll() { renderSel(); render10l(); render10(); if (S4G.stage === 'start') render4g(); }
 G.stream = makeStream(G.streamSeed);
 resetTraining(); follow3v();
 render1(); render2(); load2g(); render2g(); render4g(); render11(); render11g(); render12(); renderAll();
