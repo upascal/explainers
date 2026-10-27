@@ -170,11 +170,16 @@ function pairPlane(a, b, o = {}) {
   const xy = u => !e1 ? [0, 0] : [dot(u, e1), e2 ? dot(u, e2) : 0];
   const pts = [a, b].concat(ghost ? [ghost] : []).map(xy);
   const R = Math.max(1e-9, ...pts.map(([x, y]) => Math.hypot(x, y)));
-  const k = Rpx / R, P = ([x, y]) => [ox + x * k, oy - y * k];
+  const nb = norm(b), cos = na > 1e-12 && nb > 1e-12 ? dot(a, b) / (na * nb) : null;
+  // one vector all zeros: it has no direction, so tilt the other off the baseline (lying flat
+  // along it would read as an angle of 0°) and mark the origin "angle undefined" instead
+  const tilt = cos === null ? 0.3 : 0, ct = Math.cos(tilt), st = Math.sin(tilt);
+  const k = Rpx / R, P = ([x, y]) => [ox + (x * ct - y * st) * k, oy - (x * st + y * ct) * k];
   const labs = [];
   const arrow = (u, cls, label, dash) => {
     const [x, y] = P(xy(u)), len = Math.hypot(x - ox, y - oy);
-    if (len < 2) return `<circle cx="${ox}" cy="${oy}" r="4" class="pp-${cls}" fill="currentColor"/>${label ? `<text x="${ox + 8}" y="${oy - 10}" class="pp-lab pp-${cls}">${label} ${norm(u) < 1e-12 ? '= 0' : '(tiny)'}</text>` : ''}`;
+    // a zero vector's label goes below the dot, clear of the other (tilted) arrow
+    if (len < 2) return `<circle cx="${ox}" cy="${oy}" r="4" class="pp-${cls}" fill="currentColor"/>${label ? `<text x="${ox + 8}" y="${cos === null ? oy + 16 : oy - 10}" class="pp-lab pp-${cls}">${label} ${norm(u) < 1e-12 ? '= 0' : '(tiny)'}</text>` : ''}`;
     let tx = x + (x - ox) / len * 12, ty = y + (y - oy) / len * 12;
     if (label && labs.some(([lx, ly]) => Math.hypot(lx - tx, ly - ty) < 16)) ty -= 15;   // two tips close together: lift this label clear
     let anc = 'middle'; if (tx > W0 - 34) { anc = 'end'; tx = W0 - 2; ty = Math.min(ty, y - 10); }   // keep labels at the right edge inside the box
@@ -183,7 +188,6 @@ function pairPlane(a, b, o = {}) {
       (label ? `<text x="${tx}" y="${ty}" text-anchor="${anc}" dominant-baseline="middle" class="pp-lab pp-${cls}">${label}</text>` : '');
   };
   const mk = (cls, g) => `<marker id="${id}-${cls}${g ? 'g' : ''}" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="${g ? 5 : 6}" markerHeight="${g ? 5 : 6}" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" class="pp-${cls}" fill="currentColor"/></marker>`;
-  const nb = norm(b), cos = na > 1e-12 && nb > 1e-12 ? dot(a, b) / (na * nb) : null;
   const ang = cos === null ? null : Math.acos(Math.max(-1, Math.min(1, cos)));
   let arc = '';
   if (ang !== null && Math.min(na, nb) * k > 14 && ang > 0.12) {
@@ -194,12 +198,14 @@ function pairPlane(a, b, o = {}) {
   }
   const svg = `<svg viewBox="0 0 ${W0} ${H0}" width="100%" style="display:block;max-width:${W0}px">
     <defs>${mk('a')}${mk(bc)}${mk(bc, true)}</defs>
-    <line x1="10" y1="${oy}" x2="${W0 - 10}" y2="${oy}" stroke="var(--grid)"/>
-    <path d="M${ox - Rpx},${oy} A${Rpx},${Rpx} 0 0 1 ${ox + Rpx},${oy}" fill="none" stroke="var(--grid)" stroke-dasharray="2 4"/>
+    ${cos === null ? `<g class="pp-${na <= 1e-12 ? 'a' : bc}"><circle cx="${ox}" cy="${oy}" r="24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-dasharray="4 3"/>
+    <text x="${ox}" y="${oy - 32}" text-anchor="middle" fill="currentColor" class="pp-undef">angle undefined</text></g>`
+    : `<line x1="10" y1="${oy}" x2="${W0 - 10}" y2="${oy}" stroke="var(--grid)"/>
+    <path d="M${ox - Rpx},${oy} A${Rpx},${Rpx} 0 0 1 ${ox + Rpx},${oy}" fill="none" stroke="var(--grid)" stroke-dasharray="2 4"/>`}
     ${arc}${ghost ? arrow(ghost, bc, '', true) : ''}${arrow(b, bc, o.bLabel || 'v′')}${arrow(a, 'a', o.aLabel || 'v')}
   </svg>`;
   const cap = cos === null
-    ? `<span class="note">${na <= 1e-12 ? (o.aLabel || 'v') : (o.bLabel || 'v′')} is all zeros, so there is no angle and the dot product is 0.</span>`
+    ? `<span class="note">${na <= 1e-12 ? (o.aLabel || 'v') : (o.bLabel || 'v′')} is all zeros. With no length it has no direction, so the angle is undefined. Every product is × 0, so the dot product is 0.</span>`
     : `<span class="note">|${o.aLabel || 'v'}| = ${num(na)} · |${o.bLabel || 'v′'}| = ${num(nb, nb < 0.01 ? 4 : 3)} · angle ${Math.round(ang * 180 / Math.PI)}°<br>${num(na)} × ${num(nb, nb < 0.01 ? 4 : 3)} × cos ${Math.round(ang * 180 / Math.PI)}° = <b>${num(dot(a, b), 4)}</b></span>`;
   return `<div class="pplane">${o.title ? `<div class="pp-title">${o.title}</div>` : ''}${svg}${cap}${ghost ? '<div class="note">dashed: v′ before this update</div>' : ''}</div>`;
 }
@@ -359,14 +365,13 @@ document.querySelectorAll('.reveal-btn').forEach(b => b.addEventListener('click'
 // ---------- 3 the window ----------
 // A sandbox, separate from training: pick a sentence, drag the window, see the pairs it makes.
 // (Training shrinks the window at random and drops frequent words; the text explains that.)
-const S3 = { sent: 0, pos: 2, b: 2 };
+const S3 = { sent: 0, pos: 2, b: 2, shown: new Set() };
 function render3() {
   const s = V.sents[S3.sent], c = S3.pos, b = S3.b;
   $('m3-track').innerHTML = s.map((w, i) => `<span class="chip ${i === c ? 'v' : Math.abs(i - c) <= b ? 'vo' : ''}" data-i="${i}">${W[w]}</span>`).join('')
     + `<span class="m3band" id="m3-band"><span class="m3lbl">window ±${b}</span><span class="m3grip" aria-hidden="true"><svg viewBox="0 0 16 6" width="16" height="6"><g fill="currentColor"><circle cx="2" cy="1.2" r="1.1"/><circle cx="8" cy="1.2" r="1.1"/><circle cx="14" cy="1.2" r="1.1"/><circle cx="2" cy="4.8" r="1.1"/><circle cx="8" cy="4.8" r="1.1"/><circle cx="14" cy="4.8" r="1.1"/></g></svg></span></span>`;
   place3();
-  const ctx = s.map((w, i) => i).filter(i => i !== c && Math.abs(i - c) <= b);
-  $('m3-pairs').innerHTML = ctx.map(i => `<span class="pairchip">${wchip(W[s[c]], 'v')}${wchip(W[s[i]], 'vo')}</span>`).join('');
+  pairs3();
   $('m3-sent-pick').value = S3.sent;
   $('m3-bv').textContent = b; $('m3-minus').disabled = b <= 1; $('m3-plus').disabled = b >= CFG.WINDOW;
 }
@@ -384,9 +389,20 @@ function place3() {
 }
 function setCenter3(i) {
   if (i === S3.pos) return;
-  S3.pos = i; place3();
-  const s = V.sents[S3.sent];
-  $('m3-pairs').innerHTML = s.map((w, k) => k).filter(k => k !== i && Math.abs(k - i) <= S3.b).map(k => `<span class="pairchip">${wchip(W[s[i]], 'v')}${wchip(W[s[k]], 'vo')}</span>`).join('');
+  S3.pos = i; place3(); pairs3();
+}
+// list the window's pairs; the context chip of any pair not shown a moment ago bubbles in
+function pairs3() {
+  const s = V.sents[S3.sent], c = S3.pos, key = k => `${S3.sent}:${c}:${k}`;
+  const ks = s.map((w, k) => k).filter(k => k !== c && Math.abs(k - c) <= S3.b);
+  let n = 0;
+  $('m3-pairs').innerHTML = ks.map(k => {
+    // a new pair first opens up its space, then its context word pops in
+    if (S3.shown.has(key(k))) return `<span class="pairchip">${wchip(W[s[c]], 'v')}${wchip(W[s[k]], 'vo')}</span>`;
+    const d = 90 * n++;
+    return `<span class="pairchip grow" style="animation-delay:${d}ms">${wchip(W[s[c]], 'v')}<span class="chip vo pop" style="animation-delay:${d + 160}ms">${esc(W[s[k]])}</span></span>`;
+  }).join('');
+  S3.shown = new Set(ks.map(key));
 }
 function setSent3(k) { S3.sent = k; S3.pos = Math.min(S3.pos, V.sents[S3.sent].length - 1); render3(); }
 $('m3-sent-pick').innerHTML = V.sents.map((s, k) => `<option value="${k}">${s.map(w => W[w]).join(' ')}</option>`).join('');
