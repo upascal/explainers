@@ -1,7 +1,7 @@
 # word2vec explainer
 
 A single-page, self-contained explainer of how word2vec (skip-gram with negative
-sampling) learns. A sibling of the SynthID-Text explainer in the parent directory, built
+sampling) learns. A sibling of the SynthID-Text explainer in `../synthid/`, built
 the same way. Nothing is precomputed: a 5-dimensional toy model trains on a hand-written
 30-sentence corpus in the browser, so every number on the page is computed live.
 
