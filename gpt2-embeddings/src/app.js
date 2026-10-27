@@ -568,13 +568,15 @@ function renderDims4g() {
   $('m4g-pchead').textContent = `${k === d ? 'All 768' : `${k} of the 768`} dimensions, by position`;
   const leg = k <= 4 ? Array.from({ length: k }, (_, c) => `<span><i style="background:${few[c]}"></i>${dn(c)}</span>`).join('')
     : `<span><i style="background:var(--violet)"></i>change with position</span>${k > mov ? '<span><i style="background:#b6b4ad"></i>don’t</span>' : ''}`;
-  // reading the position back from these dimensions (precomputed: a weighted sum fitted on the even positions, tested on the odd)
+  // reading the position back from these dimensions (precomputed: a weighted sum fitted on four fifths of
+  // the positions and tested on the rest, five times round; the average error, in positions)
   const R4 = GPT2.pos.read, err = R4[end ? 'end' : 'start'][S4G.k], these = k === 1 ? 'this dimension' : `these ${k === d ? 768 : k} dimensions`;
-  $('m4g-readout').innerHTML = !end ? `Reading the position back: from random rows, a weighted sum of ${these} is off by about <b>${Math.round(err)}</b> positions, no better than guessing.`
-    : err > 200 ? `Reading the position back: a weighted sum of ${these} is off by about <b>${Math.round(err)}</b> positions, no better than guessing. A slow wave passes through the same height at many positions.`
-    : k > mov ? `Reading the position back: a weighted sum of all 768 is off by about <b>${err}</b> positions, worse than the ${mov} alone. The flat dimensions add more noise than information.`
-    : `Reading the position back: a weighted sum of ${these} finds the position to within about <b>${err >= 10 ? Math.round(err) : err}</b> positions${err < 1 ? ': the right position, or its neighbour' : ''}.`;
-  if (hi != null) $('m4g-readout').innerHTML = `At position <b>${hi * step}</b>, ${steep.map((c, r) => `<b style="color:${hcol(c, r)}">${dn(c)}</b>`).join(steep.length > 2 ? ', ' : ' and ').replace(/, ([^,]*)$/, ' and $1')} change${steep.length === 1 ? 's' : ''} fastest, so ${steep.length === 1 ? 'it tells' : 'they best tell'} it from its neighbours. Flatter waves here only say roughly where it is.`;
+  const e63 = R4.end[R4.stops.indexOf(mov)], fmt = x => x >= 10 ? Math.round(x) : x;
+  $('m4g-readout').innerHTML = !end ? `Reading the position back: from random rows, a weighted sum of ${these} is off by about <b>${Math.round(err)}</b> positions on average, no better than always guessing the middle.`
+    : err > 200 ? `Reading the position back: a weighted sum of ${these} is off by about <b>${Math.round(err)}</b> positions on average, no better than guessing. A slow wave passes through the same height at many positions.`
+    : k > mov ? `Reading the position back: a weighted sum of all 768 finds the position to within about <b>${fmt(err)}</b> positions on average, the same as the ${mov} that move (${fmt(e63)}). The flat dimensions add nothing.`
+    : `Reading the position back: a weighted sum of ${these} finds the position to within about <b>${fmt(err)}</b> positions on average.`;
+  if (hi != null) $('m4g-readout').innerHTML = `At position <b>${hi * step}</b>, ${steep.map((c, r) => `<b style="color:${hcol(c, r)}">${dn(c)}</b>`).join(steep.length > 2 ? ', ' : ' and ').replace(/, ([^,]*)$/, ' and $1')} change${steep.length === 1 ? 's' : ''} fastest, so ${steep.length === 1 ? 'it best tells' : 'they best tell'} it apart from its neighbours. Flatter waves here only say roughly where it is.`;
   $('m4g-kval').textContent = k === d ? 'all 768' : k === mov ? `all ${mov} that move` : `the top ${k}`;
   $('m4g-pcnote').innerHTML = `<div class="legend" style="margin-top:0">${leg}<span><i style="background:var(--ink-2)"></i>${dn(typ)}, a typical one</span></div>` + (end
     ? `Each line follows one dimension across all 1,024 positions, ranked by how much it changes. Only ${mov} of the 768 change much, in smooth waves${k === mov ? ': these are all of them' : ''}${k > mov ? '; the rest stay in a flat band near 0, like the typical one' : ''}.`

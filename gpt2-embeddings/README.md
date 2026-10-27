@@ -37,5 +37,5 @@ python precompute/precompute.py                    # ~1 min; uses the cached `gp
 The training stream (sentence order) uses a fixed seed; the initialization seed can be re-rolled
 on the page. `CFG` in `src/model.js` holds the toy settings. Learning rates above about 0.06 make
 the toy blow up, which is why the page offers 0.05 at most. Changing the corpus or settings can
-change whether the clusters form, so re-check the outcomes quoted in the prose (§10 and footnote 6)
+change whether the clusters form, so re-check the outcomes quoted in the prose (§10 and the last footnote)
 after editing them.

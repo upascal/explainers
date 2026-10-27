@@ -96,15 +96,23 @@ pos_order = [int(d) for d in np.argsort(-pstd)]
 pos_moving = int((pstd > 0.1).sum())
 pos_typical = int(np.argsort(pstd)[len(pstd) // 2])   # the median one: how flat most of them are
 # reading the position back: how close a weighted sum of the top k dimensions gets to the position
-# number, fitted on the even positions and tested on the odd ones (median error, in positions); for
-# the trained table and for random rows drawn the way GPT-2 starts them
+# number (mean absolute error, in positions), for the trained table and for random rows drawn the way
+# GPT-2 starts them. One method at every k: ridge regression on the values as they are, scored by
+# 5-fold cross-validation over randomly chosen positions, with the ridge strength picked by a second
+# 5-fold split inside each training part (as in Wang and Chen, 2020, who also report mean error)
 READ_STOPS = [1, 2, 4, 8, 16, 32, pos_moving, 768]
-def readout(T, k):
-    Z = T[:, pos_order[:k]]; Z = (Z - Z[0::2].mean(0)) / (Z[0::2].std(0) + 1e-12)
-    A = np.c_[Z, np.ones(len(Z))]; y = np.arange(len(Z), dtype=np.float64); I = np.eye(A.shape[1]); I[-1, -1] = 0
-    lam = 1e-6 if k <= pos_moving else 10.0   # a little ridge once there are more dimensions than the fit can pin down
-    w = np.linalg.solve(A[0::2].T @ A[0::2] + lam * I, A[0::2].T @ y[0::2])
-    return round(float(np.median(np.abs(A[1::2] @ w - y[1::2]))), 1)
+def ridge_fit(X, y, lam):
+    mu, ym = X.mean(0), y.mean(); A = X - mu
+    w = np.linalg.solve(A.T @ A + lam * np.eye(A.shape[1]), A.T @ (y - ym))
+    return lambda Z: (Z - mu) @ w + ym
+def readout(T, k, lams=(1e-6, 1e-4, 1e-2, 1, 100)):
+    X, y = T[:, pos_order[:k]], np.arange(len(T), dtype=np.float64)
+    perm = np.random.default_rng(1).permutation(len(T)); errs = []
+    for f in range(5):
+        te = perm[f::5]; tr = np.setdiff1d(perm, te); inner = [tr[i::5] for i in range(5)]
+        err = lambda l: np.mean([np.abs(ridge_fit(X[np.setdiff1d(tr, g)], y[np.setdiff1d(tr, g)], l)(X[g]) - y[g]).mean() for g in inner])
+        errs += list(np.abs(ridge_fit(X[tr], y[tr], min(lams, key=err))(X[te]) - y[te]))
+    return round(float(np.mean(errs)), 1)
 rand_pos = np.random.default_rng(0).normal(0, 0.01, wpe.shape)
 pos_read = {"stops": READ_STOPS, "end": [readout(wpe, k) for k in READ_STOPS], "start": [readout(rand_pos, k) for k in READ_STOPS]}
 pos_all = wpe[::PS][:, pos_order]
