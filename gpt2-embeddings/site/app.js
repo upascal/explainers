@@ -67,6 +67,14 @@ function upd() {
   if (!U.one[SEL.pos]) U.one[SEL.pos] = backward(U.m, U.f, SEL.pos);
   return U;
 }
+// The header holds the selected prediction's controls for sections 5–9: the sentence, the context
+// (drag it, or click a token) and the pass. Built once; renderStatebar() only updates it.
+$('statebar-in').innerHTML = `<div class="sb-set">
+    <a class="sb-lab" href="#s5">selected prediction</a>
+    <label class="m3pick sb-pick"><select id="sb-sent" aria-label="sentence"></select></label>
+    <span class="passctl"><span class="lab">pass</span><input type="range" min="1" max="1" step="1" aria-label="which pass over the corpus"><span class="note pv"></span></span>
+  </div>
+  <div class="m3scroll sb-scroll"><div class="m3track m5track" id="sb-track"></div></div>`;
 function selectPred(sent, pos) {
   SEL.sent = sent; SEL.pos = Math.max(0, Math.min(V.seqs[sent].length - 2, pos));
   S8.row = tgTok(); follow3v(); S9.a = inTok() === V.index.get(EOT) ? S9.a : inTok();
@@ -301,17 +309,16 @@ function pairPlane(a, b, o = {}) {
 
 // ---------- sticky status bar ----------
 function renderStatebar() {
-  const s = seqSel(), u = upd(), p = u.f.p[SEL.pos][tgTok()], from = Math.max(0, SEL.pos - 3);
-  const ctx = (from > 0 ? '<span class="sb-more">…</span>' : '') + s.slice(from, SEL.pos + 1).map(t => wchip(t, 'v')).join('');
-  $('statebar-in').innerHTML = `<div class="sb-set">
-    <span class="sb-pair"><a href="#s5">selected prediction</a> <span class="sb-ctx">${ctx}</span> → ${wchip(tgTok(), 'tg')}</span>
-    <span class="sb-vals"><a href="#s8">pass <b>${SEL.pass}</b></a><a href="#s7">probability <b>${(100 * p).toFixed(1)}%</b></a><a href="#s3" title="initialization seed — re-roll it in section 3">seed <b>${G.seed}</b></a></span>
-  </div>`;
+  TRACKSB.render(); bindStack($('sb-track').querySelector('.m6vp')); syncPass();
 }
 // the header only makes sense once predictions exist: show it from section 5's widget on
 (function headerWhenPreds() {
   let ticking = false;
-  const check = () => { ticking = false; $('statebar').classList.toggle('shown', $('m5').getBoundingClientRect().top < innerHeight * 0.75); };
+  const check = () => {
+    ticking = false; $('statebar').classList.toggle('shown', $('m5').getBoundingClientRect().top < innerHeight * 0.75);
+    const past = $('m6-track').getBoundingClientRect().bottom < $('statebar').offsetHeight;   // scrolled past 7's stack
+    if (past !== !!S6.sbStack) { S6.sbStack = past; renderStatebar(); }
+  };
   addEventListener('scroll', () => { if (!ticking) { ticking = true; requestAnimationFrame(check); } }, { passive: true });
   addEventListener('resize', check); setTimeout(check, 0);
 })();
@@ -522,11 +529,10 @@ $('m3v-gstate').addEventListener('click', e => { const b = e.target.closest('but
 
 // ---------- 4 token row + position row = input vector ----------
 const sentOpts = id => { $(id).innerHTML = V.seqs.map((s, k) => `<option value="${k}">${esc(CORPUS[k])}</option>`).join(''); };
-sentOpts('m4-sent'); sentOpts('m5-sent'); sentOpts('m6-sent'); sentOpts('mix-sent');
+sentOpts('m4-sent'); sentOpts('m5-sent'); sentOpts('sb-sent');
 $('m4-sent').addEventListener('change', e => selectPred(+e.target.value, SEL.pos));
 $('m5-sent').addEventListener('change', e => selectPred(+e.target.value, SEL.pos));
-$('m6-sent').addEventListener('change', e => selectPred(+e.target.value, SEL.pos));
-$('mix-sent').addEventListener('change', e => selectPred(+e.target.value, SEL.pos));
+$('sb-sent').addEventListener('change', e => selectPred(+e.target.value, SEL.pos));
 // a lookup, so one fixed moment per stage (start, halfway, end of training), whatever the sentence:
 // changing the sentence changes which rows are looked up, not the tables themselves
 const EQ4 = VecEq($('m4-eq'), () => {
@@ -655,17 +661,19 @@ $('m4g-pc').addEventListener('pointerleave', () => { if (S4G.hover != null) { S4
 function ContextTrack(k, stack = null) {
   const track = $(k + '-track'), me = {};
   me.render = () => {
-    $(k + '-sent').value = SEL.sent;
-    track.innerHTML = seqSel().map((t, i) => stack && i > SEL.pos ? (i === SEL.pos + 1 ? stack() : `<span class="chip ph" data-i="${i}">&nbsp;&nbsp;&nbsp;</span>`) : `<span class="chip" data-i="${i}">${tstr(t)}</span>`).join('')
-      + `<span class="m3band"><span class="m3lbl">context</span><span class="m3grip" aria-hidden="true"><svg viewBox="0 0 16 6" width="16" height="6"><g fill="currentColor"><circle cx="2" cy="1.2" r="1.1"/><circle cx="8" cy="1.2" r="1.1"/><circle cx="14" cy="1.2" r="1.1"/><circle cx="2" cy="4.8" r="1.1"/><circle cx="8" cy="4.8" r="1.1"/><circle cx="14" cy="4.8" r="1.1"/></g></svg></span></span>${stack ? '' : '<span class="m5next">next</span>'}`;
+    if ($(k + '-sent')) $(k + '-sent').value = SEL.sent;
+    const st = me.st = stack ? stack() : null;   // null: an ordinary track this time
+    track.innerHTML = seqSel().map((t, i) => st && i > SEL.pos ? (i === SEL.pos + 1 ? st : `<span class="chip ph" data-i="${i}">&nbsp;&nbsp;&nbsp;</span>`) : `<span class="chip" data-i="${i}">${tstr(t)}</span>`).join('')
+      + `<span class="m3band"><span class="m3lbl">context</span><span class="m3grip" aria-hidden="true"><svg viewBox="0 0 16 6" width="16" height="6"><g fill="currentColor"><circle cx="2" cy="1.2" r="1.1"/><circle cx="8" cy="1.2" r="1.1"/><circle cx="14" cy="1.2" r="1.1"/><circle cx="2" cy="4.8" r="1.1"/><circle cx="8" cy="4.8" r="1.1"/><circle cx="14" cy="4.8" r="1.1"/></g></svg></span></span>${st ? '' : '<span class="m5next">next</span>'}`;
     me.place();
   };
   me.place = () => {
     const chips = [...track.querySelectorAll('[data-i]')]; if (!chips.length) return;
     const band = track.querySelector('.m3band'), lo = chips[0], hi = chips[SEL.pos], nx = chips[SEL.pos + 1];
     band.style.left = (lo.offsetLeft - 5) + 'px'; band.style.width = (hi.offsetLeft + hi.offsetWidth - lo.offsetLeft + 10) + 'px';
+    const stack = me.st;
     if (stack) { band.style.top = (hi.offsetTop - 8) + 'px'; band.style.height = (hi.offsetHeight + 16) + 'px'; band.style.bottom = 'auto'; }
-    else track.querySelector('.m5next').style.left = (nx.offsetLeft + nx.offsetWidth / 2) + 'px';
+    else { band.style.top = band.style.height = band.style.bottom = ''; track.querySelector('.m5next').style.left = (nx.offsetLeft + nx.offsetWidth / 2) + 'px'; }
     chips.forEach((ch, i) => { if (!ch.classList.contains('m6x')) ch.className = 'chip ' + (i <= SEL.pos ? 'v' : stack ? 'ph' : i === SEL.pos + 1 ? 'tg' : ''); });
     const sc = track.parentElement, R = nx.offsetLeft + nx.offsetWidth + 8;
     if (R > sc.scrollLeft + sc.clientWidth) sc.scrollLeft = R - sc.clientWidth;
@@ -681,14 +689,14 @@ function ContextTrack(k, stack = null) {
   track.addEventListener('pointerup', end); track.addEventListener('pointercancel', end);
   return me;
 }
-const TRACK5 = ContextTrack('m5'), TRACK6 = ContextTrack('m6', () => stack6()), TRACKM = ContextTrack('mix');
+const TRACK5 = ContextTrack('m5'), TRACK6 = ContextTrack('m6', () => stack6()), TRACKSB = ContextTrack('sb', () => S6.sbStack ? stack6() : null);   // the header swaps in 7's stack once you're past it
 function render5() {
   const s = seqSel(), n = s.length - 1;
   TRACK5.render();
   $('m5-preds').innerHTML = Array.from({ length: n }, (_, p) => `<span class="pairchip m5p${p === SEL.pos ? ' on' : ''}" data-p="${p}">${p > 0 ? '<span class="m5more">…</span>' : ''}${wchip(s[p], 'v')}<span class="m5ar">→</span>${wchip(s[p + 1], 'tg')}</span>`).join('');
 }
 $('m5-preds').addEventListener('click', e => { const el = e.target.closest('[data-p]'); if (el) selectPred(SEL.sent, +el.dataset.p); });
-addEventListener('resize', () => { TRACK5.place(); TRACK6.place(); TRACKM.place(); render10(); render11g(); });
+addEventListener('resize', () => { TRACK5.place(); TRACK6.place(); TRACKSB.place(); render10(); render11g(); });
 
 // ---------- 6 mixing in the context ----------
 // The toy's one layer, for the selected prediction: how much the vector at that position draws on
@@ -702,7 +710,7 @@ const EQM = VecEq($('mix-eq'), () => {
 }, 3);
 function renderMix() {
   const u = upd(), w = u.f.a[SEL.pos], s = seqSel(), mx = Math.max(...w);
-  TRACKM.render(); syncPass();
+  syncPass();
   $('mix-wh').innerHTML = `How much the vector at ${wchip(inTok(), 'v')} draws on each token`;
   $('mix-w').innerHTML = w.map((x, i) => `<span class="mixc"><span class="mixbar"><i style="height:${(100 * x / Math.max(mx, 1e-9)).toFixed(1)}%"></i></span><span class="mixp">${Math.round(100 * x)}%</span>${wchip(s[i], i === SEL.pos ? 'v' : '')}</span>`).join('');
   const even = 1 / w.length, spread = Math.max(...w.map(x => Math.abs(x - even)));
@@ -714,7 +722,6 @@ function renderMix() {
 }
 
 // ---------- 6 score every token ----------
-const ctxChips = () => { const s = seqSel(), from = Math.max(0, SEL.pos - 4); return `<span class="lab">prediction</span> ${from > 0 ? '<span class="m5more">…</span>' : ''}${s.slice(from, SEL.pos + 1).map(t => wchip(t, 'v')).join('')} <span class="m5ar">→</span> ${wchip(tgTok(), 'tg')}`; };
 const H_SYM = '<i class="ch-h">h</i>';
 // h belongs to one position: name it by that position's token as well as its number
 // on two lines: "h at", then the token as a chip with its position
@@ -724,7 +731,8 @@ const hChip = () => `<span class="hlab"><span>h at</span><span>${wchip(inTok(), 
 // IDs instead). Scrolling the stack picks which candidate is scored against h below.
 const S6 = { cand: null };
 const ORDER6 = V.ids.map((_, i) => i).sort((a, b) => V.ids[a] - V.ids[b]);
-const ROWH = 32, PAD6 = 2;   // the stack shows 2 × 2 + 1 candidates, the picked one in line with the sentence
+const ROWH = 32, PAD6 = 2;   // 7's stack shows 2 × 2 + 1 candidates, the picked one in line with the sentence
+const rowH = vp => +vp.dataset.rh || ROWH;   // the header's squashed copy has shorter rows (set in CSS and here)
 function stack6() {
   if (S6.cand == null) S6.cand = ORDER6[0];
   return `<span class="m6x" data-i="${SEL.pos + 1}"><span class="m6vp" tabindex="0" aria-label="candidates for the next token; scroll to pick one">${ORDER6.map(i =>
@@ -737,12 +745,8 @@ const EQ6 = DotEq($('m6-eq'), () => {
 }, 3, 4);
 function render6() {
   const u = upd(), p = u.f.p[SEL.pos], tg = tgTok();
-  TRACK6.render(); $('m7-ctx').innerHTML = ctxChips(); syncPass();
-  const vp = $('m6-track').querySelector('.m6vp');
-  S6.quiet = true; vp.scrollTop = ORDER6.indexOf(S6.cand) * ROWH;
-  requestAnimationFrame(() => { S6.quiet = false; scroll6({ target: vp }); });   // in case it moved meanwhile
-  vp.addEventListener('scroll', scroll6, { passive: true });
-  vp.addEventListener('keydown', e => { if (e.key !== 'ArrowDown' && e.key !== 'ArrowUp') return; e.preventDefault(); pick6(ORDER6.indexOf(S6.cand) + (e.key === 'ArrowDown' ? 1 : -1)); });
+  TRACK6.render(); syncPass();
+  bindStack($('m6-track').querySelector('.m6vp'));
   render6eq();
 }
 function render6eq() {
@@ -758,19 +762,34 @@ function render6eq() {
     <p class="note" style="margin:-4px 0 0">${lab ? `Only ${wchip(c, pc)} came next, so it is the only candidate with label 1. Every other candidate has label 0, and an error of −p.`
       : `${wchip(tg, 'tg')} came next, so it has label 1. ${wchip(c, pc)} and every other candidate have label 0, so their error is −p.`}</p>`;
 }
-// scrolling the stack: the candidate in line with the sentence is the one scored
+// The stacks (7's, and the header's once you're past 7) share one candidate, S6.cand. Scrolling
+// either picks it; it is scored in 7 and, unless it's the right answer, is 8's wrong answer.
+const stacks = () => [...document.querySelectorAll('.m6vp')];
+function bindStack(vp) {
+  if (!vp) return;
+  if (vp.closest('#statebar')) vp.dataset.rh = 22;
+  S6.quiet = true; vp.scrollTop = ORDER6.indexOf(S6.cand) * rowH(vp);
+  requestAnimationFrame(() => { S6.quiet = false; scroll6({ target: vp }); });   // in case it moved meanwhile
+  vp.addEventListener('scroll', scroll6, { passive: true });
+  vp.addEventListener('keydown', e => { if (e.key !== 'ArrowDown' && e.key !== 'ArrowUp') return; e.preventDefault(); pick6(vp, ORDER6.indexOf(S6.cand) + (e.key === 'ArrowDown' ? 1 : -1)); });
+}
 function scroll6(e) {
   if (S6.quiet || S6.raf) return;
   S6.raf = requestAnimationFrame(() => {
-    S6.raf = 0; const vp = e.target, k = Math.max(0, Math.min(ORDER6.length - 1, Math.round(vp.scrollTop / ROWH))), c = ORDER6[k];
-    if (c === S6.cand) return;
-    S6.cand = c;
-    vp.querySelectorAll('.m6c').forEach(r => { const on = +r.dataset.t === c; r.classList.toggle('sel', on); r.querySelector('.chip').classList.toggle('vo', on); });
-    render6eq();
+    S6.raf = 0; const vp = e.target, c = ORDER6[Math.max(0, Math.min(ORDER6.length - 1, Math.round(vp.scrollTop / rowH(vp))))];
+    if (c !== S6.cand) setCand(c, vp);
   });
 }
-const pick6 = k => { const vp = $('m6-track').querySelector('.m6vp'); vp.scrollTo({ top: Math.max(0, Math.min(ORDER6.length - 1, k)) * ROWH, behavior: 'smooth' }); };
-$('m6-track').addEventListener('click', e => { const r = e.target.closest('.m6c'); if (r) pick6(ORDER6.indexOf(+r.dataset.t)); });
+function setCand(c, from = null) {
+  S6.cand = c;
+  stacks().forEach(vp => {
+    vp.querySelectorAll('.m6c').forEach(r => { const on = +r.dataset.t === c; r.classList.toggle('sel', on); r.querySelector('.chip').classList.toggle('vo', on); });
+    if (vp !== from) { S6.quiet = true; vp.scrollTop = ORDER6.indexOf(c) * rowH(vp); requestAnimationFrame(() => { S6.quiet = false; }); }
+  });
+  render6eq(); render7();
+}
+const pick6 = (vp, k) => vp.scrollTo({ top: Math.max(0, Math.min(ORDER6.length - 1, k)) * rowH(vp), behavior: 'smooth' });
+['m6-track', 'sb-track'].forEach(id => $(id).addEventListener('click', e => { const r = e.target.closest('.m6c'); if (r) pick6(r.closest('.m6vp'), ORDER6.indexOf(+r.dataset.t)); }));
 
 // ---------- 7 one prediction's updates ----------
 // the parts of one prediction: its right answer's row pulled toward h, a wrong answer's pushed
@@ -798,13 +817,13 @@ const EQ7I = VecEq($('m7-in'), () => {
 }, 4);
 function render7() {
   const u = upd(), p = u.f.p[SEL.pos], tg = tgTok(), wrongs = V.ids.map((_, i) => i).filter(i => i !== tg).sort((a, b) => p[b] - p[a]);
-  const key = u.key + ':' + SEL.pos;   // a new prediction or stage starts from its most likely wrong answer
-  if (S7.key !== key || S7.wrong === tg) { S7.key = key; S7.wrong = wrongs[0]; }
+  // the wrong answer is the candidate picked in 7's stack (or the header's), unless that is the right answer
+  if (S6.cand !== tg) S7.wrong = S6.cand; else if (S7.wrong == null || S7.wrong === tg) S7.wrong = wrongs[0];
   $('m7-g').innerHTML = gchain(tg, 'tg'); $('m7-gw').innerHTML = gchain(S7.wrong, 'neg');
   EQ7U.refresh(); EQ7D.refresh(); EQ7I.refresh();
   $('m7-wrong').innerHTML = wrongs.map(i => `<option value="${i}">${esc(optLabel(i))} (${(100 * p[i]).toFixed(1)}%)</option>`).join(''); $('m7-wrong').value = S7.wrong;
 }
-$('m7-wrong').addEventListener('change', e => { S7.wrong = +e.target.value; render7(); });
+$('m7-wrong').addEventListener('change', e => setCand(+e.target.value));
 
 // ---------- 8 adding up one sentence's update for one row ----------
 const S8 = { row: null };
@@ -834,7 +853,7 @@ function parts8() {
 function delta8() { const u = upd(), D0 = LAYOUT.E[0] + S8.row * D; return Array.from({ length: D }, (_, d) => -u.alpha * u.full.g[D0 + d]); }
 function render8() {
   const u = upd(); if (S8.row == null) S8.row = tgTok(); syncPass();
-  $('m8-sent').innerHTML = `<span class="lab">sentence</span> ${seqSel().map(t => wchip(t)).join('')}`;
+  $('m8-sent').innerHTML = `<span class="lab">its predictions</span> ${seqSel().map(t => wchip(t)).join('')}`;
   $('m8-row').innerHTML = V.ids.map((_, i) => `<option value="${i}">${esc(optLabel(i))}</option>`).join(''); $('m8-row').value = S8.row;
   EQ8S.refresh(); EQ8A.refresh();
   // every row's step, largest first: colored by its role in this sentence

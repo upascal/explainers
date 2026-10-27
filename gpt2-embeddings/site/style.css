@@ -797,3 +797,28 @@ table.m6real tr.on td.bar i { background: var(--blue); }
 .stepctl, .passctl { display: inline-flex; align-items: center; gap: 10px; flex-wrap: wrap; font-size: 0.9rem; color: var(--ink-2); min-width: 0; }
 .stepctl input, .passctl input { width: 200px; max-width: 46vw; }
 .stepctl .note, .passctl .note { font-variant-numeric: tabular-nums; white-space: nowrap; }
+/* the header: the selected prediction's controls */
+#statebar .in { gap: 4px; }
+#statebar .sb-set { gap: 6px 16px; }
+#statebar .sb-lab { font-size: 0.8rem; font-variant-caps: all-small-caps; letter-spacing: 0.06em; color: var(--muted); text-decoration: none; }
+#statebar .sb-pick select { height: 28px; font-size: 0.8rem; max-width: 260px; }
+#statebar .passctl { font-size: 0.8rem; gap: 8px; }
+#statebar .passctl input { width: 140px; }
+#statebar .passctl .note { font-size: 0.74rem; }
+#statebar .sb-scroll { margin: 0; }
+#statebar .m3track { padding: 7px 6px 12px; gap: 4px; }
+#statebar .m3track .chip { font-size: 0.76rem; padding: 2px 6px; }
+#statebar .m3band { top: 3px; bottom: 6px; border-width: 1.5px; border-radius: 8px; }
+#statebar .m3lbl, #statebar .m5next { display: none; }
+#statebar .m3grip { width: 26px; height: 11px; }
+@media (max-width: 600px) { #statebar .sb-lab, #statebar .passctl .note { display: none; } #statebar .passctl input { width: 110px; } }
+/* the header's copy of 7's stack, squashed: the picked candidate, with a faint one above and below */
+#statebar .m6x { width: 84px; }
+#statebar .m6vp { height: 66px; padding: 22px 0;
+  -webkit-mask-image: linear-gradient(transparent, rgba(0,0,0,0.35) 25%, #000 40%, #000 60%, rgba(0,0,0,0.35) 75%, transparent);
+  mask-image: linear-gradient(transparent, rgba(0,0,0,0.35) 25%, #000 40%, #000 60%, rgba(0,0,0,0.35) 75%, transparent); }
+#statebar .m6c { height: 22px; }
+#statebar .m6slot { top: 22px; height: 22px; border-width: 1.5px; border-radius: 6px; }
+#statebar .m6c .chip { font-size: 0.72rem; padding: 0 6px; min-width: 56px; line-height: 18px; }
+#statebar .m6road .m3track, #statebar .m3track { padding-top: 4px; padding-bottom: 10px; }
+#statebar .m3track { align-items: center; }
