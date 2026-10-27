@@ -6,6 +6,9 @@
     <span class="m3step"><span class="lab">Window size</span><button id="m3-minus" aria-label="smaller window">−</button><b id="m3-bv" aria-live="polite">2</b><button id="m3-plus" aria-label="larger window">+</button></span>
   </div>
   <div class="m3scroll"><div class="m3track" id="m3-track"></div></div>
-  <h4>Training pairs from this window</h4>
+  <h4>Positive pairs: words inside the window</h4>
   <div class="pairs" id="m3-pairs"></div>
+  <h4 style="margin-top:16px">Negative pairs: random words from outside the window</h4>
+  <div class="pairs" id="m3-fakes"></div>
+  <p class="note" style="margin:8px 0 0">Positive pairs come from the text; negative pairs are made up. Training adjusts the word vectors so that positive pairs get a high score and negative pairs a low one. Click any pair to select it: sections 4 and 5 score it. Section 7 explains how the negative words are drawn.</p>
 </div>

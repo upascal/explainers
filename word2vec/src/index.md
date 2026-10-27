@@ -2,7 +2,7 @@
 
 <p class="lede">In 2013 a team at Google released <a href="https://code.google.com/archive/p/word2vec/">word2vec</a>, a small program that reads a lot of text and gives every word a list of numbers. Words used in similar ways end up with similar lists. The idea underlies much of modern language technology, including the first layer of every large language model. This page takes the training procedure apart one step at a time.</p>
 
-<p class="note">Everything on this page is computed live in your browser. A tiny model with 5 dimensions trains on a hand-written corpus of 30 sentences, so the numbers on screen are the real numbers. Each section builds on the last, and they all share one model: the vectors created in section 2 are the ones trained in 6, 7 and 8. The bar at the top shows where training stands in section 8. Every interactive has the same controls: reset, play, step, and skip to end. The keyboard drives the one you used last: → steps, space plays or pauses, shift + → skips to the end, and shift + ← resets.</p>
+<p class="note">Everything on this page is computed live in your browser. A tiny model with 5 dimensions trains on a hand-written corpus of 30 sentences, so the numbers on screen are the real numbers. Each section builds on the last, and they all share one model: the vectors created in section 2 are the ones trained in 6, 7 and 8. The bar at the top shows the pair you have selected: click one in section 3, or pick any two words in section 4. Every interactive has the same controls: reset, play, step, and skip to end. The keyboard drives the one you used last: → steps, space plays or pauses, shift + → skips to the end, and shift + ← resets.</p>
 
 <!-- toc -->
 
@@ -40,7 +40,7 @@ Training begins with bookkeeping. The program splits the corpus into words, coun
 
 <!-- module: m2 -->
 
-Then every word gets **two** vectors, each a row of numbers, one per dimension. This page uses 5 dimensions, so each vector holds 5 numbers. The original paper used 300.
+Then every word gets **two** vectors, each a list of numbers, one per dimension. This page uses 5 dimensions, so each vector holds 5 numbers. The original paper used 300.
 
 The two vectors are:
 
@@ -79,17 +79,23 @@ For each pair, the model needs a score: a single number saying how strongly it b
 
 When the two vectors point the same way, most of the products are positive and the score is large. When they point in opposite directions, the score is negative. When they are unrelated, the positive and negative products cancel out and the score is near zero. At the start of training every output vector is zero, so every score is exactly zero.
 
-After training, try “coffee” with “cup”, then with “fur”. The real neighbour scores far higher. In this small corpus almost every score ends up below zero, because each word is also drawn as a fake “noise” word thousands of times (section 7), which pushes scores down. What matters is the ranking: words that really appear together score higher than words that don’t.
+At the end of training, try “coffee” with “cup”, then with “fur”: the positive pair scores far higher. Both scores are below zero, though; section 5 explains why.
 
 ## 5 The sigmoid
 
 A score can be any number. To read it as a probability, word2vec passes it through the *sigmoid* function, σ(*x*) = 1 / (1 + e<sup>−*x*</sup>). It is a smooth step. Large negative scores go to almost 0, large positive scores go to almost 1, and a score of 0 goes to exactly 0.5.
 
-The result is the model’s probability that this pair really appeared together in the text. For a real pair, the right answer is 1, so the **error** is 1 − σ(score).
+The result is the model’s probability that this pair really appeared together in the text. For a positive pair, one that really comes from the text, the right answer is 1, so the **error** is 1 − σ(score). For a negative pair (section 7) the right answer is 0.
 
 <!-- module: m5 -->
 
 At the start of training every score is 0, so σ is 0.5 and the first error is exactly 0.5: the model is a coin toss.
+
+<div class="callout reveal">
+  <div class="t">Why is the error still large after training?</div>
+  <button class="reveal-btn" aria-expanded="false">Reveal answer</button>
+  <div class="reveal-body" hidden>Take “coffee” and “cup”. Over the whole run the pair is trained 176 times as a positive pair, with the right answer 1. But “cup” is a common word, so it is also drawn as a negative word for “coffee” 384 times, with the right answer 0. The model cannot tell these apart: it is the same two vectors, told “together” 176 times and “not together” 384 times. The best it can do is a score in between, below 0, so the error stays large. Every word is drawn as a negative word like this, which pulls all the scores down. What training still achieves is the difference: positive pairs score far higher than negative ones. In the real program, with 300 dimensions and billions of words of text, strong pairs end up well above 0.</div>
+</div>
 
 <div class="callout">
   <div class="t">Why not ask about every word at once?</div>
@@ -98,28 +104,30 @@ At the start of training every score is 0, so σ is 0.5 and the first error is e
 
 ## 6 One positive update
 
-Now the model learns from its error. The update has a single scaling factor:
+Now the model learns from its error. Each pair gets one *scaling factor*: the error from section 5, times the learning rate.
 
-<p class="formula"><i>g</i> = (label − σ) × α</p>
+<div class="formula fxblock"><span class="fx"><span class="w"><span class="t tg">scaling factor</span><span class="g"><span class="o">=</span><span class="t terr">error</span></span><span class="g"><span class="o">×</span><span class="t">learning rate</span></span></span><span class="s"><span class="sg"><i>g</i></span> = <span class="serr">(label − σ)</span> × α</span></span><span class="fxsw seg" role="group" aria-label="show formulas as"><button data-fx="w">words</button><button data-fx="s">symbols</button></span></div>
 
-The label is 1 for a real pair. α is the *learning rate*, which sets the size of each step. It starts at 0.025 and shrinks linearly to almost zero over the course of training, so early steps are large and late steps are fine adjustments.
+The error is the right answer minus the guess: label − σ, where the label is 1 for a positive pair. The *learning rate* α sets the overall step size. It starts at 0.025 and shrinks linearly to almost zero over the course of training, so early steps are large and late steps are fine adjustments. The scaling factor combines the two: big when the model was very wrong early on, tiny when it was nearly right.
 
-Both vectors then move:
+The *update* then moves each vector by the scaling factor times the other vector:
 
-- The output vector moves toward the input vector: ***v*′ ← *v*′ + *g* · *v***. This is applied right away.
-- The input vector should move toward the output vector by *g* · *v*′, using *v*′ as it was before the update. But this change is **not applied yet**. It goes into a pending row, for reasons that section 7 makes clear.
+<div class="formula fxblock"><span class="fx"><span class="w"><span class="t tvo">new output vector</span><span class="g"><span class="o">=</span><span class="t tvo">output vector</span></span><span class="g"><span class="o">+</span><span class="t tg">scaling factor</span></span><span class="g"><span class="o">×</span><span class="t tv">input vector</span></span></span><span class="s"><span class="svo"><i>v</i>′</span> ← <span class="svo"><i>v</i>′</span> + <span class="sg"><i>g</i></span> · <span class="sv"><i>v</i></span></span></span><span class="fxsw seg" role="group" aria-label="show formulas as"><button data-fx="w">words</button><button data-fx="s">symbols</button></span></div>
+
+- The output vector *v*′ of the context word moves toward the center word’s input vector. This is applied right away.
+- The input vector *v* should also move toward the output vector, by <span class="fx"><span class="w"><span class="t tg">scaling factor</span><span class="g"><span class="o">×</span><span class="t tvo">output vector</span></span></span><span class="s"><span class="sg"><i>g</i></span> · <span class="svo"><i>v</i>′</span></span></span>, using *v*′ as it was before the update. But this change is **not applied yet**. It goes into a pending row, for reasons that section 7 makes clear.
 
 <!-- module: m6 -->
 
-Pick any real pair from the corpus, and a moment in training: the numbers are the model’s actual state just before that pair. Early on, a context word’s *v*′ may still be all zeros, so the pending change to *v* is zero too and only *v*′ moves. Later the vectors are larger, the error is smaller and α has shrunk, so the steps are finer.
+Pick any positive pair from the corpus, and a moment in training: the numbers are the model’s actual state just before that pair. Early on, a context word’s *v*′ may still be all zeros, so the pending change to *v* is zero too and only *v*′ moves. Later the vectors are larger, the error is smaller and α has shrunk, so the steps are finer.
 
 ## 7 Negative samples
 
 A positive update alone would be useless. The easiest way to score every pair high is to make every vector point the same way, and then the vectors carry no information. The model also needs examples of words that do *not* belong together.
 
-Negative sampling makes them up. For each real pair, word2vec draws *k* = 5 “noise” words at random and treats each as a fake pair with the center word. A word’s chance of being drawn is its frequency raised to the power 0.75. This flattens the distribution: common words are still drawn most often, but rare words get more of a chance than their raw frequency would give them. If a draw happens to be the real context word, it is skipped.
+Negative sampling makes them up. For each real pair, word2vec draws *k* = 5 “noise” words at random and treats each as a *negative pair* with the center word. A word’s chance of being drawn is its frequency raised to the power 0.75. This flattens the distribution: common words are still drawn most often, but rare words get more of a chance than their raw frequency would give them. If a draw happens to be the real context word, it is skipped.
 
-For a fake pair the label is 0, so *g* = (0 − σ) × α is negative, and the same update rule pushes the two vectors apart. Each noise word’s output vector moves at once, and each adds its share to the center word’s pending row. Only after the real pair and all the noise words is **the accumulated pending change applied to the input vector, once**. Every target in a pair is scored against the same, unchanged *v*.
+For a negative pair the label is 0, so *g* = (0 − σ) × α is negative, and the same update rule pushes the two vectors apart. Each noise word’s output vector moves at once, and each adds its share to the center word’s pending row. Only after the real pair and all the noise words is **the accumulated pending change applied to the input vector, once**. Every target in a pair is scored against the same, unchanged *v*.
 
 <!-- module: m7 -->
 

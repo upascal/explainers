@@ -24,7 +24,7 @@ const I_END = '<svg viewBox="0 0 20 16" width="13" height="10" aria-hidden="true
 const G = {
   seed: 1,                 // initialisation seed (re-rolled in 2)
   streamSeed: 2013,        // seed for window shrink, subsampling and negative draws
-  stream: null, init: null, model: null, final: null,
+  stream: null, init: null, model: null, mid: null, final: null,
   step: 0,                 // pairs trained so far on the timeline
   ck: [], lossSum: null, lossN: null, bucket: 1,
   pca: null, rad: null,
@@ -43,6 +43,7 @@ function resetTraining() {
   const m = cloneModel(G.init); G.ck = [];
   for (let i = 0; i < G.stream.total; i++) {
     if (i % CK === 0) G.ck.push(flat(m));
+    if (i === Math.floor(G.stream.total / 2)) G.mid = cloneModel(m);
     const p = G.stream.get(i), l = trainPair(m, p, alphaAt(p.wordsDone));
     const b = Math.floor(i / G.bucket); G.lossSum[b] += l; G.lossN[b]++;
   }
@@ -64,7 +65,7 @@ const timelinePair = () => G.stream.get(Math.min(G.step, G.stream.total - 1));
 // ---------- one pair, stepped through (6–7) ----------
 // The reader picks a real pair (center, context) and a moment in training; P6 holds that
 // pair from the stream, the model as it stood just before it, and how far the update has got.
-const P6 = { center: 'coffee', ctx: 'cup', moment: 'early', idx: 0, pair: null, PL: null, phase: 0, R: null, snap: null };
+const P6 = { center: 'coffee', ctx: 'cup', moment: 'early', idx: 0, pair: null, PL: null, phase: 0, R: null, snap: null, stand: null };
 const MOMENTS = { early: 0, middle: 0.5, late: 0.9 };
 
 // The phases of one pair update. 0–5 belong to 6 (the positive), the rest to 7.
@@ -175,6 +176,8 @@ document.addEventListener('keydown', e => {
 });
 
 // ---------- small render helpers ----------
+// the two vector symbols, in their colors: violet v (input), green v′ (output)
+const SV = '<span class="cv">v</span>', SVO = '<span class="cvo">v′</span>', SG = '<span class="cg">g</span>';   // and g, the scaling factor, in blue
 const wchip = (w, cls = '') => `<span class="chip ${cls}" data-w="${esc(w)}">${esc(w)}</span>`;
 function vecCells(a, cls = '', n = 3) { return a.map((x, d) => `<td class="n ${cls}" style="--d:${d}">${num(x, n)}</td>`).join(''); }
 const blankCells = () => Array.from({ length: D }, () => '<td class="n dim">·</td>').join('');
@@ -242,18 +245,12 @@ function pairPlane(a, b, o = {}) {
 
 // ---------- sticky status bar ----------
 function renderStatebar() {
-  // where section 8's training timeline is
-  const p = timelinePair(), sb = $('statebar-in'), s = V.sents[p.sent];
-  const sent = s.map((w, i) => wchip(W[w], i === p.pos ? 'v' : i === p.ctxPos ? 'vo' : '')).join('');
-  sb.innerHTML = `
-    <div class="sb-set"><span class="sb-vals">
-      <a href="#s8" title="training timeline — scrub it in 8">pair <b>${commas(Math.min(G.step + 1, G.stream.total))}</b> / ${commas(G.stream.total)}</a>
-      <span>pass <b>${p.epoch + 1}</b> / ${CFG.EPOCHS}</span>
-      <a href="#s6" title="learning rate α — decays linearly over training (6)">α <b>${alphaAt(p.wordsDone).toFixed(4)}</b></a>
-      <a href="#s2" title="initialisation seed — re-roll it in 2">seed <b>${G.seed}</b></a>
-    </span></div>
-    <span class="sb-hr"></span>
-    <div class="sb-row"><span class="sb-pair">center ${wchip(W[p.center], 'v')} context ${wchip(W[p.ctx], 'vo')}</span><span class="sb-sent">${sent}</span></div>`;
+  // the pair selected in 3, 4 or 5, and where it stands
+  const real = isReal(S4.center, S4.ctx), x = dot(S4.v, S4.u);
+  $('statebar-in').innerHTML = `<div class="sb-set">
+    <span class="sb-pair"><a href="#s3">selected pair</a> ${wchip(S4.center, 'v')} ${wchip(S4.ctx, real ? 'vo' : 'neg')} <span class="badge ${real ? 'pos' : 'neg'}">${real ? 'positive' : 'negative'}</span></span>
+    <span class="sb-vals"><a href="#s4">training <b>${{ start: 'start', middle: 'middle', trained: 'end' }[S4.stage]}</b></a><a href="#s5">score <b>${num(x, 2)}</b></a><a href="#s2" title="initialisation seed — re-roll it in section 2">seed <b>${G.seed}</b></a></span>
+  </div>`;
 }
 
 // ---------- 1 the problem ----------
@@ -357,33 +354,47 @@ function selWord2(w) { if (w && V.index.has(w)) { S2.sel = w; render2(); } }
 ['m2-corpus', 'm2-vocab'].forEach(id => $(id).addEventListener('click', e => { const el = e.target.closest('[data-w]'); if (el) selWord2(el.dataset.w); }));
 $('reroll').addEventListener('click', () => { stopAll(); G.seed = 1 + Math.floor(Math.random() * 9999); resetTraining(); loadPair6(); restart4(); renderAll(); });
 
-// ---------- 2 an example input vector, before and after training ----------
-// "trained" runs the whole stream on a private copy (what 8 does), so this works whatever
-// state the shared model is in.
-const S2V = { word: 'coffee', trained: false, cache: null };
-function trainedWin() {
-  if (S2V.cache && S2V.cache.seed === G.seed) return S2V.cache.Win;
-  const m = cloneModel(G.init);
-  for (let i = 0; i < G.stream.total; i++) { const p = G.stream.get(i); trainPair(m, p, alphaAt(p.wordsDone)); }
-  S2V.cache = { seed: G.seed, Win: m.Win };
-  return m.Win;
+// ---------- 2 an example input vector, at the beginning, middle and end of training ----------
+// Four fixed words, plus a fifth slot: a random word at first, then the selected pair's center
+// word whenever that is not one of the four.
+const FIXED2V = ['coffee', 'tea', 'dog', 'cat'];
+const S2V = { word: 'coffee', stage: 'start', extra: (o => o[Math.floor(Math.random() * o.length)])(W.filter(w => !FIXED2V.includes(w))) };
+function follow2v() {                      // called when the selected pair changes
+  if (FIXED2V.includes(S4.center) || S4.center === S2V.extra) return;
+  const viewing = S2V.word === S2V.extra;
+  S2V.extra = S4.center; if (viewing) S2V.word = S2V.extra;
+  render2v();
 }
 function render2v() {
-  const i = V.index.get(S2V.word), T = trainedWin(), v = (S2V.trained ? T : G.init.Win)[i];
-  const top = Math.max(...T.flat().map(Math.abs));          // one scale for both views
-  const cell = (x, d) => `<span class="m2v-cell"><span class="v" style="background:${x >= 0 ? 'rgba(42,120,214,' : 'rgba(235,104,52,'}${(0.08 + 0.42 * Math.abs(x) / top).toFixed(3)})">${num(x, 2)}</span><span class="d">d${d + 1}</span></span>`;
+  const M = { start: G.init, middle: G.mid, end: G.final }[S2V.stage], v = M.Win[V.index.get(S2V.word)];
+  const top = Math.max(...G.final.Win.flat().map(Math.abs));          // one scale for all three stages
+  // a column vector, as in section 4's table: one dimension per line, label on the right
+  const cell = (x, d) => `<span class="m2v-cell"><span class="d">d${d + 1}</span><span class="v" style="background:${x >= 0 ? 'rgba(42,120,214,' : 'rgba(235,104,52,'}${(0.08 + 0.42 * Math.abs(x) / top).toFixed(3)})">${num(x, 2)}</span></span>`;
   $('m2v-vec').innerHTML = `<div class="m2v-row">
     <span class="m2v-word">${esc(S2V.word)}<span class="sub">input vector</span></span>
     <span class="m2v-arrow" aria-hidden="true">→</span>
     <span class="m2v-br">${v.map(cell).join('')}</span></div>`;
-  $('m2v-note').textContent = S2V.trained
-    ? 'Training nudges the numbers up and down to bring similar words closer together. Notice how the numbers for “coffee” are more similar to “tea” than to “dog”.'
-    : `Five random numbers between −0.1 and 0.1. Nothing about “${S2V.word}” is in them yet.`;
+  $('m2v-note').textContent = {
+    start: `Five random numbers between −0.1 and 0.1. Nothing about “${S2V.word}” is in them yet.`,
+    middle: 'Halfway through training the numbers have already grown and moved. Switch between the words to compare.',
+    end: 'Training nudges the numbers up and down to bring similar words closer together. Notice how the numbers for “coffee” are more similar to “tea” than to “dog”.',
+  }[S2V.stage];
+  const ex = $('m2v-extra'); ex.dataset.v = S2V.extra; ex.textContent = S2V.extra;
   document.querySelectorAll('#m2v-word button').forEach(b => b.classList.toggle('on', b.dataset.v === S2V.word));
-  document.querySelectorAll('#m2v-state button').forEach(b => b.classList.toggle('on', (b.dataset.v === 'trained') === S2V.trained));
+  document.querySelectorAll('#m2v-state button').forEach(b => b.classList.toggle('on', b.dataset.v === S2V.stage));
 }
 $('m2v-word').addEventListener('click', e => { const b = e.target.closest('button'); if (b) { S2V.word = b.dataset.v; render2v(); } });
-$('m2v-state').addEventListener('click', e => { const b = e.target.closest('button'); if (b) { S2V.trained = b.dataset.v === 'trained'; render2v(); } });
+$('m2v-state').addEventListener('click', e => { const b = e.target.closest('button'); if (b) { S2V.stage = b.dataset.v; render2v(); } });
+
+// ---------- formulas: in words or in symbols ----------
+// One switch for the whole page; the choice is remembered in this browser when it can be.
+function setFx(m) {
+  document.body.classList.toggle('fx-sym', m === 's');
+  document.querySelectorAll('.fxsw button').forEach(b => b.classList.toggle('on', b.dataset.fx === m));
+  try { localStorage.setItem('w2v-fx', m); } catch (e) {}
+}
+document.querySelectorAll('.fxsw').forEach(sw => sw.addEventListener('click', e => { const b = e.target.closest('button'); if (b) setFx(b.dataset.fx); }));
+setFx((() => { try { return localStorage.getItem('w2v-fx') || 'w'; } catch (e) { return 'w'; } })());
 
 // ---------- callouts with a hidden answer ----------
 document.querySelectorAll('.reveal-btn').forEach(b => b.addEventListener('click', () => {
@@ -394,7 +405,44 @@ document.querySelectorAll('.reveal-btn').forEach(b => b.addEventListener('click'
 // ---------- 3 the window ----------
 // A sandbox, separate from training: pick a sentence, drag the window, see the pairs it makes.
 // (Training shrinks the window at random and drops frequent words; the text explains that.)
-const S3 = { sent: 0, pos: 2, b: 2, shown: new Set() };
+const S3 = { sent: 0, pos: 3, b: 2, shown: new Set() };
+
+// ---------- the selected pair ----------
+// One (center, context) pair is selected for the whole page: clicked in 3, or picked in 4 or 5.
+// It is real if the two words ever sit within a full window (±5) of each other in the corpus.
+const REAL = new Set();
+V.sents.forEach(s => s.forEach((c, i) => s.forEach((x, j) => { if (i !== j && Math.abs(i - j) <= CFG.WINDOW) REAL.add(c + ',' + x); })));
+const isReal = (c, x) => REAL.has(V.index.get(c) + ',' + V.index.get(x));
+function selectPair(c, x, from) {
+  S4.center = c; S4.ctx = x;
+  if (from !== '3') sync3(); else pairs3();
+  load4(); render4(); render5(); renderStatebar(); follow2v(); sync6(); refreshBars();
+}
+// 6–7 step through the selected pair; a negative pair never gets a positive update, so then
+// they show the center word with its most common real neighbour instead (and say so)
+function sync6() {
+  const ok = contexts6(S4.center).includes(S4.ctx);
+  P6.center = S4.center; P6.ctx = ok ? S4.ctx : contexts6(S4.center, true); P6.stand = ok ? null : S4.ctx;
+  stopAll(); loadPair6(); render6(); render7();
+}
+// show the selected pair in 3: a real pair at a place where it falls inside the window
+// (widening the window only if it must), a fake one with its center word at the center
+function sync3() {
+  const c = V.index.get(S4.center), x = V.index.get(S4.ctx), cur = V.sents[S3.sent];
+  if (cur[S3.pos] === c && (isReal(S4.center, S4.ctx) ? cur.some((w, j) => w === x && j !== S3.pos && Math.abs(j - S3.pos) <= S3.b) : true)) { render3(); return; }
+  let best = null;
+  V.sents.forEach((s, k) => s.forEach((w, i) => { if (w !== c) return; s.forEach((y, j) => { if (y === x && j !== i) { const d = Math.abs(i - j); if (!best || d < best.d) best = { k, i, d }; } }); }));
+  if (best && best.d <= CFG.WINDOW) { S3.sent = best.k; S3.pos = best.i; S3.b = Math.max(S3.b, best.d); }
+  else { const k = V.sents.findIndex(s => s.includes(c)); S3.sent = k; S3.pos = V.sents[k].indexOf(c); }
+  render3();
+}
+// after the window moves in 3, keep the selected context if it is still inside, else take the nearest word
+function follow3() {
+  const s = V.sents[S3.sent], c = S3.pos, ks = s.map((w, k) => k).filter(k => k !== c && Math.abs(k - c) <= S3.b);
+  const keep = W[s[c]] === S4.center && ks.some(k => W[s[k]] === S4.ctx);
+  const k = keep ? null : ks.sort((a, b) => Math.abs(a - c) - Math.abs(b - c) || b - a)[0];
+  selectPair(W[s[c]], keep ? S4.ctx : W[s[k]], '3');
+}
 function render3() {
   const s = V.sents[S3.sent], c = S3.pos, b = S3.b;
   $('m3-track').innerHTML = s.map((w, i) => `<span class="chip ${i === c ? 'v' : Math.abs(i - c) <= b ? 'vo' : ''}" data-i="${i}">${W[w]}</span>`).join('')
@@ -418,7 +466,7 @@ function place3() {
 }
 function setCenter3(i) {
   if (i === S3.pos) return;
-  S3.pos = i; place3(); pairs3();
+  S3.pos = i; place3(); follow3();
 }
 // list the window's pairs; the context chip of any pair not shown a moment ago bubbles in
 function pairs3() {
@@ -427,17 +475,34 @@ function pairs3() {
   let n = 0;
   $('m3-pairs').innerHTML = ks.map(k => {
     // a new pair first opens up its space, then its context word pops in
-    if (S3.shown.has(key(k))) return `<span class="pairchip">${wchip(W[s[c]], 'v')}${wchip(W[s[k]], 'vo')}</span>`;
+    const on = W[s[c]] === S4.center && W[s[k]] === S4.ctx ? ' on' : '', data = `data-c="${W[s[c]]}" data-x="${W[s[k]]}"`;
+    if (S3.shown.has(key(k))) return `<span class="pairchip${on}" ${data}>${wchip(W[s[c]], 'v')}${wchip(W[s[k]], 'vo')}</span>`;
     const d = 90 * n++;
-    return `<span class="pairchip grow" style="animation-delay:${d}ms">${wchip(W[s[c]], 'v')}<span class="chip vo pop" style="animation-delay:${d + 160}ms">${esc(W[s[k]])}</span></span>`;
+    return `<span class="pairchip grow${on}" ${data} style="animation-delay:${d}ms">${wchip(W[s[c]], 'v')}<span class="chip vo pop" style="animation-delay:${d + 160}ms">${esc(W[s[k]])}</span></span>`;
   }).join('');
-  S3.shown = new Set(ks.map(key));
+  const shown = new Set(ks.map(key));
+  // three fake pairs: words drawn by noise frequency (as in 7) that never sit near this center
+  // word in the corpus; seeded by the center's place so the same spot shows the same ones.
+  // A selected fake pair for this center always takes the first place.
+  const cw = W[s[c]], r = rng(1000 * S3.sent + c + 7), fakes = [];
+  if (S4.center === cw && !isReal(cw, S4.ctx) && S4.ctx !== cw) fakes.push(V.index.get(S4.ctx));
+  for (let tries = 0; fakes.length < 3 && tries < 300; tries++) { const w = drawNoise(r); if (w !== s[c] && !isReal(cw, W[w]) && !fakes.includes(w)) fakes.push(w); }
+  // the same entrance as the positive pairs, following on after them
+  $('m3-fakes').innerHTML = fakes.map(w => {
+    const k = `${S3.sent}:${c}:n${w}`, on = S4.center === cw && S4.ctx === W[w] ? ' on' : '', data = `data-c="${cw}" data-x="${W[w]}"`;
+    shown.add(k);
+    if (S3.shown.has(k)) return `<span class="pairchip fake${on}" ${data}>${wchip(cw, 'v')}${wchip(W[w], 'neg')}</span>`;
+    const d = 90 * n++;
+    return `<span class="pairchip fake grow${on}" ${data} style="animation-delay:${d}ms">${wchip(cw, 'v')}<span class="chip neg pop" style="animation-delay:${d + 160}ms">${esc(W[w])}</span></span>`;
+  }).join('');
+  S3.shown = shown;
 }
-function setSent3(k) { S3.sent = k; S3.pos = Math.min(S3.pos, V.sents[S3.sent].length - 1); render3(); }
+function setSent3(k) { S3.sent = k; S3.pos = Math.min(S3.pos, V.sents[S3.sent].length - 1); render3(); follow3(); }
 $('m3-sent-pick').innerHTML = V.sents.map((s, k) => `<option value="${k}">${s.map(w => W[w]).join(' ')}</option>`).join('');
 $('m3-sent-pick').addEventListener('change', e => setSent3(+e.target.value));
-$('m3-minus').addEventListener('click', () => { S3.b = Math.max(1, S3.b - 1); render3(); });
-$('m3-plus').addEventListener('click', () => { S3.b = Math.min(CFG.WINDOW, S3.b + 1); render3(); });
+$('m3-minus').addEventListener('click', () => { S3.b = Math.max(1, S3.b - 1); render3(); follow3(); });
+$('m3-plus').addEventListener('click', () => { S3.b = Math.min(CFG.WINDOW, S3.b + 1); render3(); follow3(); });
+['m3-pairs', 'm3-fakes'].forEach(id => $(id).addEventListener('click', e => { const x = e.target.closest('[data-x]'); if (x) selectPair(x.dataset.c, x.dataset.x, '3'); }));
 window.addEventListener('resize', () => place3());
 (function drag3() {
   // press and drag moves the window; a press that doesn't move picks the word as center
@@ -461,31 +526,38 @@ window.addEventListener('resize', () => place3());
 })();
 
 // ---------- 4 the dot product ----------
-// any center word's v against any context word's v′, at the start of training or after it
-const S4 = { center: 'coffee', ctx: 'cup', stage: 'start', edited: false, v: null, u: null, ph: 0 };
+// any center word's v against any context word's v′, at the start, middle or end of training
+const S4 = { center: 'coffee', ctx: 'hot', stage: 'start', edited: false, v: null, u: null, ph: 0 };
 function load4() {
-  const M = S4.stage === 'start' ? G.init : G.final;
+  const M = { start: G.init, middle: G.mid, trained: G.final }[S4.stage];
   S4.v = M.Win[V.index.get(S4.center)].slice(); S4.u = M.Wout[V.index.get(S4.ctx)].slice(); S4.ph = 0; S4.edited = false;
-  const cs = $('m4-center'), xs = $('m4-ctx');
-  if (!cs.options.length) W.slice().sort().forEach(w => { cs.add(new Option(w, w)); xs.add(new Option(w, w)); });
-  cs.value = S4.center; xs.value = S4.ctx;
-  $('m4-stage').querySelectorAll('button').forEach(b => b.classList.toggle('on', b.dataset.v === S4.stage));
+  ['m4', 'm5'].forEach(k => {               // 5 shows the same pair, with its own copy of the controls
+    const cs = $(k + '-center'), xs = $(k + '-ctx');
+    if (!cs.options.length) W.slice().sort().forEach(w => { cs.add(new Option(w, w)); xs.add(new Option(w, w)); });
+    cs.value = S4.center; xs.value = S4.ctx;
+    $(k + '-stage').querySelectorAll('button').forEach(b => b.classList.toggle('on', b.dataset.v === S4.stage));
+  });
 }
 function restart4() { load4(); render4(); render5(); }   // after a re-roll: new initial and trained models
 function score4() { return dot(S4.v, S4.u); }
 function render4() {
   const ph = S4.ph, prod = S4.v.map((x, d) => x * S4.u[d]);
-  let run = 0; const parts = [];
-  for (let d = 0; d < Math.min(ph, D); d++) { run += prod[d]; parts.push(num(prod[d], 4)); }
-  const inp = (a, row) => a.map((x, d) => `<td class="n ${ph - 1 === d ? 'merge' : ''}"><input type="number" step="0.05" data-r="${row}" data-d="${d}" value="${+x.toFixed(4)}"></td>`).join('');
-  const prodCells = prod.map((x, d) => d < ph ? `<td class="n prod ${ph - 1 === d ? 'pop' : ''}">${num(x, 4)}</td>` : '<td class="n dim">·</td>').join('');
+  let run = 0;
+  for (let d = 0; d < Math.min(ph, D); d++) run += prod[d];
+  // transposed: one row per dimension, columns for v, v′ and their product
+  const inp = (x, row, d) => `<td class="n ${ph - 1 === d ? 'merge' : ''}"><input type="number" step="0.05" data-r="${row}" data-d="${d}" value="${+x.toFixed(4)}"></td>`;
   const done = ph > D;
-  $('m4-table').innerHTML = `<table class="data vec"><thead><tr><th></th>${dimHead()}<th class="n">sum</th></tr></thead><tbody>
-    <tr class="r-v"><th>center v ${S4.edited ? '<span class="note">(edited)</span>' : wchip(S4.center, 'v')}</th>${inp(S4.v, 'v')}<td></td></tr>
-    <tr class="r-vo"><th>context v′ ${S4.edited ? '<span class="note">(edited)</span>' : wchip(S4.ctx, 'vo')}</th>${inp(S4.u, 'u')}<td></td></tr>
-    <tr class="r-p"><th>product</th>${prodCells}<td class="n score ${done ? 'pop' : ''}">${ph ? num(run, 4) : '·'}</td></tr></tbody></table>`;
-  $('m4-sum').innerHTML = ph === 0 ? 'Press play to multiply the two rows, one dimension at a time.'
-    : `score = ${parts.join(' + ').replace(/\+ −/g, '− ')}${ph < D ? ' + …' : ''} = <b>${num(run, 4)}</b>${done ? (Math.abs(run) < 1e-12 ? ' — exactly zero, because v′ starts as all zeros' : run > 0 ? ' — positive: the vectors point the same way' : ' — negative: the vectors point apart') : ''}`;
+  const rows = prod.map((x, d) => `<tr class="${ph - 1 === d ? 'cur' : ''}"><th class="n">d${d + 1}</th>${inp(S4.v[d], 'v', d)}${inp(S4.u[d], 'u', d)}
+    ${d < ph ? `<td class="n prod ${ph - 1 === d ? 'pop' : ''}">${num(x, 4)}</td>` : '<td class="n dim">·</td>'}</tr>`).join('');
+  const tag = (k, cls) => S4.edited ? '<span class="note">(edited)</span>' : wchip(k, cls);
+  $('m4-table').innerHTML = `<table class="data vec m4t"><thead><tr><th></th>
+      <th class="c-v">center ${SV}<br>${tag(S4.center, 'v')}</th><th class="c-vo">context ${SVO}<br>${tag(S4.ctx, 'vo')}</th><th class="c-p">product</th></tr></thead>
+    <tbody>${rows}<tr class="sumrow"><th class="n">sum</th><td></td><td></td><td class="n score ${done ? 'pop' : ''}">${ph ? num(run, 4) : '·'}</td></tr></tbody></table>`;
+  // once the sum is complete, set it beside the center word's lowest score, for comparison
+  $('m4-sum').innerHTML = ph === 0 ? 'Press play to multiply the two vectors, one dimension at a time.' : done ? cmp4(run) : '';
+  // what kind of pair this is
+  const real = isReal(S4.center, S4.ctx);
+  $('m4-kind').innerHTML = S4.edited ? '' : `<span class="badge ${real ? 'pos' : 'neg'}">${real ? 'positive pair' : 'negative pair'}</span>`;
 }
 $('m4-table').addEventListener('change', e => {
   const el = e.target.closest('input'); if (!el) return;
@@ -494,21 +566,49 @@ $('m4-table').addEventListener('change', e => {
   S4.edited = true; S4.ph = D + 1;
   render4(); render5(); refreshBars();
 });
-function pick4() { stopAll(); load4(); render4(); render5(); refreshBars(); }
-$('m4-center').addEventListener('change', e => { S4.center = e.target.value; pick4(); });
-$('m4-ctx').addEventListener('change', e => { S4.ctx = e.target.value; pick4(); });
-$('m4-stage').addEventListener('click', e => { const b = e.target.closest('button'); if (b) { S4.stage = b.dataset.v; pick4(); } });
+function pick4() { stopAll(); load4(); render4(); render5(); renderStatebar(); refreshBars(); }
+['m4', 'm5'].forEach(k => {
+  $(k + '-center').addEventListener('change', e => { stopAll(); selectPair(e.target.value, S4.ctx, k); });
+  $(k + '-ctx').addEventListener('change', e => { stopAll(); selectPair(S4.center, e.target.value, k); });
+  $(k + '-stage').addEventListener('click', e => { const b = e.target.closest('button'); if (b) { S4.stage = b.dataset.v; pick4(); } });
+});
 const bar4 = PlayBar($('m4-bar'), {
   ms: 650, canStep: () => S4.ph <= D, canReset: () => S4.ph > 0,
-  step: () => { S4.ph++; render4(); render5(); }, end: () => { S4.ph = D + 1; render4(); render5(); }, reset: () => { S4.ph = 0; render4(); render5(); },
+  step: () => { S4.ph++; render4(); fly4(); render5(); }, end: () => { S4.ph = D + 1; render4(); render5(); }, reset: () => { S4.ph = 0; render4(); render5(); },
 });
 
+// beside the sum: the same center word's lowest score with any word, for comparison
+function cmp4(run) {
+  if (S4.edited) return '';
+  if (Math.abs(run) < 1e-12) return 'Sum 0: every score is 0 at the start, because v′ is all zeros.';
+  const M = { start: G.init, middle: G.mid, trained: G.final }[S4.stage], v = M.Win[V.index.get(S4.center)];
+  let lo = 0; M.Wout.forEach((u, i) => { if (dot(v, u) < dot(v, M.Wout[lo])) lo = i; });
+  const me = `<b>${wchip(S4.center, 'v')} · ${wchip(S4.ctx, isReal(S4.center, S4.ctx) ? 'vo' : 'neg')} = ${num(run, 2)}</b>`;
+  if (W[lo] === S4.ctx) return `${me}: the lowest score of any word with “${esc(S4.center)}”.`;
+  return `${me}. Compare ${wchip(S4.center, 'v')} · ${wchip(W[lo], 'neg')} = ${num(dot(v, M.Wout[lo]), 2)}, the lowest score of any word with “${esc(S4.center)}”.`;
+}
+
+// on a step, copies of the row's two numbers fly together into the product cell
+function fly4() {
+  const d = S4.ph - 1; if (d < 0 || d >= D || matchMedia('(prefers-reduced-motion: reduce)').matches) return;
+  const row = $('m4-table').querySelectorAll('tbody tr')[d], [cv, cu, cp] = [1, 2, 3].map(k => row.children[k]);
+  const to = cp.getBoundingClientRect(), tx = to.left + to.width / 2, ty = to.top + to.height / 2;
+  [[cv, 'v', S4.v[d]], [cu, 'vo', S4.u[d]]].forEach(([cell, cls, x]) => {
+    const r = cell.querySelector('input').getBoundingClientRect();
+    const g = Object.assign(document.createElement('div'), { className: 'm4fly ' + cls, textContent: num(x, 4) });
+    g.style.left = r.left + r.width / 2 + 'px'; g.style.top = r.top + r.height / 2 + 'px';
+    document.body.appendChild(g);
+    g.animate([{ transform: 'translate(-50%, -50%)', opacity: 1 },
+      { transform: `translate(calc(-50% + ${tx - r.left - r.width / 2}px), calc(-50% + ${ty - r.top - r.height / 2}px)) scale(0.7)`, opacity: 0.2 }],
+      { duration: 420, easing: 'cubic-bezier(0.5, 0, 0.75, 0)' }).onfinish = () => g.remove();
+  });
+}
+
 // ---------- 5 the sigmoid ----------
-const S5 = { manual: null };
 const XM = 8;
 function render5() {
-  const x = S5.manual === null ? score4() : S5.manual, s = sigmoid(x);
-  const W0 = 700, H0 = 230, l = 44, r = 20, t = 14, b = 34;
+  const x = score4(), s = sigmoid(x), lab = S4.edited || isReal(S4.center, S4.ctx) ? 1 : 0;   // the selected pair's score, and its right answer
+  const W0 = 700, H0 = 250, l = 62, r = 20, t = 14, b = 48;
   const X = v => l + (Math.max(-XM, Math.min(XM, v)) + XM) / (2 * XM) * (W0 - l - r), Y = v => t + (1 - v) * (H0 - t - b);
   let path = ''; for (let i = 0; i <= 200; i++) { const v = -XM + 2 * XM * i / 200; path += (i ? 'L' : 'M') + X(v).toFixed(1) + ',' + Y(sigmoid(v)).toFixed(1); }
   const ticks = [-8, -6, -4, -2, 0, 2, 4, 6, 8].map(v => `<line x1="${X(v)}" y1="${Y(0)}" x2="${X(v)}" y2="${Y(0) + 4}" stroke="var(--axis)"/><text x="${X(v)}" y="${Y(0) + 17}" text-anchor="middle" font-size="11">${num(v, 0)}</text>`).join('');
@@ -517,47 +617,55 @@ function render5() {
   $('m5-chart').innerHTML = `<svg viewBox="0 0 ${W0} ${H0}" width="100%" style="display:block">${yt}${ticks}
     <line x1="${X(0)}" y1="${t}" x2="${X(0)}" y2="${Y(0)}" stroke="var(--grid)"/>
     <path d="${path}" fill="none" stroke="var(--ink)" stroke-width="2"/>
-    <line x1="${X(x)}" y1="${Y(s)}" x2="${X(x)}" y2="${Y(1)}" stroke="var(--blue)" stroke-width="2" opacity="0.35"/>
+    <line x1="${X(x)}" y1="${Y(s)}" x2="${X(x)}" y2="${Y(lab)}" stroke="var(--blue)" stroke-width="2" opacity="0.35"/>
     <line x1="${l}" y1="${Y(s)}" x2="${X(x)}" y2="${Y(s)}" stroke="var(--blue)" stroke-dasharray="3 3"/>
     <circle cx="${X(x)}" cy="${Y(s)}" r="7" fill="var(--blue)" stroke="white" stroke-width="2"/>
-    <text x="${X(x) + (x > 5 ? -12 : 12)}" y="${Y(1) + (Y(s) - Y(1)) / 2}" font-size="11" fill="var(--blue)" text-anchor="${x > 5 ? 'end' : 'start'}" dominant-baseline="middle">error ${num(1 - s, 3)}</text>
-    <text x="${W0 - r}" y="${H0 - 4}" text-anchor="end" font-size="11">score${off ? ' (off the chart)' : ''}</text>
+    <text x="${X(x) + (x > 5 ? -12 : 12)}" y="${Y(lab) + (Y(s) - Y(lab)) / 2}" font-size="11" fill="var(--blue)" text-anchor="${x > 5 ? 'end' : 'start'}" dominant-baseline="middle">error ${num(lab - s, 3)}</text>
+    <text x="${l + (W0 - l - r) / 2}" y="${H0 - 6}" text-anchor="middle" font-size="12" font-weight="600" fill="var(--ink-2)">score (v · v′)${off ? ' — off the chart' : ''}</text>
+    <text transform="translate(16,${t + (Y(0) - t) / 2}) rotate(-90)" text-anchor="middle" font-size="12" font-weight="600" fill="var(--ink-2)">probability σ(score)</text>
   </svg>`;
-  $('m5-stats').innerHTML = `<div class="s"><div class="l">score</div><div class="v">${num(x, 3)}</div></div>
-    <div class="s"><div class="l"><span class="lc">σ</span>(score)</div><div class="v">${s.toFixed(3)}</div></div>
-    <div class="s"><div class="l">error 1 − <span class="lc">σ</span></div><div class="v">${(1 - s).toFixed(3)}</div></div>`;
-  $('m5-src').textContent = S5.manual === null ? 'The dot follows the score from 4.' : 'Score set by hand. Reset to follow 4 again.';
-  $('m5-x').value = Math.max(-XM, Math.min(XM, x)); $('m5-xv').textContent = num(x, 2);
+  // score → probability, then right answer − probability → error; two by two, like 6
+  const who = S4.edited ? 'edited vectors' : `${wchip(S4.center, 'v')} · ${wchip(S4.ctx, isReal(S4.center, S4.ctx) ? 'vo' : 'neg')}`;   // mirrors v · v′ in the label
+  const ch = (l, f, v, cls = '') => `<div class="ch${cls}"><div class="l">${l}</div><div class="f">${f}</div><div class="v">${v}</div></div>`;
+  $('m5-chain').innerHTML =
+    `<div class="grp">${ch(`score (${SV} · ${SVO})`, who, num(x, 3))}</div>`
+    + `<div class="grp"><div class="op">σ →</div>${ch('probability', `σ(${num(x, 2)})`, s.toFixed(3))}</div>`
+    + `<div class="grp">${ch('right answer (label)', `<span class="badge ${lab ? 'pos' : 'neg'}">${lab ? 'positive pair' : 'negative pair'}</span>`, lab, lab ? ' lab1' : ' lab0')}</div>`
+    + `<div class="grp"><div class="op">− prob. →</div>${ch('error', `${lab} − ${s.toFixed(3)}`, num(lab - s, 3), ' err')}</div>`;
 }
-$('m5-x').addEventListener('input', e => { S5.manual = +e.target.value; render5(); refreshBars(); });
-const bar5 = PlayBar($('m5-bar'), {
-  ms: 350, canStep: () => (S5.manual === null ? score4() : S5.manual) < XM, canReset: () => S5.manual !== null,
-  step: () => { const x = S5.manual === null ? score4() : S5.manual; S5.manual = Math.min(XM, Math.floor(x * 2 + 1e-9) / 2 + 0.5); render5(); },
-  end: () => { S5.manual = XM; render5(); }, reset: () => { S5.manual = null; render5(); },
-});
+
 
 // ---------- 6 one positive update ----------
 function render6() {
   const p = P6.pair, R = P6.R, ph = Math.min(P6.phase, POS_END), t = R.T[0], fresh = k => P6.phase === k ? ' new' : '';
-  const show = (k, cells) => ph >= k ? cells : blankCells();
-  const prod = R.v0.map((x, d) => x * t.vo0[d]);
-  $('m6-head').innerHTML = `<div class="pairhead">center ${wchip(W[p.center], 'v')} context ${wchip(W[p.ctx], 'vo')} <span class="badge pos">real pair · label 1</span><span class="note">pair ${commas(P6.idx + 1)} of ${commas(G.stream.total)}, pass ${p.epoch + 1} · α = ${R.alpha.toFixed(5)}</span></div>`;
-  $('m6-table').innerHTML = `<table class="data vec"><thead><tr><th></th>${dimHead()}<th class="n"></th></tr></thead><tbody>
-      <tr class="r-v"><th>center v</th>${vecCells(R.v0)}<td></td></tr>
-      <tr class="r-vo"><th>context v′</th>${vecCells(t.vo0)}<td></td></tr>
-      <tr class="r-p"><th>product</th>${show(1, vecCells(prod, 'prod' + fresh(1), 4))}<td class="n score${fresh(1)}">${ph >= 1 ? 'score ' + num(t.f, 4) : ''}</td></tr>
-      <tr class="r-s"><th>σ, g</th><td colspan="${D + 1}" class="scal${fresh(2)}">${ph >= 2 ? `σ(${num(t.f, 4)}) = <b>${t.s.toFixed(4)}</b>` : ''}${ph >= 3 ? `<span class="${fresh(3)}"> &nbsp;·&nbsp; g = (1 − ${t.s.toFixed(4)}) × ${R.alpha.toFixed(5)} = <b>${num(t.g, 6)}</b></span>` : ''}</td></tr>
-      <tr class="r-d"><th>Δv′ = g · v</th>${show(4, vecCells(t.dvo, 'chg' + fresh(4), 5))}<td></td></tr>
-      <tr class="r-vo"><th>new v′</th>${show(4, vecCells(ph >= 4 ? t.vo1 : t.vo0, 'chg' + fresh(4), 4))}<td class="n note">${ph >= 4 ? 'applied now' : ''}</td></tr>
-      <tr class="r-pend"><th>pending Δv += g · v′</th>${show(5, vecCells(t.contrib, 'chg' + fresh(5), 5))}<td class="n note">${ph >= 5 ? 'held for 7' : ''}</td></tr>
-    </tbody></table>`;
+  const stand = P6.stand ? `<p class="note" style="margin:0 0 8px">${wchip(P6.center, 'v')} · ${wchip(P6.stand, 'neg')} is a negative pair, so it never gets a positive update. Showing ${wchip(P6.center, 'v')} · ${wchip(P6.ctx, 'vo')}, a positive pair.</p>` : '';
+  $('m6-head').innerHTML = stand + `<div class="pairhead">center ${wchip(W[p.center], 'v')} context ${wchip(W[p.ctx], 'vo')} <span class="badge pos">positive pair · label 1</span><span class="note">pair ${commas(P6.idx + 1)} of ${commas(G.stream.total)}, pass ${p.epoch + 1} · α = ${R.alpha.toFixed(5)}</span></div>`;
+  // single numbers first, as a chain: score → probability → error → scaling factor
+  const card = (k, l, f, v, cls = '') => `<div class="ch${cls}${ph >= k ? '' : ' wait'}${fresh(k)}"><div class="l">${l}</div><div class="f">${ph >= k ? f : '&nbsp;'}</div><div class="v">${ph >= k ? v : '·'}</div></div>`;
+  // each operator travels with the card after it, so the chain wraps cleanly
+  const step = (op, c) => `<div class="grp"><div class="op">${op}</div>${c}</div>`;
+  $('m6-chain').innerHTML =
+    `<div class="grp">${card(1, `score (${SV} · ${SVO})`, 'as in section 4', num(t.f, 3))}</div>`
+    + step('σ →', card(2, 'probability', `σ(${num(t.f, 2)})`, t.s.toFixed(3)))
+    + step('1 − →', card(2, 'error', `1 − ${t.s.toFixed(3)}`, num(1 - t.s, 3), ' err'))
+    + step('× α →', card(3, `scaling factor ${SG}`, `× ${R.alpha.toFixed(4)}`, num(t.g, 5), ' gcard'));
+  // then the vectors, one row per dimension, one column per vector (as in 4)
+  const cell = (k, x, n, cls) => ph >= k ? `<td class="n ${cls}${fresh(k)}">${num(x, n)}</td>` : '<td class="n dim">·</td>';
+  const rows = Array.from({ length: D }, (_, d) => `<tr><th class="n">d${d + 1}</th>
+      <td class="n c-v">${num(R.v0[d], 4)}</td><td class="n c-vo">${num(t.vo0[d], 4)}</td>
+      ${cell(4, t.dvo[d], 5, 'chg')}${cell(4, t.vo1[d], 4, 'chg c-vo')}${cell(5, t.contrib[d], 5, 'chg c-v')}</tr>`).join('');
+  const hd = (k, top, sub, cls = '') => `<th class="${cls}">${top}${sub ? `<br><span class="sub">${sub}</span>` : ''}</th>`;
+  $('m6-table').innerHTML = `<table class="data vec m6t"><thead><tr><th></th>
+      ${hd(0, `center ${SV}<br>${wchip(W[p.center], 'v')}`, '', 'c-v')}${hd(0, `context ${SVO}<br>${wchip(W[p.ctx], 'vo')}`, '', 'c-vo')}
+      ${hd(4, `Δ${SVO}`, `${SG} · ${SV}`)}${hd(4, `new ${SVO}`, 'applied now', 'c-vo')}${hd(5, `pending Δ${SV}`, `${SG} · ${SVO}`, 'c-v')}</tr></thead>
+    <tbody>${rows}</tbody></table>`;
   const msg = [
     'Press play to score this pair and update it.',
     `The score is the dot product of v and v′, ${num(t.f, 4)}.`,
     `σ turns it into the model’s probability that the pair is real: ${t.s.toFixed(4)}. The pair is real, so the error is 1 − σ = ${(1 - t.s).toFixed(4)}.`,
     `g scales the error by the learning rate. It is positive, so both vectors will move toward each other.`,
     `v′ moves by g times v: a small step in v’s direction. It is changed straight away.`,
-    P6.phase > POS_END ? 'The positive update is done. 7 is now working through the negative samples for this pair.' : `v’s change, g times the old v′, is only written into the pending row. 7 adds negative samples before it is applied.`,
+    P6.phase > POS_END ? 'The positive update is done. Section 7 now works through the negative samples for this pair.' : `v’s change, g times the old v′, is only written into the pending row. Section 7 adds negative samples before it is applied.`,
   ];
   $('m6-note').textContent = msg[ph] + (norm(t.vo0) === 0 && ph >= 3 ? ' (v′ is still all zeros at this point, so v’s pending change is zero too.)' : '');
   // pickers
@@ -573,8 +681,9 @@ const bar6 = PlayBar($('m6-bar'), {
   reset: () => { setPhase(0); render6(); render7(); },
 });
 function pick6() { stopAll(); loadPair6(); render6(); render7(); refreshBars(); }
-$('m6-center').addEventListener('change', e => { P6.center = e.target.value; P6.ctx = contexts6(P6.center, true); pick6(); });
-$('m6-ctx').addEventListener('change', e => { P6.ctx = e.target.value; pick6(); });
+// the pickers here change the page's selected pair, like those in 3–5
+$('m6-center').addEventListener('change', e => { const c = e.target.value; selectPair(c, contexts6(c).includes(S4.ctx) ? S4.ctx : contexts6(c, true), '6'); });
+$('m6-ctx').addEventListener('change', e => selectPair(S4.center, e.target.value, '6'));
 $('m6-moment').addEventListener('click', e => { const x = e.target.closest('button'); if (x) { P6.moment = x.dataset.v; pick6(); } });
 
 // ---------- 7 negative samples ----------
@@ -601,28 +710,43 @@ function render7() {
   $('m7-draws').innerHTML = negs.map(t => ph >= t.drawAt
     ? (t.skip ? `<span class="chip skip" title="same word as the context: skipped">${W[t.w]}</span>` : `<span class="chip neg">${W[t.w]}</span>`)
     : '<span class="dempty"></span>').join('');
-  // the running table
+  // targets: single numbers only, one row per target word
+  const shown = R.T.filter(t => t.label === 1 || ph >= t.drawAt);
+  // the target being worked on: the latest draw, or the positive one before any draws, or the last one once applied
+  const focus = cur && (cur.k === 'neg' || cur.k === 'draw') ? R.T[cur.j + 1]
+    : cur && cur.k === 'apply' ? R.T.filter(t => !t.skip).pop() : R.T[0];
   const row = t => {
-    const lab = t.label ? `<span class="badge pos">real</span>` : `<span class="badge neg">noise</span>`;
-    if (t.label === 0 && ph < t.drawAt) return '';
-    if (t.skip) return `<tr class="skipped"><th>${wchip(W[t.w], 'neg')}${lab}</th><td colspan="${3 + D}" class="note">same word as the context, so this draw is skipped</td></tr>`;
-    const doneT = ph >= t.pendAt, isNew = cur && ((cur.k === 'neg' && cur.j === t.j) || (cur.k === 'pend' && t.label));
-    return `<tr class="${doneT ? '' : 'wait'}${isNew ? ' newrow' : ''}"><th>${wchip(W[t.w], t.label ? 'vo' : 'neg')}${lab}</th>
-      <td class="n">${doneT ? num(t.f, 4) : '·'}</td><td class="n">${doneT ? t.s.toFixed(4) : '·'}</td><td class="n">${doneT ? num(t.g, 6) : '·'}</td>
-      ${doneT ? vecCells(t.contrib, 'chg' + (isNew ? ' new' : ''), 5) : blankCells()}</tr>`;
+    const lab = t.label ? `<span class="badge pos">positive</span>` : `<span class="badge neg">negative</span>`;
+    if (t.skip) return `<tr class="skipped"><th>${wchip(W[t.w], 'neg')}</th><td>${lab}</td><td colspan="4" class="note">same word as the context, so this draw is skipped</td></tr>`;
+    const doneT = ph >= t.pendAt, on = t === focus && ph >= POS_END && !R.applied ? ' newrow' : '';
+    const c = (x, n, cls = '') => `<td class="n ${cls}">${doneT ? num(x, n) : '·'}</td>`;
+    return `<tr class="${doneT ? '' : 'wait'}${on}"><th>${wchip(W[t.w], t.label ? 'vo' : 'neg')}</th><td>${lab}</td>
+      ${c(t.f, 3)}${c(t.s, 3)}${c(t.label - t.s, 3, 'err')}${c(t.g, 5, 'gcol')}</tr>`;
   };
-  const applied = R.applied;
-  $('m7-table').innerHTML = `<table class="data vec upd"><thead><tr><th>target</th><th class="n">score</th><th class="n">σ</th><th class="n">g</th>${Array.from({ length: D }, (_, d) => `<th class="n">g·v′ d${d + 1}</th>`).join('')}</tr></thead><tbody>
-    ${R.T.map(row).join('')}
-    <tr class="r-pend tot"><th colspan="4">pending Δv (sum of the rows above)</th>${vecCells(R.pend, 'chg' + (cur && (cur.k === 'neg' || cur.k === 'pend') ? ' new' : ''), 5)}</tr>
-    <tr class="r-v"><th colspan="4">center v ${wchip(W[p.center], 'v')} before</th>${vecCells(R.v0, '', 4)}</tr>
-    <tr class="r-v ${applied ? '' : 'wait'}"><th colspan="4">v + pending Δv${applied ? '' : ' (not yet applied)'}</th>${applied ? vecCells(R.v1, 'chg new', 4) : blankCells()}</tr>
-  </tbody></table>`;
+  // vectors: one row per dimension (as in 4 and 6) — v, the focus target's v′ and its share, the running pending row, and new v
+  const fv = focus && !focus.skip && ph >= focus.drawAt ? focus : null, fs = fv && ph >= fv.pendAt, applied = R.applied;
+  const vrows = Array.from({ length: D }, (_, d) => `<tr><th class="n">d${d + 1}</th>
+      <td class="n c-v">${num(R.v0[d], 4)}</td>
+      <td class="n ${fv && fv.label ? 'c-vo' : 'c-neg'}">${fv ? num(fv.vo0[d], 4) : '·'}</td>
+      <td class="n chg">${fs ? num(fv.contrib[d], 5) : '·'}</td>
+      <td class="n chg c-v">${num(R.pend[d], 5)}</td>
+      <td class="n c-v ${applied ? 'chg new' : 'dim'}">${applied ? num(R.v1[d], 4) : '·'}</td></tr>`).join('');
+  $('m7-table').innerHTML = `<h4>Each target, scored against the same v</h4>
+    <div class="tscroll"><table class="data m7t"><thead><tr><th>target</th><th></th><th class="n">score</th><th class="n">probability σ</th><th class="n">error</th><th class="n">scaling factor ${SG}</th></tr></thead>
+    <tbody>${shown.map(row).join('')}</tbody></table></div>
+    <h4 style="margin-top:16px">The vectors, by dimension</h4>
+    <div class="tscroll"><table class="data vec m6t m7v"><thead><tr><th></th>
+      <th class="c-v">center ${SV}<br>${wchip(W[p.center], 'v')}</th>
+      <th class="${fv && !fv.label ? 'c-neg' : 'c-vo'}">target ${SVO}<br>${fv ? wchip(W[fv.w], fv.label ? 'vo' : 'neg') : '<span class="sub">—</span>'}</th>
+      <th>its share<br><span class="sub">${SG} · ${SVO}</span></th>
+      <th class="c-v">pending Δ${SV}<br><span class="sub">sum of shares</span></th>
+      <th class="c-v">new ${SV}<br><span class="sub">${applied ? `${SV} + pending Δ${SV}` : 'not yet applied'}</span></th></tr></thead>
+    <tbody>${vrows}</tbody></table></div>`;
   let msg;
-  if (ph < POS_END) msg = 'The positive update from 6 comes first. Step to complete it.';
+  if (ph < POS_END) msg = 'The positive update from section 6 comes first. Step to complete it.';
   else if (!cur || cur.k === 'pend') msg = `Next: draw ${CFG.K} noise words from the orange distribution.`;
-  else if (cur.k === 'draw') { const t = R.T[cur.j + 1]; msg = t.skip ? `Drew “${W[t.w]}”, the context word itself. word2vec skips such draws.` : `Drew “${W[t.w]}”. It is treated as a fake pair: label 0.`; }
-  else if (cur.k === 'neg') { const t = R.T[cur.j + 1]; msg = `Fake pair with “${W[t.w]}”: σ = ${t.s.toFixed(4)}, so g = (0 − σ) × α = ${num(t.g, 6)} is negative. Its v′ is pushed away from v, and g·v′ joins the pending row.`; }
+  else if (cur.k === 'draw') { const t = R.T[cur.j + 1]; msg = t.skip ? `Drew “${W[t.w]}”, the context word itself. word2vec skips such draws.` : `Drew “${W[t.w]}”. It is treated as a negative pair: label 0.`; }
+  else if (cur.k === 'neg') { const t = R.T[cur.j + 1]; msg = `Negative pair with “${W[t.w]}”: σ = ${t.s.toFixed(4)}, so g = (0 − σ) × α = ${num(t.g, 6)} is negative. Its v′ is pushed away from v, and g·v′ joins the pending row.`; }
   else msg = `All ${CFG.K} draws done. The pending row is added to v once. That finishes this pair; training moves on to the next one.`;
   $('m7-note').textContent = msg;
 }
@@ -743,6 +867,6 @@ function renderAll() {
   renderStatebar(); render2(); render2v(); render3(); render6(); render7(); render8(); refreshBars();
 }
 G.stream = makeStream(G.streamSeed);
-resetTraining(); loadPair6(); load4();
+resetTraining(); load4(); sync3(); P6.center = S4.center; P6.ctx = S4.ctx; loadPair6();
 render1(); render4(); render5(); render9(); render10(); renderAll();
 })();

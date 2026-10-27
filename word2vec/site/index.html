@@ -16,7 +16,7 @@
 <main>
 <h1>How word2vec learns</h1>
 <p class="lede">In 2013 a team at Google released <a href="https://code.google.com/archive/p/word2vec/">word2vec</a>, a small program that reads a lot of text and gives every word a list of numbers. Words used in similar ways end up with similar lists. The idea underlies much of modern language technology, including the first layer of every large language model. This page takes the training procedure apart one step at a time.</p>
-<p class="note">Everything on this page is computed live in your browser. A tiny model with 5 dimensions trains on a hand-written corpus of 30 sentences, so the numbers on screen are the real numbers. Each section builds on the last, and they all share one model: the vectors created in section 2 are the ones trained in 6, 7 and 8. The bar at the top shows where training stands in section 8. Every interactive has the same controls: reset, play, step, and skip to end. The keyboard drives the one you used last: → steps, space plays or pauses, shift + → skips to the end, and shift + ← resets.</p>
+<p class="note">Everything on this page is computed live in your browser. A tiny model with 5 dimensions trains on a hand-written corpus of 30 sentences, so the numbers on screen are the real numbers. Each section builds on the last, and they all share one model: the vectors created in section 2 are the ones trained in 6, 7 and 8. The bar at the top shows the pair you have selected: click one in section 3, or pick any two words in section 4. Every interactive has the same controls: reset, play, step, and skip to end. The keyboard drives the one you used last: → steps, space plays or pauses, shift + → skips to the end, and shift + ← resets.</p>
 <nav class="toc">
   <a href="#s1">1. The problem</a>
   <a href="#s2">2. The vocabulary and two tables</a>
@@ -113,7 +113,7 @@
   </div>
   <p class="note" style="margin:10px 0 0">Click any word to find it in the corpus and the vocabulary.</p>
 </div>
-<p>Then every word gets <strong>two</strong> vectors, each a row of numbers, one per dimension. This page uses 5 dimensions, so each vector holds 5 numbers. The original paper used 300.</p>
+<p>Then every word gets <strong>two</strong> vectors, each a list of numbers, one per dimension. This page uses 5 dimensions, so each vector holds 5 numbers. The original paper used 300.</p>
 <p>The two vectors are:</p>
 <ul>
 <li>The <strong>input vector <em>v</em></strong> describes the word when it is the center of attention. Each number in the vector starts out random, drawn uniformly from the range ±0.5/<em>d</em>, where <em>d</em> is the number of dimensions. That is ±0.1 here, and ±0.0017 at 300 dimensions.</li>
@@ -122,8 +122,8 @@
 <p>Here is one input vector, as it starts and as it ends up after training.</p>
 <div class="module" id="m2v">
   <div class="row">
-    <label class="ctl">word <span class="seg" id="m2v-word"><button data-v="coffee" class="on">coffee</button><button data-v="tea">tea</button><button data-v="dog">dog</button><button data-v="cat">cat</button></span></label>
-    <span class="seg" id="m2v-state"><button data-v="untrained" class="on">untrained</button><button data-v="trained">trained</button></span>
+    <label class="ctl">word <span class="seg" id="m2v-word"><button data-v="coffee" class="on">coffee</button><button data-v="tea">tea</button><button data-v="dog">dog</button><button data-v="cat">cat</button><button id="m2v-extra" data-slot="extra"></button></span></label>
+    <label class="ctl">training <span class="seg" id="m2v-state"><button data-v="start" class="on">start</button><button data-v="middle">middle</button><button data-v="end">end</button></span></label>
   </div>
   <div id="m2v-vec"></div>
   <p class="note" id="m2v-note" style="margin:10px 0 0"></p>
@@ -151,8 +151,11 @@
     <span class="m3step"><span class="lab">Window size</span><button id="m3-minus" aria-label="smaller window">−</button><b id="m3-bv" aria-live="polite">2</b><button id="m3-plus" aria-label="larger window">+</button></span>
   </div>
   <div class="m3scroll"><div class="m3track" id="m3-track"></div></div>
-  <h4>Training pairs from this window</h4>
+  <h4>Positive pairs: words inside the window</h4>
   <div class="pairs" id="m3-pairs"></div>
+  <h4 style="margin-top:16px">Negative pairs: random words from outside the window</h4>
+  <div class="pairs" id="m3-fakes"></div>
+  <p class="note" style="margin:8px 0 0">Positive pairs come from the text; negative pairs are made up. Training adjusts the word vectors so that positive pairs get a high score and negative pairs a low one. Click any pair to select it: sections 4 and 5 score it. Section 7 explains how the negative words are drawn.</p>
 </div>
 <p>During training the window slides by itself: every word in the corpus takes a turn as the center, once per pass, 200 passes in all. The window size and the dropped words are drawn fresh each time, so the same sentence yields different pairs on every pass.</p>
 <h2 id="s4"><span class="num">4</span>The dot product</h2>
@@ -161,40 +164,47 @@
   <div class="row">
     <label class="ctl">center <select id="m4-center"></select></label>
     <label class="ctl">context <select id="m4-ctx"></select></label>
-    <span class="seg" id="m4-stage"><button data-v="start" class="on">start of training</button><button data-v="trained">after training</button></span>
+    <span id="m4-kind"></span>
+    <label class="ctl">training <span class="seg" id="m4-stage"><button data-v="start" class="on">start</button><button data-v="middle">middle</button><button data-v="trained">end</button></span></label>
   </div>
   <div class="row"><span id="m4-bar"></span></div>
   <div class="tscroll" id="m4-table"></div>
   <p class="sumline" id="m4-sum" style="margin-top:12px"></p>
-  <p class="note" style="margin:10px 0 0">Every number is editable. Type over one to change the vectors.</p>
 </div>
 <p>When the two vectors point the same way, most of the products are positive and the score is large. When they point in opposite directions, the score is negative. When they are unrelated, the positive and negative products cancel out and the score is near zero. At the start of training every output vector is zero, so every score is exactly zero.</p>
-<p>After training, try “coffee” with “cup”, then with “fur”. The real neighbour scores far higher. In this small corpus almost every score ends up below zero, because each word is also drawn as a fake “noise” word thousands of times (section 7), which pushes scores down. What matters is the ranking: words that really appear together score higher than words that don’t.</p>
+<p>At the end of training, try “coffee” with “cup”, then with “fur”: the positive pair scores far higher. Both scores are below zero, though; section 5 explains why.</p>
 <h2 id="s5"><span class="num">5</span>The sigmoid</h2>
 <p>A score can be any number. To read it as a probability, word2vec passes it through the <em>sigmoid</em> function, σ(<em>x</em>) = 1 / (1 + e<sup>−<em>x</em></sup>). It is a smooth step. Large negative scores go to almost 0, large positive scores go to almost 1, and a score of 0 goes to exactly 0.5.</p>
-<p>The result is the model’s probability that this pair really appeared together in the text. For a real pair, the right answer is 1, so the <strong>error</strong> is 1 − σ(score).</p>
+<p>The result is the model’s probability that this pair really appeared together in the text. For a positive pair, one that really comes from the text, the right answer is 1, so the <strong>error</strong> is 1 − σ(score). For a negative pair (section 7) the right answer is 0.</p>
 <div class="module" id="m5">
   <div class="row">
-    <span id="m5-bar"></span>
-    <label class="ctl">Score <input type="range" id="m5-x" min="-8" max="8" step="0.05" value="0"> <b id="m5-xv">0</b></label>
-    <span class="note" id="m5-src"></span>
+    <label class="ctl">center <select id="m5-center"></select></label>
+    <label class="ctl">context <select id="m5-ctx"></select></label>
+    <label class="ctl">training <span class="seg" id="m5-stage"><button data-v="start" class="on">start</button><button data-v="middle">middle</button><button data-v="trained">end</button></span></label>
   </div>
+  <p class="note" style="margin:0 0 12px">The same pair as section 4: changing it here changes it there too.</p>
+  <div class="m5chain m6chain" id="m5-chain"></div>
   <div id="m5-chart"></div>
-  <div class="stat" id="m5-stats"></div>
 </div>
 <p>At the start of training every score is 0, so σ is 0.5 and the first error is exactly 0.5: the model is a coin toss.</p>
+<div class="callout reveal">
+  <div class="t">Why is the error still large after training?</div>
+  <button class="reveal-btn" aria-expanded="false">Reveal answer</button>
+  <div class="reveal-body" hidden>Take “coffee” and “cup”. Over the whole run the pair is trained 176 times as a positive pair, with the right answer 1. But “cup” is a common word, so it is also drawn as a negative word for “coffee” 384 times, with the right answer 0. The model cannot tell these apart: it is the same two vectors, told “together” 176 times and “not together” 384 times. The best it can do is a score in between, below 0, so the error stays large. Every word is drawn as a negative word like this, which pulls all the scores down. What training still achieves is the difference: positive pairs score far higher than negative ones. In the real program, with 300 dimensions and billions of words of text, strong pairs end up well above 0.</div>
+</div>
 <div class="callout">
   <div class="t">Why not ask about every word at once?</div>
   The natural question is “which word, out of the whole vocabulary, is the context?” That calls for a <em>softmax</em>, which scores every word in the vocabulary, millions of them, for every training pair. The first word2vec paper avoided that cost with <em>hierarchical softmax</em>, a chain of sigmoids down a binary tree of the vocabulary. The second paper replaced it with <em>negative sampling</em>, the approach on this page: one sigmoid for the real word and one for each of a handful of randomly drawn ones.
 </div>
 <h2 id="s6"><span class="num">6</span>One positive update</h2>
-<p>Now the model learns from its error. The update has a single scaling factor:</p>
-<p class="formula"><i>g</i> = (label − σ) × α</p>
-<p>The label is 1 for a real pair. α is the <em>learning rate</em>, which sets the size of each step. It starts at 0.025 and shrinks linearly to almost zero over the course of training, so early steps are large and late steps are fine adjustments.</p>
-<p>Both vectors then move:</p>
+<p>Now the model learns from its error. Each pair gets one <em>scaling factor</em>: the error from section 5, times the learning rate.</p>
+<div class="formula fxblock"><span class="fx"><span class="w"><span class="t tg">scaling factor</span><span class="g"><span class="o">=</span><span class="t terr">error</span></span><span class="g"><span class="o">×</span><span class="t">learning rate</span></span></span><span class="s"><span class="sg"><i>g</i></span> = <span class="serr">(label − σ)</span> × α</span></span><span class="fxsw seg" role="group" aria-label="show formulas as"><button data-fx="w">words</button><button data-fx="s">symbols</button></span></div>
+<p>The error is the right answer minus the guess: label − σ, where the label is 1 for a positive pair. The <em>learning rate</em> α sets the overall step size. It starts at 0.025 and shrinks linearly to almost zero over the course of training, so early steps are large and late steps are fine adjustments. The scaling factor combines the two: big when the model was very wrong early on, tiny when it was nearly right.</p>
+<p>The <em>update</em> then moves each vector by the scaling factor times the other vector:</p>
+<div class="formula fxblock"><span class="fx"><span class="w"><span class="t tvo">new output vector</span><span class="g"><span class="o">=</span><span class="t tvo">output vector</span></span><span class="g"><span class="o">+</span><span class="t tg">scaling factor</span></span><span class="g"><span class="o">×</span><span class="t tv">input vector</span></span></span><span class="s"><span class="svo"><i>v</i>′</span> ← <span class="svo"><i>v</i>′</span> + <span class="sg"><i>g</i></span> · <span class="sv"><i>v</i></span></span></span><span class="fxsw seg" role="group" aria-label="show formulas as"><button data-fx="w">words</button><button data-fx="s">symbols</button></span></div>
 <ul>
-<li>The output vector moves toward the input vector: <strong><em>v</em>′ ← <em>v</em>′ + <em>g</em> · <em>v</em></strong>. This is applied right away.</li>
-<li>The input vector should move toward the output vector by <em>g</em> · <em>v</em>′, using <em>v</em>′ as it was before the update. But this change is <strong>not applied yet</strong>. It goes into a pending row, for reasons that section 7 makes clear.</li>
+<li>The output vector <em>v</em>′ of the context word moves toward the center word’s input vector. This is applied right away.</li>
+<li>The input vector <em>v</em> should also move toward the output vector, by <span class="fx"><span class="w"><span class="t tg">scaling factor</span><span class="g"><span class="o">×</span><span class="t tvo">output vector</span></span></span><span class="s"><span class="sg"><i>g</i></span> · <span class="svo"><i>v</i>′</span></span></span>, using <em>v</em>′ as it was before the update. But this change is <strong>not applied yet</strong>. It goes into a pending row, for reasons that section 7 makes clear.</li>
 </ul>
 <div class="module" id="m6">
   <div class="row">
@@ -204,14 +214,15 @@
   </div>
   <div class="row"><span id="m6-bar"></span><span class="note">one step per stage of the update</span></div>
   <div id="m6-head"></div>
+  <div class="m5chain m6chain" id="m6-chain"></div>
   <div class="tscroll" id="m6-table"></div>
   <p class="note" id="m6-note" style="margin:12px 0 0"></p>
 </div>
-<p>Pick any real pair from the corpus, and a moment in training: the numbers are the model’s actual state just before that pair. Early on, a context word’s <em>v</em>′ may still be all zeros, so the pending change to <em>v</em> is zero too and only <em>v</em>′ moves. Later the vectors are larger, the error is smaller and α has shrunk, so the steps are finer.</p>
+<p>Pick any positive pair from the corpus, and a moment in training: the numbers are the model’s actual state just before that pair. Early on, a context word’s <em>v</em>′ may still be all zeros, so the pending change to <em>v</em> is zero too and only <em>v</em>′ moves. Later the vectors are larger, the error is smaller and α has shrunk, so the steps are finer.</p>
 <h2 id="s7"><span class="num">7</span>Negative samples</h2>
 <p>A positive update alone would be useless. The easiest way to score every pair high is to make every vector point the same way, and then the vectors carry no information. The model also needs examples of words that do <em>not</em> belong together.</p>
-<p>Negative sampling makes them up. For each real pair, word2vec draws <em>k</em> = 5 “noise” words at random and treats each as a fake pair with the center word. A word’s chance of being drawn is its frequency raised to the power 0.75. This flattens the distribution: common words are still drawn most often, but rare words get more of a chance than their raw frequency would give them. If a draw happens to be the real context word, it is skipped.</p>
-<p>For a fake pair the label is 0, so <em>g</em> = (0 − σ) × α is negative, and the same update rule pushes the two vectors apart. Each noise word’s output vector moves at once, and each adds its share to the center word’s pending row. Only after the real pair and all the noise words is <strong>the accumulated pending change applied to the input vector, once</strong>. Every target in a pair is scored against the same, unchanged <em>v</em>.</p>
+<p>Negative sampling makes them up. For each real pair, word2vec draws <em>k</em> = 5 “noise” words at random and treats each as a <em>negative pair</em> with the center word. A word’s chance of being drawn is its frequency raised to the power 0.75. This flattens the distribution: common words are still drawn most often, but rare words get more of a chance than their raw frequency would give them. If a draw happens to be the real context word, it is skipped.</p>
+<p>For a negative pair the label is 0, so <em>g</em> = (0 − σ) × α is negative, and the same update rule pushes the two vectors apart. Each noise word’s output vector moves at once, and each adds its share to the center word’s pending row. Only after the real pair and all the noise words is <strong>the accumulated pending change applied to the input vector, once</strong>. Every target in a pair is scored against the same, unchanged <em>v</em>.</p>
 <div class="module" id="m7">
   <h4>How often each word is drawn as noise</h4>
   <div id="m7-chart"></div>
@@ -220,7 +231,7 @@
     <span id="m7-bar"></span>
     <span class="draws" id="m7-draws"></span>
   </div>
-  <div class="tscroll" id="m7-table"></div>
+  <div id="m7-table"></div>
   <p class="note" id="m7-note" style="margin:12px 0 0"></p>
 </div>
 <p>This is the whole of training. Every pair, in every pass, gets one positive update and up to five negative ones.</p>

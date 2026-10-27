@@ -1,9 +1,10 @@
 <div class="module" id="m5">
   <div class="row">
-    <span id="m5-bar"></span>
-    <label class="ctl">Score <input type="range" id="m5-x" min="-8" max="8" step="0.05" value="0"> <b id="m5-xv">0</b></label>
-    <span class="note" id="m5-src"></span>
+    <label class="ctl">center <select id="m5-center"></select></label>
+    <label class="ctl">context <select id="m5-ctx"></select></label>
+    <label class="ctl">training <span class="seg" id="m5-stage"><button data-v="start" class="on">start</button><button data-v="middle">middle</button><button data-v="trained">end</button></span></label>
   </div>
+  <p class="note" style="margin:0 0 12px">The same pair as section 4: changing it here changes it there too.</p>
+  <div class="m5chain m6chain" id="m5-chain"></div>
   <div id="m5-chart"></div>
-  <div class="stat" id="m5-stats"></div>
 </div>
