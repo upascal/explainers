@@ -28,7 +28,7 @@ const tstr = i => gstr(V.ids[i]);                       // a toy token, by its i
 const wchip = (i, cls = '') => `<span class="chip ${cls}" data-t="${i}">${tstr(i)}</span>`;
 const plain = i => V.ids[i] === EOT ? '<|endoftext|>' : V.str[i];   // for <option> labels and titles
 const optLabel = i => plain(i).replace(/^ /, '·');
-const SV = '<span class="cv">row</span>';
+const SV = '<i class="cv">E</i>';   // an input embedding: a row of E, the token embedding table
 
 // ---------- shared model state ----------
 // One initialization (re-rolled in 3 or 10) and one training stream for the whole page. The whole
@@ -74,7 +74,8 @@ $('statebar-in').innerHTML = `<div class="sb-set">
     <label class="m3pick sb-pick"><select id="sb-sent" aria-label="sentence"></select></label>
     <span class="passctl"><span class="lab">pass</span><input type="range" min="1" max="1" step="1" aria-label="which pass over the corpus"><span class="note pv"></span></span>
   </div>
-  <div class="m3scroll sb-scroll"><div class="m3track m5track" id="sb-track"></div></div>`;
+  <div class="m3scroll sb-scroll"><div class="m3track m5track" id="sb-track"></div></div>
+  <div class="sb-sentview" id="sb-sentview" hidden></div>`;
 function selectPred(sent, pos) {
   SEL.sent = sent; SEL.pos = Math.max(0, Math.min(V.seqs[sent].length - 2, pos));
   S8.row = tgTok(); follow3v(); S9.a = inTok() === V.index.get(EOT) ? S9.a : inTok();
@@ -308,16 +309,26 @@ function pairPlane(a, b, o = {}) {
 }
 
 // ---------- sticky status bar ----------
+// The header changes with where you are: the context track (5–6), with 7's stack (7–8), the whole
+// sentence (9, whose update uses every prediction at once; click a token to pick 9's row), then hides.
 function renderStatebar() {
-  TRACKSB.render(); bindStack($('sb-track').querySelector('.m6vp')); syncPass();
+  const sent = S6.sbMode === 'sent';
+  document.querySelector('#statebar .sb-scroll').hidden = sent; $('sb-sentview').hidden = !sent;
+  if (sent) $('sb-sentview').innerHTML = `<span class="lab">every prediction in this sentence · row</span>${seqSel().map(t => `<span class="chip${t === S8.row ? ' v' : ''}" data-t="${t}" title="pick this row">${tstr(t)}</span>`).join('')}`;
+  else { TRACKSB.render(); bindStack($('sb-track').querySelector('.m6vp')); }
+  syncPass();
 }
 // the header only makes sense once predictions exist: show it from section 5's widget on
 (function headerWhenPreds() {
   let ticking = false;
   const check = () => {
-    ticking = false; $('statebar').classList.toggle('shown', $('m5').getBoundingClientRect().top < innerHeight * 0.75);
-    const past = $('m6-track').getBoundingClientRect().bottom < $('statebar').offsetHeight;   // scrolled past 7's stack
-    if (past !== !!S6.sbStack) { S6.sbStack = past; renderStatebar(); }
+    ticking = false; const H = $('statebar').offsetHeight, top = id => $(id).getBoundingClientRect().top;
+    // shown once 5's widget is scrolled past, until the end of 9's (past that nothing uses the selected
+    // prediction), and hidden while 7's own track is on screen, so there is never a second track in view
+    const r7 = $('m6-track').getBoundingClientRect(), track7 = r7.bottom > H && r7.top < innerHeight;
+    $('statebar').classList.toggle('shown', $('m5').getBoundingClientRect().bottom < H && !track7 && $('m8').getBoundingClientRect().bottom > H);
+    const mode = top('s9') < H ? 'sent' : $('m6-track').getBoundingClientRect().bottom < H ? 'stack' : 'track';
+    if (mode !== S6.sbMode) { S6.sbMode = mode; renderStatebar(); }
   };
   addEventListener('scroll', () => { if (!ticking) { ticking = true; requestAnimationFrame(check); } }, { passive: true });
   addEventListener('resize', check); setTimeout(check, 0);
@@ -491,7 +502,7 @@ function render3vToy() {
   $('m3v-vec').innerHTML = `<div class="m2v-row"><span class="m2v-word"><span>${tstr(S3V.tok)}</span><span class="sub">ID ${V.ids[S3V.tok]}</span></span><span class="m2v-arrow" aria-hidden="true">→</span><span class="m2v-br">${v.map(cell).join('')}</span></div>`;
   $('m3v-note').innerHTML = G.step === 0 ? `Six random numbers, most within ±0.04. Nothing about “${plain(S3V.tok).trim()}” is in them yet.`
     : G.step < N ? `After ${commas(G.step)} of ${commas(N)} steps, the numbers have grown and moved. Drag on, or switch between the tokens to compare.`
-    : 'Training nudges the numbers until tokens used alike have alike rows. Compare “ coffee” with “ tea”, then with “ dog”.';
+    : 'Training nudges the numbers until tokens used alike have alike embeddings. Compare “ coffee” with “ tea”, then with “ dog”.';
 }
 function render3vReal() {
   // GPT-2's row: 768 numbers as a grid of squares, 32 to a line. OpenAI released only the trained
@@ -508,8 +519,8 @@ function render3vReal() {
   // a vertical color bar beside the grid: positive at the top, 0 in the middle, negative at the bottom
   const lab = x => num(x, rtop < 0.1 ? 3 : 2), key = Rs ? `<div class="m3vkey" aria-label="color scale"><span>+${lab(rtop)}</span><i style="background:linear-gradient(180deg, ${heatColor(rtop, rtop)}, white, ${heatColor(-rtop, rtop)})"></i><span>−${lab(rtop)}</span></div>` : '';
   $('m3v-real').innerHTML = `<div class="m3vheat">${svg}</svg>${key}<span class="m3vtip" hidden></span></div><p class="note" style="margin:8px 0 0">${{
-    start: `A random start for row ${id}, ${tstr(S3V.tok)}: 768 numbers drawn with a standard deviation of 0.02, the way GPT-2’s code starts every row. GPT-2’s actual starting numbers were never published.`,
-    end: `GPT-2’s row ${id}, ${tstr(S3V.tok)}, after training, from its released weights. Blue is positive, orange negative.`,
+    start: `A random start for ${tstr(S3V.tok)}’s embedding (row ${id}): 768 numbers drawn with a standard deviation of 0.02, the way GPT-2’s code starts every embedding. GPT-2’s actual starting numbers were never published.`,
+    end: `GPT-2’s embedding of ${tstr(S3V.tok)} (row ${id}), after training, from its released weights. Blue is positive, orange negative.`,
   }[S3V.real]}${S3V.real === 'start' ? '' : ' OpenAI released only the finished table, so there is nothing to show from partway through training.'}</p>`;
   $('m3v-word').innerHTML = FIXED3.concat([S3V.extra]).map(i => `<button data-v="${i}" class="${i === S3V.tok ? 'on' : ''}">${tstr(i)}</button>`).join('');
   document.querySelectorAll('#m3v-gstate button').forEach(b => b.classList.toggle('on', b.dataset.v === S3V.real));
@@ -537,8 +548,8 @@ $('sb-sent').addEventListener('change', e => selectPred(+e.target.value, SEL.pos
 // changing the sentence changes which rows are looked up, not the tables themselves
 const EQ4 = VecEq($('m4-eq'), () => {
   const m = G.snaps[G.step], t = inTok(), tok = arr(rowOf(m, 'E', t)), pos = arr(rowOf(m, 'P', SEL.pos));
-  return { left: [{ t: 'vec', label: 'token row', sym: SV, chip: wchip(t, 'v'), vals: tok, cls: 'cv' }, { t: 'op', s: '+' },
-    { t: 'vec', label: 'position row', sym: '<span class="cpos">pos</span>', chip: `<span class="chip pos">position ${SEL.pos}</span>`, vals: pos, cls: 'cpos' }],
+  return { left: [{ t: 'vec', label: 'input embedding', sym: SV, chip: wchip(t, 'v'), vals: tok, cls: 'cv' }, { t: 'op', s: '+' },
+    { t: 'vec', label: 'position embedding', sym: '<i class="cpos">P</i>', chip: `<span class="chip pos">position ${SEL.pos}</span>`, vals: pos, cls: 'cpos' }],
     result: { label: 'input vector', chip: `<span class="chip">${tstr(t)} at ${SEL.pos}</span>`, vals: tok.map((x, d) => x + pos[d]), cls: 'cp' } };
 }, 3);
 function render4() {
@@ -583,8 +594,8 @@ function renderHeat4g() {
   $('m4g-heat').innerHTML = `<div class="m4gwrap"><div class="m4gy">${ticks.map(t => `<span style="top:${t / 1024 * 100}%">${t}</span>`).join('')}</div><div class="m4gbox"></div><div class="m4gx">${ticks.map(t => `<span style="left:${t / 1024 * 100}%">${t}</span>`).join('')}</div></div>`;
   cv.className = 'm4gcv'; $('m4g-heat').querySelector('.m4gbox').appendChild(cv);
   const read = () => $('m4g-read').innerHTML = S4G.stage === 'end'
-    ? 'This shows GPT-2’s learned position rows by comparing every pair of them. Each square is two positions: blue where their rows point the same way, white where they are unrelated, orange where opposite. Hover to read a square.'
-    : 'Before training: random rows, drawn the way GPT-2’s code starts them. Every position is unrelated to every other, so all but the diagonal, each position compared with itself, is nearly white. GPT-2’s actual starting rows were never published. Hover to read a square.';
+    ? 'This shows GPT-2’s learned position embeddings by comparing every pair of them. Each square is two positions: blue where their embeddings point the same way, white where they are unrelated, orange where opposite. Hover to read a square.'
+    : 'Before training: random embeddings, drawn the way GPT-2’s code starts them. Every position is unrelated to every other, so all but the diagonal, each position compared with itself, is nearly white. GPT-2’s actual starting embeddings were never published. Hover to read a square.';
   read();
   cv.addEventListener('pointermove', e => {
     const r = cv.getBoundingClientRect(), i = Math.max(0, Math.min(n - 1, Math.floor((e.clientX - r.left) / r.width * n))), j = Math.max(0, Math.min(n - 1, Math.floor((e.clientY - r.top) / r.height * n)));
@@ -633,7 +644,7 @@ function renderDims4g() {
   // the positions and tested on the rest, five times round; the average error, in positions)
   const R4 = GPT2.pos.read, err = R4[end ? 'end' : 'start'][S4G.k], these = k === 1 ? 'this dimension' : `these ${k === d ? 768 : k} dimensions`;
   const e63 = R4.end[R4.stops.indexOf(mov)], fmt = x => x >= 10 ? Math.round(x) : x;
-  $('m4g-readout').innerHTML = !end ? `Reading the position back: from random rows, a weighted sum of ${these} is off by about <b>${Math.round(err)}</b> positions on average, no better than always guessing the middle.`
+  $('m4g-readout').innerHTML = !end ? `Reading the position back: from random embeddings, a weighted sum of ${these} is off by about <b>${Math.round(err)}</b> positions on average, no better than always guessing the middle.`
     : err > 200 ? `Reading the position back: a weighted sum of ${these} is off by about <b>${Math.round(err)}</b> positions on average, no better than guessing. A slow wave passes through the same height at many positions.`
     : k > mov ? `Reading the position back: a weighted sum of all 768 finds the position to within about <b>${fmt(err)}</b> positions on average, the same as the ${mov} that move (${fmt(e63)}). The flat dimensions add nothing.`
     : `Reading the position back: a weighted sum of ${these} finds the position to within about <b>${fmt(err)}</b> positions on average.`;
@@ -641,7 +652,7 @@ function renderDims4g() {
   $('m4g-kval').textContent = k === d ? 'all 768' : k === mov ? `all ${mov} that move` : `the top ${k}`;
   $('m4g-pcnote').innerHTML = `<div class="legend" style="margin-top:0">${leg}<span><i style="background:var(--ink-2)"></i>${dn(typ)}, a typical one</span></div>` + (end
     ? `Each line follows one dimension across all 1,024 positions, ranked by how much it changes. Only ${mov} of the 768 change much, in smooth waves${k === mov ? ': these are all of them' : ''}${k > mov ? '; the rest stay in a flat band near 0, like the typical one' : ''}.`
-    : 'The same dimensions in the random rows: tiny, and no pattern from one position to the next.');
+    : 'The same dimensions in the random embeddings: tiny, and no pattern from one position to the next.');
 }
 $('m4g-k').addEventListener('input', e => { S4G.k = +e.target.value; renderDims4g(); });
 // hover (or touch) the chart to pick a position; the frame is 320 wide with the plot from x = 30
@@ -689,7 +700,7 @@ function ContextTrack(k, stack = null) {
   track.addEventListener('pointerup', end); track.addEventListener('pointercancel', end);
   return me;
 }
-const TRACK5 = ContextTrack('m5'), TRACK6 = ContextTrack('m6', () => stack6()), TRACKSB = ContextTrack('sb', () => S6.sbStack ? stack6() : null);   // the header swaps in 7's stack once you're past it
+const TRACK5 = ContextTrack('m5'), TRACK6 = ContextTrack('m6', () => stack6()), TRACKSB = ContextTrack('sb', () => S6.sbMode === 'stack' ? stack6() : null);   // the header swaps in 7's stack once you're past it
 function render5() {
   const s = seqSel(), n = s.length - 1;
   TRACK5.render();
@@ -725,11 +736,12 @@ function renderMix() {
 const H_SYM = '<i class="ch-h">h</i>';
 // h belongs to one position: name it by that position's token as well as its number
 // on two lines: "h at", then the token as a chip with its position
-const hChip = () => `<span class="hlab"><span>h at</span><span>${wchip(inTok(), 'v')} <span class="hpos">(${SEL.pos})</span></span></span>`;
+// in grey: h belongs to a position but is neither an input embedding nor a candidate
+const hChip = () => `<span class="hlab"><span>h at</span><span>${wchip(inTok())} <span class="hpos">(${SEL.pos})</span></span></span>`;
 // The candidates for the next token, as a vertical stack at the next position, in the token table's
 // own order (by token ID: the toy stores its rows most common first, so they're listed by their GPT-2
 // IDs instead). Scrolling the stack picks which candidate is scored against h below.
-const S6 = { cand: null };
+const S6 = { cand: null, sbMode: 'track' };
 const ORDER6 = V.ids.map((_, i) => i).sort((a, b) => V.ids[a] - V.ids[b]);
 const ROWH = 32, PAD6 = 2;   // 7's stack shows 2 × 2 + 1 candidates, the picked one in line with the sentence
 const rowH = vp => +vp.dataset.rh || ROWH;   // the header's squashed copy has shorter rows (set in CSS and here)
@@ -741,7 +753,7 @@ function stack6() {
 const EQ6 = DotEq($('m6-eq'), () => {
   const u = upd(), t = S6.cand;
   return { a: { label: 'after the layers', sym: H_SYM, chip: hChip(), vals: arr(u.f.h2[SEL.pos]), cls: 'ch' },
-    b: { label: 'a candidate’s row', sym: '<span class="cvo">row</span>', chip: wchip(t, 'vo'), vals: arr(rowOf(u.m, 'E', t)), cls: 'cvo' } };
+    b: { label: 'candidate embedding', sym: '<i class="cvo">E</i>', chip: wchip(t, 'vo'), vals: arr(rowOf(u.m, 'E', t)), cls: 'cvo' } };
 }, 3, 4);
 function render6() {
   const u = upd(), p = u.f.p[SEL.pos], tg = tgTok();
@@ -751,7 +763,7 @@ function render6() {
 }
 function render6eq() {
   const u = upd(), c = S6.cand, p = u.f.p[SEL.pos][c];
-  $('m6-eqh').innerHTML = `One of the ${V.n} scores: h · the row of ${wchip(c, 'vo')}`;
+  $('m6-eqh').innerHTML = `One of the ${V.n} scores: h · the embedding of ${wchip(c, 'vo')}`;
   EQ6.refresh();
   $('m6-p').innerHTML = `After the softmax over all ${V.n} scores, ${wchip(c, 'vo')} gets a probability of <b>${p < 0.001 ? (100 * p).toFixed(3) : (100 * p).toFixed(1)}%</b>.`;
   // the error for the same candidate: label 1 if it really came next, 0 if not
@@ -802,18 +814,18 @@ const gchain = (i, cls) => {
     + sc('', 'learning rate α', u.alpha.toFixed(4), 'at this point in training') + '<div class="op">=</div>'
     + sc('gval', 'scaling factor <span class="cg">g</span>', num(g, 5), g > 0 ? 'positive: toward h' : 'negative: away from h');
 };
+// Section 8 works out parts only: nothing is applied until section 9 adds every part up.
+// A candidate's part is g × h; the input token's part is α × the direction sent back to its input vector.
 const upEq = (i, cls) => () => {
-  const u = upd(), r = arr(rowOf(u.m, 'E', i)), h = arr(u.f.h2[SEL.pos]), { g } = g7(i);
-  return { left: [{ t: 'vec', label: 'row', sym: '<span class="cvo">row</span>', chip: wchip(i, cls), vals: r, cls: 'cvo' }, { t: 'op', s: '+' }, { t: 'paren', s: '(' },
-    { t: 'scal', label: '<span class="cg">g</span>', val: num(g, 4), cls: 'cg' }, { t: 'op', s: '×' }, { t: 'vec', label: 'after the layers', sym: H_SYM, chip: hChip(), vals: h, cls: 'ch' }, { t: 'paren', s: ')' }],
-    result: { label: 'moved row', chip: wchip(i, cls), vals: r.map((x, d) => x + g * h[d]), cls: 'cvo' } };
+  const u = upd(), h = arr(u.f.h2[SEL.pos]), { g } = g7(i);
+  return { left: [{ t: 'scal', label: '<span class="cg">g</span>', val: num(g, 4), cls: 'cg' }, { t: 'op', s: '×' }, { t: 'vec', label: 'after the layers', sym: H_SYM, chip: hChip(), vals: h, cls: 'ch' }],
+    result: { label: 'Δ from being scored', chip: `<span class="chip ${cls}">Δ ${tstr(i)}</span>`, vals: h.map(x => g * x), cls: 'cvo' } };
 };
 const EQ7U = VecEq($('m7-up'), () => upEq(tgTok(), 'tg')(), 4), EQ7D = VecEq($('m7-down'), () => upEq(S7.wrong, 'neg')(), 4);
 const EQ7I = VecEq($('m7-in'), () => {
-  const u = upd(), t = inTok(), r = arr(rowOf(u.m, 'E', t)), sig = arr(u.one[SEL.pos].dh0[SEL.pos]).map(x => -x);
-  return { left: [{ t: 'vec', label: 'token row', sym: SV, chip: wchip(t, 'v'), vals: r, cls: 'cv' }, { t: 'op', s: '+' }, { t: 'paren', s: '(' },
-    { t: 'scal', label: 'α', val: u.alpha.toFixed(4) }, { t: 'op', s: '×' }, { t: 'vec', label: 'sent back', sym: '<i class="ch-h">∇</i>', chip: `<span class="chip">sent back to ${SEL.pos}</span>`, vals: sig, cls: 'ch' }, { t: 'paren', s: ')' }],
-    result: { label: 'moved row', chip: wchip(t, 'v'), vals: r.map((x, d) => x + u.alpha * sig[d]), cls: 'cv' } };
+  const u = upd(), t = inTok(), sig = arr(u.one[SEL.pos].dh0[SEL.pos]).map(x => -x);
+  return { left: [{ t: 'scal', label: 'α', val: u.alpha.toFixed(4) }, { t: 'op', s: '×' }, { t: 'vec', label: 'error-reducing nudge', sym: '<i class="ch-h">∇</i>', chip: `<span class="hlab"><span>for the input at</span><span>${wchip(t)} <span class="hpos">(${SEL.pos})</span></span></span>`, vals: sig, cls: 'ch' }],
+    result: { label: 'Δ from being the input', chip: `<span class="chip v">Δ ${tstr(t)}</span>`, vals: sig.map(x => u.alpha * x), cls: 'cv' } };
 }, 4);
 function render7() {
   const u = upd(), p = u.f.p[SEL.pos], tg = tgTok(), wrongs = V.ids.map((_, i) => i).filter(i => i !== tg).sort((a, b) => p[b] - p[a]);
@@ -827,35 +839,49 @@ $('m7-wrong').addEventListener('change', e => setCand(+e.target.value));
 
 // ---------- 8 adding up one sentence's update for one row ----------
 const S8 = { row: null };
-const EQ8S = VecEq($('m8-sum'), () => {
-  const u = upd(), f = u.f, r = S8.row, left = [];
-  parts8().forEach((q, i) => { if (i) left.push({ t: 'op', s: '+' }); left.push(q); });
-  return { left, result: { label: `Δ${SV}`, chip: wchip(r, 'v'), vals: delta8(), cls: 'cv' } };
-}, 4, 'compact');
+// The chosen row's parts, one line per prediction (each is what section 8 works out, for this row),
+// then the input parts, then their sum: the row's whole change in this step. The row gets parts in
+// both roles, so here it is shown in neither color.
+const SROW = '<i class="crow">E</i>';
 const EQ8A = VecEq($('m8-apply'), () => {
   const u = upd(), r = arr(rowOf(u.m, 'E', S8.row)), dl = delta8();
-  return { left: [{ t: 'vec', label: 'row', sym: SV, chip: wchip(S8.row, 'v'), vals: r, cls: 'cv' }, { t: 'op', s: '+' }, { t: 'vec', label: `Δ${SV}`, sym: `Δ${SV}`, chip: wchip(S8.row, 'v'), vals: dl, cls: 'cp' }],
-    result: { label: `new ${SV}`, chip: wchip(S8.row, 'v'), vals: r.map((x, d) => x + dl[d]), cls: 'cv' } };
+  return { left: [{ t: 'vec', label: 'the embedding', sym: SROW, chip: wchip(S8.row), vals: r, cls: 'cp' }, { t: 'op', s: '+' }, { t: 'vec', label: 'total change', sym: `Δ${SROW}`, chip: `<span class="chip">total Δ ${tstr(S8.row)}</span>`, vals: dl, cls: 'cp' }],
+    result: { label: 'new embedding', chip: wchip(S8.row), vals: r.map((x, d) => x + dl[d]), cls: 'cp' } };
 }, 4);
-// a row's parts: one where rows are scored for every position (right or wrong answer there), and one at the
-// bottom for every position where it is the input
 function parts8() {
   const u = upd(), f = u.f, r = S8.row, out = [];
   for (let t = 0; t < f.n; t++) {
     const lab = f.tg[t] === r ? 1 : 0, g = (lab - f.p[t][r]) * u.alpha;
-    out.push({ t: 'vec', label: `position ${t}`, sym: `<span class="cg">g</span><span class="gx">·</span>${H_SYM}`, chip: `<span class="chip ${lab ? 'tg' : 'neg'}">${lab ? 'answer' : 'wrong'} at ${t}</span>`,
-      vals: arr(f.h2[t]).map(x => g * x), cls: 'cp', top: true });
+    out.push({ t, kind: lab ? 'came' : 'not', what: `${wchip(f.inp[t])} → ?`, p: f.p[t][r], vals: arr(f.h2[t]).map(x => g * x) });
   }
-  for (let t = 0; t < f.n; t++) if (f.inp[t] === r) out.push({ t: 'vec', label: `position ${t}`, sym: `α<span class="gx">·</span><i class="ch-h">∇</i>`, chip: `<span class="chip v">input at ${t}</span>`,
-    vals: arr(u.full.dh0[t]).map(x => -u.alpha * x), cls: 'cp' });
+  // as the input at t: what backprop sends back to the input vector there, from every prediction that can
+  // see position t (mostly the one at t itself; later ones add a little through attention)
+  for (let t = 0; t < f.n; t++) if (f.inp[t] === r) out.push({ t, kind: 'input', what: `${wchip(r)} is the input at ${t}`, vals: arr(u.full.dh0[t]).map(x => -u.alpha * x) });
   return out;
+}
+const ROLE8 = { came: ['tg', 'came next'], not: ['neg', 'didn’t come next'], input: ['v', 'the input'] };
+function renderSum8() {
+  const u = upd(), f = u.f, parts = parts8(), tot = delta8(), r = S8.row, top = Math.max(1e-12, ...parts.flatMap(p => p.vals.map(Math.abs)), ...tot.map(Math.abs));
+  const cells = v => v.map(x => `<span class="rc" style="background:${heatColor(x, top * 1.4)}">${num(x, 4)}</span>`).join('');
+  const pct = p => p < 0.001 ? (100 * p).toFixed(3) + '%' : (100 * p).toFixed(1) + '%';
+  // what you're looking at: the sentence's predictions, and what each does to this one embedding
+  const came = f.tg.map((x, t) => x === r ? t : -1).filter(t => t >= 0), inp = f.inp.map((x, t) => x === r ? t : -1).filter(t => t >= 0), n = f.n, rc = wchip(r);
+  const at = ts => ts.length === 1 ? `position ${ts[0]}` : `positions ${ts.join(' and ')}`;
+  const intro = !came.length && !inp.length
+    ? `${rc} isn’t in this sentence. But each of its ${n} predictions still scores every token, ${rc} included, so each pushes ${rc}’s embedding away a little, by how likely it thought ${rc} was.`
+    : `${rc} ${came.length ? `comes next at ${at(came)}` : 'never comes next'}${inp.length ? ` and is the input at ${at(inp)}` : ''}. The other predictions still score it, and push its embedding away a little, by how likely they thought it was.`;
+  $('m8-sum').innerHTML = `<p class="m8intro">${intro}</p><div class="m8t"><div class="m8r m8h"><span>prediction</span><span class="pc" title="the probability the model gave ${esc(plain(r))} there">p</span><span>came next?</span><span>its Δ, one number per dimension</span></div>
+    ${parts.map(p => { const [c, l] = ROLE8[p.kind];
+      const ans = p.kind === 'input' ? '<span class="badge inb">input</span>' : p.kind === 'came' ? '<span class="badge pos">yes</span>' : '<span class="badge neg">no</span>';
+      return `<div class="m8r${p.kind === 'input' ? ' inp' : ''}"><span class="w"><span class="pn">${p.t}</span>${p.what}</span><span class="pc">${p.kind === 'input' ? '' : pct(p.p)}</span><span class="m8ans">${ans}</span><span class="cells">${cells(p.vals)}</span></div>`; }).join('')}
+    <div class="m8r m8tot"><span class="w">total Δ ${rc}: all ${parts.length} added up</span><span></span><span></span><span class="cells">${cells(tot)}</span></div></div>
+    <p class="note" style="margin:8px 0 0">At each position the model gives every token a probability; this table follows one of them, ${rc}. Each line is the same calculation as section 8: (label − p) × α × h at that position, where the label is 1 if ${rc} came next and 0 if not. An input line is α × the error-reducing nudge for the input vector at that position: mostly from the prediction made there, plus a little from later predictions, whose attention can look back at it.</p>`;
 }
 function delta8() { const u = upd(), D0 = LAYOUT.E[0] + S8.row * D; return Array.from({ length: D }, (_, d) => -u.alpha * u.full.g[D0 + d]); }
 function render8() {
   const u = upd(); if (S8.row == null) S8.row = tgTok(); syncPass();
-  $('m8-sent').innerHTML = `<span class="lab">its predictions</span> ${seqSel().map(t => wchip(t)).join('')}`;
   $('m8-row').innerHTML = V.ids.map((_, i) => `<option value="${i}">${esc(optLabel(i))}</option>`).join(''); $('m8-row').value = S8.row;
-  EQ8S.refresh(); EQ8A.refresh();
+  renderSum8(); EQ8A.refresh();
   // every row's step, largest first: colored by its role in this sentence
   const s = new Set(seqSel()), tgs = new Set(u.f.tg), mag = V.ids.map((_, i) => Math.hypot(...Array.from({ length: D }, (_, d) => u.full.g[LAYOUT.E[0] + i * D + d])) * u.alpha);
   const ord = mag.map((x, i) => i).sort((a, b) => mag[b] - mag[a]), mx = mag[ord[0]] || 1, W0 = 700, H0 = 170, l = 8, bt = 70, top = 8, bw = (W0 - l - 4) / V.n, Y = v => top + (1 - v / mx) * (H0 - bt - top);
@@ -868,8 +894,9 @@ function render8() {
   $('m8-all').innerHTML = svg + `<line x1="${l}" x2="${W0}" y1="${Y(0)}" y2="${Y(0)}" stroke="var(--axis)"/></svg>
     <div class="legend"><span><i style="background:var(--violet)"></i>an input in this sentence (and maybe an answer too)</span><span><i style="background:var(--blue)"></i>only an answer</span><span><i style="background:#f6c3ad"></i>not in the sentence: only pushed away</span></div>`;
 }
-$('m8-row').addEventListener('change', e => { S8.row = +e.target.value; render8(); });
-$('m8-all').addEventListener('click', e => { const g = e.target.closest('[data-r]'); if (g) { S8.row = +g.dataset.r; render8(); } });
+$('m8-row').addEventListener('change', e => { S8.row = +e.target.value; render8(); renderStatebar(); });
+$('sb-sentview').addEventListener('click', e => { const c = e.target.closest('[data-t]'); if (c) { S8.row = +c.dataset.t; render8(); renderStatebar(); } });
+$('m8-all').addEventListener('click', e => { const g = e.target.closest('[data-r]'); if (g) { S8.row = +g.dataset.r; render8(); renderStatebar(); } });
 
 // ---------- 9 two tokens drawing together ----------
 const S9 = { a: tokIx(' coffee'), b: tokIx(' tea'), key: '', series: null };
@@ -1005,10 +1032,10 @@ function render11() {
   const vrow = variants.map(v => { const ids = BPE.encode(v); return `<span class="m11v">${ids.map(id => `<span class="chip">${gstr(id)}</span>`).join('')}<span class="note">${ids.length === 1 ? 'ID ' + ids[0] : ids.length + ' tokens'}</span></span>`; }).join('');
   const ids = BPE.encode(' ' + w), r = ids.length === 1 ? NN.at.get(ids[0]) : undefined;
   let nn;
-  if (ids.length > 1) nn = `<p class="note">“${vis(' ' + w)}” is ${ids.length} tokens in GPT-2, so it has no row of its own.</p>`;
+  if (ids.length > 1) nn = `<p class="note">“${vis(' ' + w)}” is ${ids.length} tokens in GPT-2, so it has no embedding of its own.</p>`;
   else if (r === undefined) nn = `<p class="note">“${vis(' ' + w)}” is token ${ids[0]}, but its neighbours aren’t included on this page. Try a more common word.</p>`;
   else nn = `<table class="data"><tbody>${Array.from({ length: NN.k }, (_, j) => { const id = NN.ids[r * NN.k + j], c = NN.cos[r * NN.k + j] / 255; return `<tr><td class="n rk">${j + 1}</td><td class="mono">${gstr(id)}</td><td class="n mono">${id}</td><td class="n">${c.toFixed(2)}</td><td class="bar"><i style="width:${c * 100}%"></i></td></tr>`; }).join('')}</tbody></table>`;
-  out.innerHTML = `<h4>The word as GPT-2 tokens</h4><div class="m11vs">${vrow}</div><h4 style="margin-top:14px">The 10 rows nearest to ${ids.length === 1 ? `“${gstr(ids[0])}”` : 'it'}, out of 50,257</h4>${nn}`;
+  out.innerHTML = `<h4>The word as GPT-2 tokens</h4><div class="m11vs">${vrow}</div><h4 style="margin-top:14px">The 10 embeddings nearest to ${ids.length === 1 ? `“${gstr(ids[0])}”` : 'it'}, out of 50,257</h4>${nn}`;
 }
 $('m11-ex').innerHTML = M11_EX.map(w => `<button data-w="${w}">${w}</button>`).join('');
 $('m11-ex').addEventListener('click', e => { const b = e.target.closest('button'); if (b) { $('m11-word').value = b.dataset.w; render11(); } });
@@ -1031,10 +1058,10 @@ function render11g() {
   // labels alternate above and below their dots so neighbours don't collide
   const mark = (id, c, k) => `<circle cx="${X(id)}" cy="${Y(DMU[id])}" r="4" fill="none" stroke="var(--${c})" stroke-width="1.6"/><text x="${X(id)}" y="${Y(DMU[id]) + (k % 2 ? 17 : -9)}" text-anchor="middle" font-size="10.5" font-family="var(--mono)" fill="var(--${c})">${esc(BPE.str(id).replace(/^ /, '·'))}</text>`;
   MARK11.forEach(([id, c], k) => { svg += mark(id, c, k); });
-  svg += `<text transform="translate(10,${t + (H0 - t - b) / 2}) rotate(-90)" text-anchor="middle" font-size="10">distance from the average row</text>`;
+  svg += `<text transform="translate(10,${t + (H0 - t - b) / 2}) rotate(-90)" text-anchor="middle" font-size="10">distance from the average embedding</text>`;
   svg += `<g id="m11g-hov"></g>`;
   $('m11g-svg').innerHTML = svg;
-  const read = () => { $('m11g-read').innerHTML = `Each dot is one of the 50,257 rows. Height is its distance from the average row. The red rows sit nearest the middle: glitch tokens GPT-2 almost never saw in training. The dots at the far left, just as low, are byte values that never occur in ordinary text. Hover to read any dot.`; $('m11g-hov').innerHTML = ''; };
+  const read = () => { $('m11g-read').innerHTML = `Each dot is one of the 50,257 token embeddings. Height is its distance from the average embedding. The red ones sit nearest the middle: glitch tokens GPT-2 almost never saw in training. The dots at the far left, just as low, are byte values that never occur in ordinary text. Hover to read any dot.`; $('m11g-hov').innerHTML = ''; };
   read();
   cv.addEventListener('pointermove', e => {
     const rc = cv.getBoundingClientRect(), mx = e.clientX - rc.left, my = e.clientY - rc.top, span = 3 / (W0 - l - r) * 50256, c = (mx - l) / (W0 - l - r) * 50256;
@@ -1042,7 +1069,7 @@ function render11g() {
     for (let id = Math.max(0, Math.floor(c - span)); id <= Math.min(50256, Math.ceil(c + span)); id++) { const d = Math.hypot(X(id) - mx, Y(DMU[id]) - my); if (d < bd) { bd = d; best = id; } }
     if (best < 0 || bd > 14) { read(); return; }
     $('m11g-hov').innerHTML = `<circle cx="${X(best)}" cy="${Y(DMU[best])}" r="5" fill="none" stroke="var(--ink)" stroke-width="1.5"/>`;
-    $('m11g-read').innerHTML = `token <b>${best}</b>, <span class="mono">${gstr(best)}</span>: distance from the average row <b>${DMU[best].toFixed(2)}</b>`;
+    $('m11g-read').innerHTML = `token <b>${best}</b>, <span class="mono">${gstr(best)}</span>: distance from the average embedding <b>${DMU[best].toFixed(2)}</b>`;
   });
   cv.addEventListener('pointerleave', read);
 }

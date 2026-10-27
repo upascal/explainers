@@ -822,3 +822,43 @@ table.m6real tr.on td.bar i { background: var(--blue); }
 #statebar .m6c .chip { font-size: 0.72rem; padding: 0 6px; min-width: 56px; line-height: 18px; }
 #statebar .m6road .m3track, #statebar .m3track { padding-top: 4px; padding-bottom: 10px; }
 #statebar .m3track { align-items: center; }
+/* the header in section 9: the whole sentence, the chosen row's token marked */
+#statebar .sb-sentview { display: flex; flex-wrap: wrap; align-items: center; gap: 4px; padding: 2px 0 4px; }
+#statebar .sb-sentview[hidden] { display: none; }
+#statebar .sb-sentview .lab { font-size: 0.74rem; color: var(--muted); margin-right: 4px; }
+#statebar .sb-sentview .chip { cursor: pointer; }
+#statebar .sb-sentview .chip:hover { border-color: var(--violet); }
+/* 9: one line per prediction, then the sum */
+.crow { color: var(--ink); font-weight: 700; }
+.m8t { border: 1px solid var(--grid); border-radius: 8px; background: white; overflow-x: auto; }
+.m8r { display: grid; grid-template-columns: minmax(190px, 1fr) 130px auto; gap: 10px; align-items: center; padding: 4px 10px; min-width: 600px; }
+.m8r + .m8r { border-top: 1px solid #f0efea; }
+.m8h { font-size: 0.7rem; color: var(--muted); padding-top: 8px; }
+.m8h .chip { font-size: 0.7rem; padding: 0 4px; }
+.m8r .w { display: inline-flex; align-items: center; gap: 4px; flex-wrap: wrap; font-size: 0.78rem; color: var(--ink-2); }
+.m8r .w .chip { font-size: 0.74rem; padding: 1px 5px; }
+.m8r .pn { font-size: 0.68rem; color: var(--muted); min-width: 14px; font-variant-numeric: tabular-nums; }
+.m8r .cells { display: grid; grid-template-columns: repeat(6, 56px); gap: 3px; }
+.m8r .rc { font-family: "JetBrains Mono", var(--mono); font-size: 0.68rem; text-align: right; padding: 1px 4px; border-radius: 3px; font-variant-numeric: tabular-nums; }
+.m8r.here { background: #f6f5fc; }
+.m8here { font-size: 0.66rem; color: var(--violet); margin-left: 4px; white-space: nowrap; }
+.m8r.inp { background: #faf9fe; }
+.m8tot { border-top: 2px solid var(--axis) !important; font-weight: 600; }
+.m8tot .w { color: var(--ink); }
+.badge.inb { background: var(--violet-100); color: var(--violet); }
+.m8r { grid-template-columns: minmax(170px, 1fr) 118px auto; min-width: 640px; }
+.m8r .badge { text-transform: none; letter-spacing: 0; white-space: nowrap; font-size: 0.72rem; margin-left: 0; }
+.m8intro { font-size: 0.88rem; color: var(--ink-2); margin: 0 0 10px; line-height: 1.5; }
+.m8intro .chip, .m8h .chip { font-size: 0.74rem; padding: 0 5px; }
+.m8r { grid-template-columns: minmax(170px, 1fr) 118px 62px auto; min-width: 700px; }
+.m8r .pc { font-size: 0.72rem; color: var(--ink-2); text-align: right; font-variant-numeric: tabular-nums; }
+/* 9: fixed columns, so the header lines up with every line */
+.m8r { grid-template-columns: 190px 118px 62px 351px; min-width: 771px; }
+.m8h > span { white-space: nowrap; }
+.m8h .pc { text-align: right; }
+.m8r { grid-template-columns: 190px 70px 150px 351px; min-width: 801px; }
+.m8ans { display: inline-flex; align-items: center; gap: 4px; white-space: nowrap; }
+.m8nx { font-size: 0.7rem; color: var(--muted); }
+.m8nx .chip { font-size: 0.7rem; padding: 0 4px; }
+.m8r { grid-template-columns: 190px 70px 130px 351px; min-width: 781px; }
+#m7b .m4wrap .m4eq.mathon { padding-top: 66px; }

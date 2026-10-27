@@ -1,13 +1,11 @@
 <div class="module" id="m7">
-  <h4 class="m3title">Update the rows for one prediction</h4>
-  <h4>The right answer’s row</h4>
+  <h4 class="m3title">The Δ from being scored, for one prediction</h4>
+  <h4>The embedding of the token that came next</h4>
   <div class="m5eq m6g" id="m7-g"></div>
   <div id="m7-up"></div>
-  <h4 style="margin-top:14px">A wrong answer’s row</h4>
-  <div class="row"><label class="ctl">wrong token <select id="m7-wrong"></select></label></div>
+  <h4 style="margin-top:14px">The embedding of a token that didn’t come next</h4>
+  <div class="row"><label class="ctl">token <select id="m7-wrong"></select></label></div>
   <div class="m5eq m6g" id="m7-gw"></div>
   <div id="m7-down"></div>
-  <h4 style="margin-top:14px">The input token’s row</h4>
-  <div id="m7-in"></div>
-  <p class="note" style="margin:8px 0 0">These are parts of an update, not yet applied. Section 9 adds them up.</p>
+  <p class="note" style="margin:8px 0 0">Each result is a change, Δ, not an embedding: one prediction’s share of what will be added. Nothing is applied yet: section 9 adds up every Δ for one embedding and applies the total once.</p>
 </div>

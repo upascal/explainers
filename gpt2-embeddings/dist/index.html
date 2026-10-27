@@ -832,6 +832,46 @@ table.m6real tr.on td.bar i { background: var(--blue); }
 #statebar .m6c .chip { font-size: 0.72rem; padding: 0 6px; min-width: 56px; line-height: 18px; }
 #statebar .m6road .m3track, #statebar .m3track { padding-top: 4px; padding-bottom: 10px; }
 #statebar .m3track { align-items: center; }
+/* the header in section 9: the whole sentence, the chosen row's token marked */
+#statebar .sb-sentview { display: flex; flex-wrap: wrap; align-items: center; gap: 4px; padding: 2px 0 4px; }
+#statebar .sb-sentview[hidden] { display: none; }
+#statebar .sb-sentview .lab { font-size: 0.74rem; color: var(--muted); margin-right: 4px; }
+#statebar .sb-sentview .chip { cursor: pointer; }
+#statebar .sb-sentview .chip:hover { border-color: var(--violet); }
+/* 9: one line per prediction, then the sum */
+.crow { color: var(--ink); font-weight: 700; }
+.m8t { border: 1px solid var(--grid); border-radius: 8px; background: white; overflow-x: auto; }
+.m8r { display: grid; grid-template-columns: minmax(190px, 1fr) 130px auto; gap: 10px; align-items: center; padding: 4px 10px; min-width: 600px; }
+.m8r + .m8r { border-top: 1px solid #f0efea; }
+.m8h { font-size: 0.7rem; color: var(--muted); padding-top: 8px; }
+.m8h .chip { font-size: 0.7rem; padding: 0 4px; }
+.m8r .w { display: inline-flex; align-items: center; gap: 4px; flex-wrap: wrap; font-size: 0.78rem; color: var(--ink-2); }
+.m8r .w .chip { font-size: 0.74rem; padding: 1px 5px; }
+.m8r .pn { font-size: 0.68rem; color: var(--muted); min-width: 14px; font-variant-numeric: tabular-nums; }
+.m8r .cells { display: grid; grid-template-columns: repeat(6, 56px); gap: 3px; }
+.m8r .rc { font-family: "JetBrains Mono", var(--mono); font-size: 0.68rem; text-align: right; padding: 1px 4px; border-radius: 3px; font-variant-numeric: tabular-nums; }
+.m8r.here { background: #f6f5fc; }
+.m8here { font-size: 0.66rem; color: var(--violet); margin-left: 4px; white-space: nowrap; }
+.m8r.inp { background: #faf9fe; }
+.m8tot { border-top: 2px solid var(--axis) !important; font-weight: 600; }
+.m8tot .w { color: var(--ink); }
+.badge.inb { background: var(--violet-100); color: var(--violet); }
+.m8r { grid-template-columns: minmax(170px, 1fr) 118px auto; min-width: 640px; }
+.m8r .badge { text-transform: none; letter-spacing: 0; white-space: nowrap; font-size: 0.72rem; margin-left: 0; }
+.m8intro { font-size: 0.88rem; color: var(--ink-2); margin: 0 0 10px; line-height: 1.5; }
+.m8intro .chip, .m8h .chip { font-size: 0.74rem; padding: 0 5px; }
+.m8r { grid-template-columns: minmax(170px, 1fr) 118px 62px auto; min-width: 700px; }
+.m8r .pc { font-size: 0.72rem; color: var(--ink-2); text-align: right; font-variant-numeric: tabular-nums; }
+/* 9: fixed columns, so the header lines up with every line */
+.m8r { grid-template-columns: 190px 118px 62px 351px; min-width: 771px; }
+.m8h > span { white-space: nowrap; }
+.m8h .pc { text-align: right; }
+.m8r { grid-template-columns: 190px 70px 150px 351px; min-width: 801px; }
+.m8ans { display: inline-flex; align-items: center; gap: 4px; white-space: nowrap; }
+.m8nx { font-size: 0.7rem; color: var(--muted); }
+.m8nx .chip { font-size: 0.7rem; padding: 0 4px; }
+.m8r { grid-template-columns: 190px 70px 130px 351px; min-width: 781px; }
+#m7b .m4wrap .m4eq.mathon { padding-top: 66px; }
 </style>
 </head>
 <body>
@@ -845,12 +885,14 @@ table.m6real tr.on td.bar i { background: var(--blue); }
 <nav class="toc">
   <a href="#s1">1. The problem</a>
   <a href="#s2">2. Building the vocabulary</a>
-  <a href="#s3">3. The token table</a>
+  <a href="#s3">3. Token embeddings</a>
   <a href="#s4">4. Position</a>
   <a href="#s5">5. Predicting the next token</a>
   <a href="#s6">6. Mixing in the context</a>
   <a href="#s7">7. Scoring every token</a>
   <a href="#s8">8. One update</a>
+  <a href="#s8-1">8.1 The Δ from being scored</a>
+  <a href="#s8-2">8.2 The Δ from being the input</a>
   <a href="#s9">9. Adding up an update</a>
   <a href="#s10">10. Two tokens drawing together</a>
   <a href="#s11">11. Training at scale</a>
@@ -902,7 +944,7 @@ table.m6real tr.on td.bar i { background: var(--blue); }
 <tr>
 <td>Parameters</td>
 <td>756</td>
-<td>124 million, 38.6 million of them in the token table</td>
+<td>124 million, 38.6 million of them in the token embedding table</td>
 </tr>
 <tr>
 <td>Training text</td>
@@ -960,8 +1002,8 @@ table.m6real tr.on td.bar i { background: var(--blue); }
   <div class="m2gsteps" id="m2g-steps"></div>
   <p class="note" style="margin:10px 0 0">Type a single word. A leading space is part of the word, as it is in running text.</p>
 </div>
-<h2 id="s3"><span class="num">3</span>The token table</h2>
-<p>A token ID is just a row number. The first layer of GPT-2 is a table with one row for each of the 50,257 tokens and 768 numbers in each row. For every token in the text, it looks up that token’s row. Nothing is calculated: it is a lookup. The table holds 38.6 million numbers, almost a third of GPT-2 small’s parameters.</p>
+<h2 id="s3"><span class="num">3</span>Token embeddings</h2>
+<p>A token ID is just a row number. The first layer of GPT-2 is a table with one row for each of the 50,257 tokens and 768 numbers in each row. For every token in the text, it looks up that token’s row. Nothing is calculated: it is a lookup. A token’s row is called its <em>embedding</em>: the 768 numbers in row 6891 are <span class="tok"><span class="sp">·</span>coffee</span>’s embedding. GPT-2’s code calls the whole table <code>wte</code>, for word token embeddings; formulas usually call it <em>E</em>, and token <em>j</em>’s embedding <em>E</em><sub><em>j</em></sub>. The table holds 38.6 million numbers, almost a third of GPT-2 small’s parameters.</p>
 <p>Here is the toy corpus, cut into GPT-2’s tokens, and its vocabulary.</p>
 <div class="module" id="m3">
   <h4 class="m3title">The corpus as GPT-2 tokens, and its vocabulary</h4>
@@ -970,11 +1012,11 @@ table.m6real tr.on td.bar i { background: var(--blue); }
     <div><h4>Corpus</h4><div class="corpus" id="m3-corpus"></div></div>
     <div><h4>Vocabulary, by count</h4><div class="vocabwrap" id="m3-vocab"></div></div>
   </div>
-  <p class="note" style="margin:10px 0 0">Click any token to select it: it is highlighted here and shown in the row below.</p>
+  <p class="note" style="margin:10px 0 0">Click any token to select it: it is highlighted here and shown in the embedding below.</p>
 </div>
-<p>Before training, every number in the table is random, drawn from a normal distribution with a standard deviation of 0.02. Training then adjusts the rows, as sections 7 to 9 show. Here is one toy row, at any step of its training, next to the same token’s real row from GPT-2.</p>
+<p>Before training, every number in the table is random, drawn from a normal distribution with a standard deviation of 0.02. Training then adjusts the embeddings, as sections 7 to 9 show. Here is one toy embedding, at any step of its training, next to the same token’s real embedding from GPT-2.</p>
 <div class="module" id="m3v">
-  <h4 class="m3title">One token’s row</h4>
+  <h4 class="m3title">One token’s embedding</h4>
   <div class="row">
     <label class="ctl">token <span class="seg" id="m3v-word"></span></label>
     <span class="stepctl"><span class="lab">training step</span><input type="range" min="0" max="1" step="1" aria-label="training step"><span class="note sv"></span></span>
@@ -987,27 +1029,27 @@ table.m6real tr.on td.bar i { background: var(--blue); }
     <button id="reroll">Re-roll initialization</button>
     <span class="note" id="m3-seed"></span>
   </div>
-  <p class="note" style="margin:6px 0 0">Re-rolling draws new random rows and restarts training for the rest of the page.</p>
+  <p class="note" style="margin:6px 0 0">Re-rolling draws new random embeddings and restarts training for the rest of the page.</p>
 </div>
-<p>word2vec gave every word two vectors, an input vector and an output vector, kept in two tables. GPT-2 has one token table, and uses it twice: at the start, to look up each token, and at the end, to score which token comes next (section 7). Sharing one table this way is called <em>weight tying</em>.</p>
+<p>word2vec gave every word two vectors, an input vector and an output vector, kept in two tables. GPT-2 has one token embedding table, and uses it twice: at the start, to look up each token, and at the end, to score which token comes next (section 7). Sharing one table this way is called <em>weight tying</em>.</p>
 <div class="callout reveal">
   <div class="t">Why can GPT-2 get away with one table, when word2vec needed two?</div>
   <button class="reveal-btn" aria-expanded="false">Reveal answer</button>
-  <div class="reveal-body" hidden>In word2vec, one table would score a word against its own vector. That score is a squared length, always positive, so every word would be predicted next to itself. In GPT-2 the vector scored at the end is not the row that went in at the start: it has passed through 12 layers, which have mixed in the rest of the text. So a token’s row is not automatically its own best match. One table also saves parameters: a second 50,257 × 768 table would add 38.6 million.</div>
+  <div class="reveal-body" hidden>In word2vec, one table would score a word against its own vector. That score is a squared length, always positive, so every word would be predicted next to itself. In GPT-2 the vector scored at the end is not the embedding that went in at the start: it has passed through 12 layers, which have mixed in the rest of the text. So a token’s embedding is not automatically its own best match. One table also saves parameters: a second 50,257 × 768 table would add 38.6 million.</div>
 </div>
 <h2 id="s4"><span class="num">4</span>Position</h2>
-<p>The layers that come next, attention layers, see the text as a set of vectors with nothing to say which came first. “the dog walks” and “walks the dog” would look the same. So GPT-2 has a second table, with one row for each position from 0 to 1,023.</p>
-<p>These position rows are learned, just like the token rows. Nobody told GPT-2 that position 10 is close to position 11. But after training, the rows of nearby positions are nearly the same, and they drift apart smoothly with distance.</p>
+<p>The layers that come next, attention layers, see the text as a set of vectors with nothing to say which came first. “the dog walks” and “walks the dog” would look the same. So GPT-2 has a second table, of <em>position embeddings</em>: one for each position from 0 to 1,023 (<code>wpe</code> in GPT-2’s code).</p>
+<p>These position embeddings are learned, just like the token embeddings. Nobody told GPT-2 that position 10 is close to position 11. But after training, the embeddings of nearby positions are nearly the same, and they drift apart smoothly with distance.</p>
 <div class="module" id="m4g">
-  <h4 class="m3title">GPT-2’s 1,024 position rows</h4>
+  <h4 class="m3title">GPT-2’s 1,024 position embeddings</h4>
   <div class="row"><label class="ctl">training <span class="seg" id="m4g-stage"><button data-v="start">start</button><button data-v="end" class="on">end</button></span></label></div>
   <div class="cols2">
     <div><h4>How alike each pair of positions is</h4><div id="m4g-heat"></div><p class="note" id="m4g-read" style="margin:6px 0 0"></p></div>
     <div><h4 id="m4g-pchead"></h4><div id="m4g-pc"></div><div class="m4gslide"><input type="range" id="m4g-k" min="0" max="7" step="1" value="2" aria-label="how many dimensions"><span class="note" id="m4g-kval"></span></div><p class="m4gread" id="m4g-readout" aria-live="polite"></p><p class="note" id="m4g-pcnote" style="margin:6px 0 0"></p></div>
   </div>
 </div>
-<p>The table holds position this precisely, but GPT-2 seems to use only a rough version of it. Averaging the rows of every 10 neighbouring positions, so that they share one row, barely changes GPT-2’s predictions. Its precise sense of order seems to come from the attention layers that follow, which can see which tokens came before.</p>
-<p>For each token in the text, GPT-2 adds its position’s row to the token’s row. The sum is the vector that goes into the first layer. Here is that addition in the toy model, which has 8 positions.</p>
+<p>The table holds position this precisely, but GPT-2 seems to use only a rough version of it. Averaging the embeddings of every 10 neighbouring positions, so that they share one, barely changes GPT-2’s predictions. Its precise sense of order seems to come from the attention layers that follow, which can see which tokens came before.</p>
+<p>For each token in the text, GPT-2 adds its position embedding to the token’s embedding. The sum is the vector that goes into the first layer. Here is that addition in the toy model, which has 8 positions.</p>
 <div class="module" id="m4">
   <h4 class="m3title">Add the position</h4>
   <div class="row">
@@ -1031,7 +1073,7 @@ table.m6real tr.on td.bar i { background: var(--blue); }
 </div>
 <p>Compare word2vec’s window from the other page: it made pairs of neighbouring words, in both directions. Here the context is everything that came before, and the order matters.</p>
 <h2 id="s6"><span class="num">6</span>Mixing in the context</h2>
-<p>The input vector at a position only knows its own token and where it sits. To predict what comes next, it needs the rest of the prior context: after “ hot”, it matters whether “a cup of” came before. That is what the layers between the token table and the scoring do.</p>
+<p>The input vector at a position only knows its own token and where it sits. To predict what comes next, it needs the rest of the prior context: after “ hot”, it matters whether “a cup of” came before. That is what the layers between looking up the embeddings and scoring them do.</p>
 <p>Each layer has two parts. An <em>attention</em> part lets each position draw on the vectors at its own and every earlier position, more on some than on others, and adds the mix to its own vector. An <em>MLP</em> part then works on each position’s vector by itself and adds its result too. Because each part adds to the vector instead of replacing it, the vector that comes out of the last layer, the final <em>hidden state</em> <em>h</em>, is exactly a sum of the input vector and what each part added to it:</p>
 <div class="formula fxblock"><span class="fx"><span class="w"><span class="t">final hidden state</span><span class="g"><span class="o">=</span><span class="t tv">input vector</span></span><span class="g"><span class="o">+</span><span class="t">attention’s mix</span></span><span class="g"><span class="o">+</span><span class="t">MLP’s change</span></span></span><span class="s"><i>h</i> = <span class="sv"><i>x</i></span> + attn(<i>x</i><sub>0</sub> … <i>x</i><sub><i>t</i></sub>) + mlp(…)</span></span><span class="fxsw seg" role="group" aria-label="show formulas as"><button data-fx="w">words</button><button data-fx="s">symbols</button></span></div>
 <p>The toy has one such layer, so here it is in full for the selected prediction.</p>
@@ -1044,15 +1086,15 @@ table.m6real tr.on td.bar i { background: var(--blue); }
   <div id="mix-eq"></div>
   <p class="note" style="margin:8px 0 0">The attention part’s mix is a weighted blend of the context’s vectors, using the weights above, passed through the layer’s own small tables. Section 7 scores this h against every token.</p>
 </div>
-<p>GPT-2 repeats this 12 times, with 12 attention parts working side by side in each layer, and normalizes the result once more after the last one. This page doesn’t open those layers up; what matters here is that <em>h</em> is built from the input vectors of the whole prior context, so training can reach every one of their rows.</p>
+<p>GPT-2 repeats this 12 times, with 12 attention parts working side by side in each layer, and normalizes the result once more after the last one. This page doesn’t open those layers up; what matters here is that <em>h</em> is built from the input vectors of the whole prior context, so training can reach every one of their embeddings.</p>
 <h2 id="s7"><span class="num">7</span>Scoring every token</h2>
-<p>After GPT-2’s last layer, each position has one vector of 768 numbers. Call it <em>h</em>. As section 6 showed, it starts as the input vector of the token at that position, and the layers mix into it information from all the tokens before it. It belongs to one position but carries the whole context. To predict the next token, GPT-2 scores <em>h</em> against <strong>every row of the token table</strong>, the same table as in section 3, with the dot product, as word2vec did. That makes 50,257 scores, one for each token. The <em>softmax</em> turns them into probabilities that add up to 1:</p>
+<p>After GPT-2’s last layer, each position has one vector of 768 numbers. Call it <em>h</em>. As section 6 showed, it starts as the input vector of the token at that position, and the layers mix into it information from all the tokens before it. It belongs to one position but carries the whole context. To predict the next token, GPT-2 scores <em>h</em> against <strong>every token embedding in the table</strong>, the same table as in section 3, with the dot product, as word2vec did. That makes 50,257 scores, one for each token. The <em>softmax</em> turns them into probabilities that add up to 1:</p>
 <div class="formula">p<sub><i>j</i></sub> = e<sup>score<sub><i>j</i></sub></sup> / (e<sup>score<sub>1</sub></sup> + e<sup>score<sub>2</sub></sup> + … + e<sup>score<sub><i>n</i></sub></sup>)</div>
-<p>A higher score means a higher probability, and raising one token’s probability lowers all the others. word2vec turned each score into a probability on its own, with the sigmoid. The softmax makes the tokens compete.</p>
+<p>A higher score means a higher probability, and raising one token’s probability lowers all the others. On this page an embedding scored this way is a <em>candidate embedding</em>, in green; one looked up for a token in the text, as in section 4, is an <em>input embedding</em>, in purple. It is the same table either way, and the same token’s embedding can play both parts. word2vec turned each score into a probability on its own, with the sigmoid. The softmax makes the tokens compete.</p>
 <div class="module" id="m6">
   <h4 class="m3title">Score every token</h4>
   <div class="m3scroll m6road"><div class="m3track m5track" id="m6-track"></div></div>
-  <p class="note" style="margin:2px 0 14px">The stack holds every token that could come next, in the token table’s order. Scroll it, or click a token, to score that one against h.</p>
+  <p class="note" style="margin:2px 0 14px">The stack holds every token that could come next, in the embedding table’s order. Scroll it, or click a token, to score that one against h.</p>
   <h4 id="m6-eqh"></h4>
   <div id="m6-eq"></div>
   <p class="note" id="m6-p" style="margin:8px 0 0"></p>
@@ -1060,55 +1102,91 @@ table.m6real tr.on td.bar i { background: var(--blue); }
 </div>
 <p>As in word2vec, the <strong>error</strong> is the right answer minus the guess. Now there is one for every token: the label is 1 for the token that really came next and 0 for every other token, so the error is label − p. At the start of training every probability is about 1/41, the model’s best guess when it knows nothing.</p>
 <h2 id="s8"><span class="num">8</span>One update</h2>
-<p>Now the table learns from the error. Each token gets a scaling factor, its error times the learning rate, exactly as in word2vec:</p>
+<p>Now the table learns from the error. One prediction gives token embeddings a change, Δ, in two different ways: as candidates that were scored at the end, and, for the input token, as the input at the start. They use different formulas.</p>
+<h3 id="s8-1"><span class="num">8.1</span>The Δ from being scored</h3>
+<p>Each token gets a scaling factor, its error times the learning rate, exactly as in word2vec:</p>
 <div class="formula fxblock"><span class="fx"><span class="w"><span class="t tg">scaling factor</span><span class="g"><span class="o">=</span><span class="t terr">error</span></span><span class="g"><span class="o">×</span><span class="t">learning rate</span></span></span><span class="s"><span class="sg"><i>g</i></span> = <span class="serr">(label − p)</span> × α</span></span><span class="fxsw seg" role="group" aria-label="show formulas as"><button data-fx="w">words</button><button data-fx="s">symbols</button></span></div>
-<p>Then every row of the table moves by its scaling factor times <em>h</em>:</p>
-<div class="formula fxblock"><span class="fx"><span class="w"><span class="t tvo">new row</span><span class="g"><span class="o">=</span><span class="t tvo">row</span></span><span class="g"><span class="o">+</span><span class="t tg">scaling factor</span></span><span class="g"><span class="o">×</span><span class="t">h</span></span></span><span class="s"><span class="svo">row</span> ← <span class="svo">row</span> + <span class="sg"><i>g</i></span> · <i>h</i></span></span><span class="fxsw seg" role="group" aria-label="show formulas as"><button data-fx="w">words</button><button data-fx="s">symbols</button></span></div>
+<p>Each token’s embedding then gets a change, Δ, of its scaling factor times <em>h</em>:</p>
+<div class="formula fxblock"><span class="fx"><span class="w"><span class="t tvo">change to the embedding</span><span class="g"><span class="o">=</span><span class="t tg">scaling factor</span></span><span class="g"><span class="o">×</span><span class="t">h</span></span></span><span class="s">Δ<span class="svo"><i>E</i><sub><i>j</i></sub></span> = <span class="sg"><i>g</i><sub><i>j</i></sub></span> · <i>h</i></span></span><span class="fxsw seg" role="group" aria-label="show formulas as"><button data-fx="w">words</button><button data-fx="s">symbols</button></span></div>
 <ul>
-<li>The row of the token that really came next has a positive scaling factor, so it moves toward <em>h</em>. Next time, <em>h</em> will score it higher.</li>
-<li><strong>Every other row</strong> has a negative scaling factor, so it moves away from <em>h</em>, in proportion to how likely the model thought it was. word2vec drew 5 random words to push away. GPT-2 pushes away all 50,256 wrong tokens, the likely ones hardest.</li>
+<li>The token that really came next has a positive scaling factor, so its Δ points toward <em>h</em>. Once applied, <em>h</em> will score it higher next time.</li>
+<li><strong>Every other token</strong> has a negative scaling factor, so its Δ points away from <em>h</em>, in proportion to how likely the model thought it was. word2vec drew 5 random words to push away. GPT-2 pushes away all 50,256 wrong tokens, the likely ones hardest.</li>
 </ul>
-<p>Those are the rows scored at the end. The rows looked up at the start learn too, but they are harder to reach: they affect the error only through the layers. To find which way each of them should move, GPT-2 works backwards from the error through the same steps that made the prediction, the scores, then each layer’s MLP and attention parts, down to the input vectors. At each step backwards it uses the chain rule of calculus. This is <em>backpropagation</em>. It gives a direction for every number in the model. The rows scored at the end are the first step back, which is why their update is so simple. Along the way it gives directions for the layers’ own tables too, which this page doesn’t show, and at the input vector it arrives as the direction that would have made the prediction better. The input token’s row and the position’s row both move a small step that way. word2vec never needed more than that first step, since nothing sits between its vectors and the score. On this page the whole backwards pass is computed exactly, through the toy’s one layer.</p>
 <div class="module" id="m7">
-  <h4 class="m3title">Update the rows for one prediction</h4>
-  <h4>The right answer’s row</h4>
+  <h4 class="m3title">The Δ from being scored, for one prediction</h4>
+  <h4>The embedding of the token that came next</h4>
   <div class="m5eq m6g" id="m7-g"></div>
   <div id="m7-up"></div>
-  <h4 style="margin-top:14px">A wrong answer’s row</h4>
-  <div class="row"><label class="ctl">wrong token <select id="m7-wrong"></select></label></div>
+  <h4 style="margin-top:14px">The embedding of a token that didn’t come next</h4>
+  <div class="row"><label class="ctl">token <select id="m7-wrong"></select></label></div>
   <div class="m5eq m6g" id="m7-gw"></div>
   <div id="m7-down"></div>
-  <h4 style="margin-top:14px">The input token’s row</h4>
+  <p class="note" style="margin:8px 0 0">Each result is a change, Δ, not an embedding: one prediction’s share of what will be added. Nothing is applied yet: section 9 adds up every Δ for one embedding and applies the total once.</p>
+</div>
+<h3 id="s8-2"><span class="num">8.2</span>The Δ from being the input</h3>
+<p>The embeddings looked up at the start, the input token’s and the position’s, learn too, but they are harder to reach: they affect the error only through the layers. To find which way each of them should move, GPT-2 works backwards from the error through the same steps that made the prediction, the scores, then each layer’s MLP and attention parts, down to the input vectors. At each step backwards it uses the chain rule of calculus. This is <em>backpropagation</em>. It gives a direction for every number in the model. The embeddings scored at the end are the first step back, which is why their update is so simple. Along the way it gives directions for the layers’ own tables too, which this page doesn’t show, and what arrives at the input vector is an <em>error-reducing nudge</em>. It is a vector the same size as an embedding: its direction says which way to move the input vector to lower this prediction’s error fastest, and its length how steeply the error falls that way. The input token’s embedding and the position embedding each get a change of the learning rate times that nudge. word2vec never needed more than that first step, since nothing sits between its vectors and the score. On this page the whole backwards pass is computed exactly, through the toy’s one layer.</p>
+<div class="formula fxblock"><span class="fx"><span class="w"><span class="t tv">change to the input embedding</span><span class="g"><span class="o">=</span><span class="t">learning rate</span></span><span class="g"><span class="o">×</span><span class="t">error-reducing nudge</span></span></span><span class="s">Δ<span class="sv"><i>E</i><sub><i>x</i></sub></span> = α · ∇</span></span><span class="fxsw seg" role="group" aria-label="show formulas as"><button data-fx="w">words</button><button data-fx="s">symbols</button></span></div>
+<div class="module" id="m7b">
+  <h4 class="m3title">The Δ from being the input, for one prediction</h4>
   <div id="m7-in"></div>
-  <p class="note" style="margin:8px 0 0">These are parts of an update, not yet applied. Section 9 adds them up.</p>
+  <p class="note" style="margin:8px 0 0">The error-reducing nudge for the input vector at this position: which way to move each of its 6 numbers, and how much, to lower this prediction’s error fastest. Backpropagation works it out, backwards through the toy’s one layer. The position embedding gets the same Δ. Section 9 adds it to the rest.</p>
 </div>
 <h2 id="s9"><span class="num">9</span>Adding up an update</h2>
-<p>A sentence makes several predictions, and every one of them moves every row of the table a little. The model works out all of these parts first, with the table as it stands, then adds them up and changes each row once. This is one training step.</p>
+<p>A sentence makes several predictions, and every one of them moves every token embedding a little. The model works out all of these parts first, with the table as it stands, then adds them up and changes each embedding once. This is one training step.</p>
+<p>A token’s embedding can get three kinds of change from one sentence:</p>
+<table>
+<thead>
+<tr>
+<th>Where the token is</th>
+<th>Its change</th>
+<th>The size depends on</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>it came next, at some position</td>
+<td>a pull toward <em>h</em>: (1 − p) × α × <em>h</em></td>
+<td>how surprised the model was: small p, big pull</td>
+</tr>
+<tr>
+<td>it didn’t come next, at every other position</td>
+<td>a push away from <em>h</em>: −p × α × <em>h</em></td>
+<td>how tempting it was: almost none if p is near 0</td>
+</tr>
+<tr>
+<td>it is the input, at some position</td>
+<td>α × the error-reducing nudge there</td>
+<td>how much that input affected the errors</td>
+</tr>
+</tbody>
+</table>
+<p>A token that isn’t in the sentence at all gets only the second kind.</p>
+<p>Only now does anything change. Each embedding moves once, by all of its Δs added up:</p>
+<div class="formula fxblock"><span class="fx"><span class="w"><span class="t">new embedding</span><span class="g"><span class="o">=</span><span class="t">embedding</span></span><span class="g"><span class="o">+</span><span class="t tvo">every change from being scored</span></span><span class="g"><span class="o">+</span><span class="t tv">every change from being the input</span></span></span><span class="s"><i>E</i><sub><i>j</i></sub> ← <i>E</i><sub><i>j</i></sub> + <span class="svo">Σ<sub><i>t</i></sub> <i>g</i><sub><i>t</i>,<i>j</i></sub> · <i>h</i><sub><i>t</i></sub></span> + <span class="sv">Σ<sub><i>t</i> : input is <i>j</i></sub> α · ∇<sub><i>t</i></sub></span></span></span><span class="fxsw seg" role="group" aria-label="show formulas as"><button data-fx="w">words</button><button data-fx="s">symbols</button></span></div>
 <div class="module" id="m8">
-  <h4 class="m3title">Add up the parts for one row</h4>
+  <h4 class="m3title">Add up the parts for one embedding</h4>
   <div class="row">
-    <span class="m6ctx" id="m8-sent"></span>
-    <label class="ctl">row <select id="m8-row"></select></label>
+    <label class="ctl">embedding of <select id="m8-row"></select></label>
   </div>
   <div id="m8-sum"></div>
-  <h4>Applying the update</h4>
+  <h4 style="margin-top:16px">Applying the update</h4>
   <div id="m8-apply"></div>
-  <h4 style="margin-top:14px">How far every row moves in this step</h4>
+  <h4 style="margin-top:14px">How far every embedding moves in this step</h4>
   <div id="m8-all"></div>
 </div>
-<p>A row gets parts from three roles: as the right answer at some positions, as a wrong answer at all the others, and as an input wherever its token appears in the sentence. One GPT-2 step adds up the parts from 512 × 1,024 = 524,288 predictions.</p>
+<p>An embedding gets parts from three roles: as the right answer at some positions, as a wrong answer at all the others, and as an input wherever its token appears in the sentence. One GPT-2 step adds up the parts from 512 × 1,024 = 524,288 predictions.</p>
 <h2 id="s10"><span class="num">10</span>Two tokens drawing together</h2>
-<p>“coffee” and “tea” never appear in the same sentence. But the same tokens come before them, <span class="tok"><span class="sp">·</span>hot</span>, <span class="tok"><span class="sp">·</span>the</span> and <span class="tok"><span class="sp">·</span>my</span>, and the same tokens follow, <span class="tok"><span class="sp">·</span>with</span>, <span class="tok"><span class="sp">·</span>every</span> and <span class="tok"><span class="sp">·</span>is</span>. So the vectors <em>h</em> that should predict them are alike, which pulls both rows the same way when they are scored, and as inputs both rows should lead to the same predictions. Their rows drift together, through the same kind of shared company word2vec used.</p>
-<p>Any two rows lie together in one flat plane, so they can be drawn at their true lengths with the true angle between them. Drag through training, and try a token that shares no company with <span class="tok"><span class="sp">·</span>coffee</span>, such as <span class="tok"><span class="sp">·</span>dog</span>.</p>
+<p>“coffee” and “tea” never appear in the same sentence. But the same tokens come before them, <span class="tok"><span class="sp">·</span>hot</span>, <span class="tok"><span class="sp">·</span>the</span> and <span class="tok"><span class="sp">·</span>my</span>, and the same tokens follow, <span class="tok"><span class="sp">·</span>with</span>, <span class="tok"><span class="sp">·</span>every</span> and <span class="tok"><span class="sp">·</span>is</span>. So the vectors <em>h</em> that should predict them are alike, which pulls both embeddings the same way when they are scored, and as inputs both embeddings should lead to the same predictions. Their embeddings drift together, through the same kind of shared company word2vec used.</p>
+<p>Any two embeddings lie together in one flat plane, so they can be drawn at their true lengths with the true angle between them. Drag through training, and try a token that shares no company with <span class="tok"><span class="sp">·</span>coffee</span>, such as <span class="tok"><span class="sp">·</span>dog</span>.</p>
 <div class="module" id="m9">
-  <h4 class="m3title">Compare two tokens’ rows</h4>
+  <h4 class="m3title">Compare two tokens’ embeddings</h4>
   <div class="row">
     <label class="ctl">token <select id="m9-a"></select></label>
     <label class="ctl">compared with <select id="m9-b"></select></label>
     <span class="stepctl"><span class="lab">training step</span><input type="range" min="0" max="1" step="1" aria-label="training step"><span class="note sv"></span></span>
   </div>
   <div class="cols2 m8agrid">
-    <div><h4>The two rows, at their true angle</h4><div id="m9-plane"></div></div>
+    <div><h4>The two embeddings, at their true angle</h4><div id="m9-plane"></div></div>
     <div><h4>The angle between them over training</h4><div id="m9-chart"></div></div>
   </div>
 </div>
@@ -1130,13 +1208,13 @@ table.m6real tr.on td.bar i { background: var(--blue); }
   <p class="note" id="m10-ghost" style="margin:6px 0 0"></p>
 </div>
 <p>The loss cannot fall to zero, because the corpus doesn’t always say what comes next. After <span class="tok"><span class="sp">·</span>hot</span>, the corpus has <span class="tok"><span class="sp">·</span>coffee</span> twice, <span class="tok"><span class="sp">·</span>tea</span> twice, <span class="tok"><span class="sp">·</span>drink</span> once and the end of the sentence twice, so the best possible guess there splits its probability.</p>
-<p>To see the table itself, the map below projects the 6-number rows down to 2 numbers with PCA, which keeps the two directions in which the rows spread out most. The picture is approximate; the neighbour list beside it is computed in all 6 dimensions. Drag the slider under it to any point in training; playing above moves it too.</p>
+<p>To see the table itself, the map below projects the 6-number embeddings down to 2 numbers with PCA, which keeps the two directions in which the embeddings spread out most. The picture is approximate; the neighbour list beside it is computed in all 6 dimensions. Drag the slider under it to any point in training; playing above moves it too.</p>
 <div class="module" id="m10">
-  <h4 class="m3title">Watch the rows arrange themselves</h4>
-  <div class="row"><label class="ctl"><input type="checkbox" id="m10-pos"> show position rows</label></div>
+  <h4 class="m3title">Watch the embeddings arrange themselves</h4>
+  <div class="row"><label class="ctl"><input type="checkbox" id="m10-pos"> show position embeddings</label></div>
   <div class="split8">
     <div>
-      <h4>Token rows, projected to 2D (PCA, approximate)</h4>
+      <h4>Token embeddings, projected to 2D (PCA, approximate)</h4>
       <div class="m8map"><div id="m10-scatter"></div>
         <span class="m8zoom" role="group" aria-label="zoom the map"><button data-z="in" title="zoom in">+</button><button data-z="out" title="zoom out">−</button><button data-z="fit" title="fit the whole map">Fit</button></span></div>
       <div class="m8scrub" style="margin:12px 0 0">
@@ -1152,9 +1230,9 @@ table.m6real tr.on td.bar i { background: var(--blue); }
     </div>
   </div>
 </div>
-<p>Watch <span class="tok"><span class="sp">·</span>coffee</span> and <span class="tok"><span class="sp">·</span>tea</span>, and <span class="tok"><span class="sp">·</span>dog</span> and <span class="tok"><span class="sp">·</span>cat</span>. The sentence-starting tokens “the”, “a”, “i”, “my” and “pour” also gather, apart from <span class="tok"><span class="sp">·</span>the</span>, <span class="tok"><span class="sp">·</span>a</span> and <span class="tok"><span class="sp">·</span>my</span> with their spaces: they are different tokens, used in different places. Turn on the position rows to see where the 8 positions sit among the tokens.</p>
+<p>Watch <span class="tok"><span class="sp">·</span>coffee</span> and <span class="tok"><span class="sp">·</span>tea</span>, and <span class="tok"><span class="sp">·</span>dog</span> and <span class="tok"><span class="sp">·</span>cat</span>. The sentence-starting tokens “the”, “a”, “i”, “my” and “pour” also gather, apart from <span class="tok"><span class="sp">·</span>the</span>, <span class="tok"><span class="sp">·</span>a</span> and <span class="tok"><span class="sp">·</span>my</span> with their spaces: they are different tokens, used in different places. Turn on the position embeddings to see where the 8 positions sit among the tokens.</p>
 <h2 id="s12"><span class="num">12</span>Inside GPT-2’s table</h2>
-<p>The real table, after training on 40 GB of text, holds the same kind of structure at a far larger scale. Here are the nearest neighbours of any word in it, by the angle between rows. The rows themselves come straight from GPT-2’s released weights.</p>
+<p>The real table, after training on 40 GB of text, holds the same kind of structure at a far larger scale. Here are the nearest neighbours of any word in it, by the angle between embeddings. The embeddings themselves come straight from GPT-2’s released weights.</p>
 <div class="module" id="m11">
   <h4 class="m3title">Nearest neighbours in GPT-2’s table</h4>
   <div class="row">
@@ -1164,15 +1242,15 @@ table.m6real tr.on td.bar i { background: var(--blue); }
   <div id="m11-out"></div>
   <p class="note" style="margin:8px 0 0">The page looks up the token for the word with a space in front, as it would appear mid-sentence. Neighbour lists are included for 14,940 common word tokens.</p>
 </div>
-<p>Many of the neighbours are the same word in another form: capitalized, plural, or without its space. GPT-2 has to learn for itself that <span class="tok"><span class="sp">·</span>coffee</span> and <span class="tok"><span class="sp">·</span>Coffee</span> mean the same thing, and puts their rows close together. The rest are related words: for <span class="tok"><span class="sp">·</span>coffee</span>, <span class="tok"><span class="sp">·</span>espresso</span>, <span class="tok"><span class="sp">·</span>caffeine</span> and, as in the toy, <span class="tok"><span class="sp">·</span>tea</span>.</p>
-<p>The table has other habits. Its rows are not spread evenly in every direction: they all share a large common offset, so two random rows have a cosine similarity of about 0.27 instead of 0. Subtract the average row and that drops to about 0. And some rows barely moved at all. A token’s row only gets the pull toward <em>h</em> when that token comes next, which some tokens almost never did. The tokenizer seems to have been built from different text than the model was trained on, so it has tokens like <span class="tok"><span class="sp">·</span>TheNitrome</span>, <span class="tok"><span class="sp">·</span>RandomRedditor</span> and <span class="tok"><span class="sp">·</span>externalToEVA</span>: strings common in the tokenizer’s text that hardly appear in the model’s. They were found in 2023 as “glitch tokens”, which confuse the model. Their rows got almost no training, and sit close to the average row.</p>
+<p>Many of the neighbours are the same word in another form: capitalized, plural, or without its space. GPT-2 has to learn for itself that <span class="tok"><span class="sp">·</span>coffee</span> and <span class="tok"><span class="sp">·</span>Coffee</span> mean the same thing, and puts their embeddings close together. The rest are related words: for <span class="tok"><span class="sp">·</span>coffee</span>, <span class="tok"><span class="sp">·</span>espresso</span>, <span class="tok"><span class="sp">·</span>caffeine</span> and, as in the toy, <span class="tok"><span class="sp">·</span>tea</span>.</p>
+<p>The table has other habits. Its embeddings are not spread evenly in every direction: they all share a large common offset, so two random embeddings have a cosine similarity of about 0.27 instead of 0. Subtract the average embedding and that drops to about 0. And some embeddings barely moved at all. A token’s embedding only gets the pull toward <em>h</em> when that token comes next, which some tokens almost never did. The tokenizer seems to have been built from different text than the model was trained on, so it has tokens like <span class="tok"><span class="sp">·</span>TheNitrome</span>, <span class="tok"><span class="sp">·</span>RandomRedditor</span> and <span class="tok"><span class="sp">·</span>externalToEVA</span>: strings common in the tokenizer’s text that hardly appear in the model’s. They were found in 2023 as “glitch tokens”, which confuse the model. Their embeddings got almost no training, and sit close to the average embedding.</p>
 <div class="module" id="m11g">
-  <h4 class="m3title">How far each row sits from the average row</h4>
+  <h4 class="m3title">How far each embedding sits from the average embedding</h4>
   <div id="m11g-plot"></div>
   <p class="note" id="m11g-read" style="margin:8px 0 0"></p>
 </div>
 <h2 id="s13"><span class="num">13</span>The table is static</h2>
-<p>A token’s row is the same wherever the token appears. “plot” gets the same numbers in “the garden plot” and in “the secret plot”. Telling the two apart is the job of the 12 layers that follow: each layer mixes information from the other tokens into each vector. Coming out of the tables the two “plot” vectors are identical; layer by layer they move apart.</p>
+<p>A token’s embedding is the same wherever the token appears. “plot” gets the same numbers in “the garden plot” and in “the secret plot”. Telling the two apart is the job of the 12 layers that follow: each layer mixes information from the other tokens into each vector. Coming out of the tables the two “plot” vectors are identical; layer by layer they move apart.</p>
 <div class="module" id="m12">
   <h4 class="m3title">One word, two meanings, through GPT-2’s layers</h4>
   <div class="row"><label class="ctl">word <span class="seg" id="m12-word"></span></label></div>
@@ -1186,10 +1264,10 @@ table.m6real tr.on td.bar i { background: var(--blue); }
   <ol class="fn">
     <li>Radford, Wu, Child, Luan, Amodei and Sutskever, <a href="https://cdn.openai.com/better-language-models/language_models_are_unsupervised_multitask_learners.pdf">“Language Models are Unsupervised Multitask Learners”</a> (2019). GPT-2: byte-level BPE with merges kept within character categories, a 1,024-token context, batches of 512, WebText.</li>
     <li>Sennrich, Haddow and Birch, <a href="https://arxiv.org/abs/1508.07909">“Neural Machine Translation of Rare Words with Subword Units”</a>, ACL (2016), brought byte-pair encoding, first a compression method (Gage, 1994), to language modelling.</li>
-    <li>Press and Wolf, <a href="https://arxiv.org/abs/1608.05859">“Using the Output Embedding to Improve Language Models”</a>, EACL (2017), on tying the input and output tables. GPT-2’s released code computes its scores with the token table itself.</li>
-    <li>Wang and Chen, <a href="https://arxiv.org/abs/2010.04903">“What Do Position Embeddings Learn? An Empirical Study of Pre-Trained Language Model Positional Encoding”</a>, EMNLP (2020). The same comparison of every pair of positions as in section 4, for GPT-2, BERT and RoBERTa: only GPT-2’s shows clear periodic patterns. A weighted sum of GPT-2’s position rows recovers the position to within about 1 on average, as the readout in section 4 does.</li>
-    <li>Yedidia, <a href="https://www.lesswrong.com/posts/qvWP3aBDBaqXvPNhS/gpt-2-s-positional-embedding-matrix-is-a-helix">“GPT-2’s positional embedding matrix is a helix”</a> (2023): three directions hold about 90% of the position rows’ variation, and plotted in them the 1,024 rows trace a helix, with positions 0 and 1,023 as outliers. And <a href="https://www.lesswrong.com/posts/zRA8B2FJLtTYRgie6/the-positional-embedding-matrix-and-previous-token-heads-how">“The positional embedding matrix and previous-token heads: how do they actually work?”</a> (2023), on averaging neighbouring position rows with little effect on GPT-2’s predictions.</li>
-    <li>Rumbelow and Watkins, <a href="https://www.lesswrong.com/posts/aPeJE8bSo6rAFoLqg/solidgoldmagikarp-plus-prompt-generation">“SolidGoldMagikarp (plus, prompt generation)”</a> (2023), on GPT-2 and GPT-3’s “glitch tokens”, such as <span class="tok"><span class="sp">·</span>SolidGoldMagikarp</span> (a single token, as section 2 shows), and their rows near the centre of the table.</li>
+    <li>Press and Wolf, <a href="https://arxiv.org/abs/1608.05859">“Using the Output Embedding to Improve Language Models”</a>, EACL (2017), on tying the input and output tables. GPT-2’s released code computes its scores with the token embedding table itself.</li>
+    <li>Wang and Chen, <a href="https://arxiv.org/abs/2010.04903">“What Do Position Embeddings Learn? An Empirical Study of Pre-Trained Language Model Positional Encoding”</a>, EMNLP (2020). The same comparison of every pair of positions as in section 4, for GPT-2, BERT and RoBERTa: only GPT-2’s shows clear periodic patterns. A weighted sum of GPT-2’s position embeddings recovers the position to within about 1 on average, as the readout in section 4 does.</li>
+    <li>Yedidia, <a href="https://www.lesswrong.com/posts/qvWP3aBDBaqXvPNhS/gpt-2-s-positional-embedding-matrix-is-a-helix">“GPT-2’s positional embedding matrix is a helix”</a> (2023): three directions hold about 90% of the position embeddings’ variation, and plotted in them the 1,024 embeddings trace a helix, with positions 0 and 1,023 as outliers. And <a href="https://www.lesswrong.com/posts/zRA8B2FJLtTYRgie6/the-positional-embedding-matrix-and-previous-token-heads-how">“The positional embedding matrix and previous-token heads: how do they actually work?”</a> (2023), on averaging neighbouring position embeddings with little effect on GPT-2’s predictions.</li>
+    <li>Rumbelow and Watkins, <a href="https://www.lesswrong.com/posts/aPeJE8bSo6rAFoLqg/solidgoldmagikarp-plus-prompt-generation">“SolidGoldMagikarp (plus, prompt generation)”</a> (2023), on GPT-2 and GPT-3’s “glitch tokens”, such as <span class="tok"><span class="sp">·</span>SolidGoldMagikarp</span> (a single token, as section 2 shows), and their embeddings near the centre of the table.</li>
     <li>Ethayarajh, <a href="https://arxiv.org/abs/1909.00512">“How Contextual are Contextualized Word Representations?”</a>, EMNLP (2019), on how GPT-2’s vectors share a common direction and grow more context-specific in higher layers. Section 13 subtracts each layer’s average vector, taken over a dozen ordinary sentences, before comparing, so the shared offset doesn’t make every pair look alike. Its layer 12 is the last layer’s output before GPT-2’s final LayerNorm.</li>
     <li>The toy model, corpus and seeds are this page’s own. The toy adds up its loss over a sentence’s predictions, where GPT-2 averages over a batch; that only changes the scale of the learning rate. It uses GELU in its MLP, as GPT-2 does, and no LayerNorm. Sections 6 to 9 look at the model just before the selected sentence’s own update, in whichever of its 120 passes is chosen; sections 3, 4, 10 and 11 share one training step, from 0 to 3,600. Across 100 initialization seeds, <span class="tok"><span class="sp">·</span>coffee</span> and <span class="tok"><span class="sp">·</span>tea</span> ended up as each other’s nearest neighbours 99 times, and <span class="tok"><span class="sp">·</span>dog</span> and <span class="tok"><span class="sp">·</span>cat</span> 99 times too.</li>
   </ol>
@@ -1487,7 +1565,7 @@ const tstr = i => gstr(V.ids[i]);                       // a toy token, by its i
 const wchip = (i, cls = '') => `<span class="chip ${cls}" data-t="${i}">${tstr(i)}</span>`;
 const plain = i => V.ids[i] === EOT ? '<|endoftext|>' : V.str[i];   // for <option> labels and titles
 const optLabel = i => plain(i).replace(/^ /, '·');
-const SV = '<span class="cv">row</span>';
+const SV = '<i class="cv">E</i>';   // an input embedding: a row of E, the token embedding table
 
 // ---------- shared model state ----------
 // One initialization (re-rolled in 3 or 10) and one training stream for the whole page. The whole
@@ -1533,7 +1611,8 @@ $('statebar-in').innerHTML = `<div class="sb-set">
     <label class="m3pick sb-pick"><select id="sb-sent" aria-label="sentence"></select></label>
     <span class="passctl"><span class="lab">pass</span><input type="range" min="1" max="1" step="1" aria-label="which pass over the corpus"><span class="note pv"></span></span>
   </div>
-  <div class="m3scroll sb-scroll"><div class="m3track m5track" id="sb-track"></div></div>`;
+  <div class="m3scroll sb-scroll"><div class="m3track m5track" id="sb-track"></div></div>
+  <div class="sb-sentview" id="sb-sentview" hidden></div>`;
 function selectPred(sent, pos) {
   SEL.sent = sent; SEL.pos = Math.max(0, Math.min(V.seqs[sent].length - 2, pos));
   S8.row = tgTok(); follow3v(); S9.a = inTok() === V.index.get(EOT) ? S9.a : inTok();
@@ -1767,16 +1846,26 @@ function pairPlane(a, b, o = {}) {
 }
 
 // ---------- sticky status bar ----------
+// The header changes with where you are: the context track (5–6), with 7's stack (7–8), the whole
+// sentence (9, whose update uses every prediction at once; click a token to pick 9's row), then hides.
 function renderStatebar() {
-  TRACKSB.render(); bindStack($('sb-track').querySelector('.m6vp')); syncPass();
+  const sent = S6.sbMode === 'sent';
+  document.querySelector('#statebar .sb-scroll').hidden = sent; $('sb-sentview').hidden = !sent;
+  if (sent) $('sb-sentview').innerHTML = `<span class="lab">every prediction in this sentence · row</span>${seqSel().map(t => `<span class="chip${t === S8.row ? ' v' : ''}" data-t="${t}" title="pick this row">${tstr(t)}</span>`).join('')}`;
+  else { TRACKSB.render(); bindStack($('sb-track').querySelector('.m6vp')); }
+  syncPass();
 }
 // the header only makes sense once predictions exist: show it from section 5's widget on
 (function headerWhenPreds() {
   let ticking = false;
   const check = () => {
-    ticking = false; $('statebar').classList.toggle('shown', $('m5').getBoundingClientRect().top < innerHeight * 0.75);
-    const past = $('m6-track').getBoundingClientRect().bottom < $('statebar').offsetHeight;   // scrolled past 7's stack
-    if (past !== !!S6.sbStack) { S6.sbStack = past; renderStatebar(); }
+    ticking = false; const H = $('statebar').offsetHeight, top = id => $(id).getBoundingClientRect().top;
+    // shown once 5's widget is scrolled past, until the end of 9's (past that nothing uses the selected
+    // prediction), and hidden while 7's own track is on screen, so there is never a second track in view
+    const r7 = $('m6-track').getBoundingClientRect(), track7 = r7.bottom > H && r7.top < innerHeight;
+    $('statebar').classList.toggle('shown', $('m5').getBoundingClientRect().bottom < H && !track7 && $('m8').getBoundingClientRect().bottom > H);
+    const mode = top('s9') < H ? 'sent' : $('m6-track').getBoundingClientRect().bottom < H ? 'stack' : 'track';
+    if (mode !== S6.sbMode) { S6.sbMode = mode; renderStatebar(); }
   };
   addEventListener('scroll', () => { if (!ticking) { ticking = true; requestAnimationFrame(check); } }, { passive: true });
   addEventListener('resize', check); setTimeout(check, 0);
@@ -1950,7 +2039,7 @@ function render3vToy() {
   $('m3v-vec').innerHTML = `<div class="m2v-row"><span class="m2v-word"><span>${tstr(S3V.tok)}</span><span class="sub">ID ${V.ids[S3V.tok]}</span></span><span class="m2v-arrow" aria-hidden="true">→</span><span class="m2v-br">${v.map(cell).join('')}</span></div>`;
   $('m3v-note').innerHTML = G.step === 0 ? `Six random numbers, most within ±0.04. Nothing about “${plain(S3V.tok).trim()}” is in them yet.`
     : G.step < N ? `After ${commas(G.step)} of ${commas(N)} steps, the numbers have grown and moved. Drag on, or switch between the tokens to compare.`
-    : 'Training nudges the numbers until tokens used alike have alike rows. Compare “ coffee” with “ tea”, then with “ dog”.';
+    : 'Training nudges the numbers until tokens used alike have alike embeddings. Compare “ coffee” with “ tea”, then with “ dog”.';
 }
 function render3vReal() {
   // GPT-2's row: 768 numbers as a grid of squares, 32 to a line. OpenAI released only the trained
@@ -1967,8 +2056,8 @@ function render3vReal() {
   // a vertical color bar beside the grid: positive at the top, 0 in the middle, negative at the bottom
   const lab = x => num(x, rtop < 0.1 ? 3 : 2), key = Rs ? `<div class="m3vkey" aria-label="color scale"><span>+${lab(rtop)}</span><i style="background:linear-gradient(180deg, ${heatColor(rtop, rtop)}, white, ${heatColor(-rtop, rtop)})"></i><span>−${lab(rtop)}</span></div>` : '';
   $('m3v-real').innerHTML = `<div class="m3vheat">${svg}</svg>${key}<span class="m3vtip" hidden></span></div><p class="note" style="margin:8px 0 0">${{
-    start: `A random start for row ${id}, ${tstr(S3V.tok)}: 768 numbers drawn with a standard deviation of 0.02, the way GPT-2’s code starts every row. GPT-2’s actual starting numbers were never published.`,
-    end: `GPT-2’s row ${id}, ${tstr(S3V.tok)}, after training, from its released weights. Blue is positive, orange negative.`,
+    start: `A random start for ${tstr(S3V.tok)}’s embedding (row ${id}): 768 numbers drawn with a standard deviation of 0.02, the way GPT-2’s code starts every embedding. GPT-2’s actual starting numbers were never published.`,
+    end: `GPT-2’s embedding of ${tstr(S3V.tok)} (row ${id}), after training, from its released weights. Blue is positive, orange negative.`,
   }[S3V.real]}${S3V.real === 'start' ? '' : ' OpenAI released only the finished table, so there is nothing to show from partway through training.'}</p>`;
   $('m3v-word').innerHTML = FIXED3.concat([S3V.extra]).map(i => `<button data-v="${i}" class="${i === S3V.tok ? 'on' : ''}">${tstr(i)}</button>`).join('');
   document.querySelectorAll('#m3v-gstate button').forEach(b => b.classList.toggle('on', b.dataset.v === S3V.real));
@@ -1996,8 +2085,8 @@ $('sb-sent').addEventListener('change', e => selectPred(+e.target.value, SEL.pos
 // changing the sentence changes which rows are looked up, not the tables themselves
 const EQ4 = VecEq($('m4-eq'), () => {
   const m = G.snaps[G.step], t = inTok(), tok = arr(rowOf(m, 'E', t)), pos = arr(rowOf(m, 'P', SEL.pos));
-  return { left: [{ t: 'vec', label: 'token row', sym: SV, chip: wchip(t, 'v'), vals: tok, cls: 'cv' }, { t: 'op', s: '+' },
-    { t: 'vec', label: 'position row', sym: '<span class="cpos">pos</span>', chip: `<span class="chip pos">position ${SEL.pos}</span>`, vals: pos, cls: 'cpos' }],
+  return { left: [{ t: 'vec', label: 'input embedding', sym: SV, chip: wchip(t, 'v'), vals: tok, cls: 'cv' }, { t: 'op', s: '+' },
+    { t: 'vec', label: 'position embedding', sym: '<i class="cpos">P</i>', chip: `<span class="chip pos">position ${SEL.pos}</span>`, vals: pos, cls: 'cpos' }],
     result: { label: 'input vector', chip: `<span class="chip">${tstr(t)} at ${SEL.pos}</span>`, vals: tok.map((x, d) => x + pos[d]), cls: 'cp' } };
 }, 3);
 function render4() {
@@ -2042,8 +2131,8 @@ function renderHeat4g() {
   $('m4g-heat').innerHTML = `<div class="m4gwrap"><div class="m4gy">${ticks.map(t => `<span style="top:${t / 1024 * 100}%">${t}</span>`).join('')}</div><div class="m4gbox"></div><div class="m4gx">${ticks.map(t => `<span style="left:${t / 1024 * 100}%">${t}</span>`).join('')}</div></div>`;
   cv.className = 'm4gcv'; $('m4g-heat').querySelector('.m4gbox').appendChild(cv);
   const read = () => $('m4g-read').innerHTML = S4G.stage === 'end'
-    ? 'This shows GPT-2’s learned position rows by comparing every pair of them. Each square is two positions: blue where their rows point the same way, white where they are unrelated, orange where opposite. Hover to read a square.'
-    : 'Before training: random rows, drawn the way GPT-2’s code starts them. Every position is unrelated to every other, so all but the diagonal, each position compared with itself, is nearly white. GPT-2’s actual starting rows were never published. Hover to read a square.';
+    ? 'This shows GPT-2’s learned position embeddings by comparing every pair of them. Each square is two positions: blue where their embeddings point the same way, white where they are unrelated, orange where opposite. Hover to read a square.'
+    : 'Before training: random embeddings, drawn the way GPT-2’s code starts them. Every position is unrelated to every other, so all but the diagonal, each position compared with itself, is nearly white. GPT-2’s actual starting embeddings were never published. Hover to read a square.';
   read();
   cv.addEventListener('pointermove', e => {
     const r = cv.getBoundingClientRect(), i = Math.max(0, Math.min(n - 1, Math.floor((e.clientX - r.left) / r.width * n))), j = Math.max(0, Math.min(n - 1, Math.floor((e.clientY - r.top) / r.height * n)));
@@ -2092,7 +2181,7 @@ function renderDims4g() {
   // the positions and tested on the rest, five times round; the average error, in positions)
   const R4 = GPT2.pos.read, err = R4[end ? 'end' : 'start'][S4G.k], these = k === 1 ? 'this dimension' : `these ${k === d ? 768 : k} dimensions`;
   const e63 = R4.end[R4.stops.indexOf(mov)], fmt = x => x >= 10 ? Math.round(x) : x;
-  $('m4g-readout').innerHTML = !end ? `Reading the position back: from random rows, a weighted sum of ${these} is off by about <b>${Math.round(err)}</b> positions on average, no better than always guessing the middle.`
+  $('m4g-readout').innerHTML = !end ? `Reading the position back: from random embeddings, a weighted sum of ${these} is off by about <b>${Math.round(err)}</b> positions on average, no better than always guessing the middle.`
     : err > 200 ? `Reading the position back: a weighted sum of ${these} is off by about <b>${Math.round(err)}</b> positions on average, no better than guessing. A slow wave passes through the same height at many positions.`
     : k > mov ? `Reading the position back: a weighted sum of all 768 finds the position to within about <b>${fmt(err)}</b> positions on average, the same as the ${mov} that move (${fmt(e63)}). The flat dimensions add nothing.`
     : `Reading the position back: a weighted sum of ${these} finds the position to within about <b>${fmt(err)}</b> positions on average.`;
@@ -2100,7 +2189,7 @@ function renderDims4g() {
   $('m4g-kval').textContent = k === d ? 'all 768' : k === mov ? `all ${mov} that move` : `the top ${k}`;
   $('m4g-pcnote').innerHTML = `<div class="legend" style="margin-top:0">${leg}<span><i style="background:var(--ink-2)"></i>${dn(typ)}, a typical one</span></div>` + (end
     ? `Each line follows one dimension across all 1,024 positions, ranked by how much it changes. Only ${mov} of the 768 change much, in smooth waves${k === mov ? ': these are all of them' : ''}${k > mov ? '; the rest stay in a flat band near 0, like the typical one' : ''}.`
-    : 'The same dimensions in the random rows: tiny, and no pattern from one position to the next.');
+    : 'The same dimensions in the random embeddings: tiny, and no pattern from one position to the next.');
 }
 $('m4g-k').addEventListener('input', e => { S4G.k = +e.target.value; renderDims4g(); });
 // hover (or touch) the chart to pick a position; the frame is 320 wide with the plot from x = 30
@@ -2148,7 +2237,7 @@ function ContextTrack(k, stack = null) {
   track.addEventListener('pointerup', end); track.addEventListener('pointercancel', end);
   return me;
 }
-const TRACK5 = ContextTrack('m5'), TRACK6 = ContextTrack('m6', () => stack6()), TRACKSB = ContextTrack('sb', () => S6.sbStack ? stack6() : null);   // the header swaps in 7's stack once you're past it
+const TRACK5 = ContextTrack('m5'), TRACK6 = ContextTrack('m6', () => stack6()), TRACKSB = ContextTrack('sb', () => S6.sbMode === 'stack' ? stack6() : null);   // the header swaps in 7's stack once you're past it
 function render5() {
   const s = seqSel(), n = s.length - 1;
   TRACK5.render();
@@ -2184,11 +2273,12 @@ function renderMix() {
 const H_SYM = '<i class="ch-h">h</i>';
 // h belongs to one position: name it by that position's token as well as its number
 // on two lines: "h at", then the token as a chip with its position
-const hChip = () => `<span class="hlab"><span>h at</span><span>${wchip(inTok(), 'v')} <span class="hpos">(${SEL.pos})</span></span></span>`;
+// in grey: h belongs to a position but is neither an input embedding nor a candidate
+const hChip = () => `<span class="hlab"><span>h at</span><span>${wchip(inTok())} <span class="hpos">(${SEL.pos})</span></span></span>`;
 // The candidates for the next token, as a vertical stack at the next position, in the token table's
 // own order (by token ID: the toy stores its rows most common first, so they're listed by their GPT-2
 // IDs instead). Scrolling the stack picks which candidate is scored against h below.
-const S6 = { cand: null };
+const S6 = { cand: null, sbMode: 'track' };
 const ORDER6 = V.ids.map((_, i) => i).sort((a, b) => V.ids[a] - V.ids[b]);
 const ROWH = 32, PAD6 = 2;   // 7's stack shows 2 × 2 + 1 candidates, the picked one in line with the sentence
 const rowH = vp => +vp.dataset.rh || ROWH;   // the header's squashed copy has shorter rows (set in CSS and here)
@@ -2200,7 +2290,7 @@ function stack6() {
 const EQ6 = DotEq($('m6-eq'), () => {
   const u = upd(), t = S6.cand;
   return { a: { label: 'after the layers', sym: H_SYM, chip: hChip(), vals: arr(u.f.h2[SEL.pos]), cls: 'ch' },
-    b: { label: 'a candidate’s row', sym: '<span class="cvo">row</span>', chip: wchip(t, 'vo'), vals: arr(rowOf(u.m, 'E', t)), cls: 'cvo' } };
+    b: { label: 'candidate embedding', sym: '<i class="cvo">E</i>', chip: wchip(t, 'vo'), vals: arr(rowOf(u.m, 'E', t)), cls: 'cvo' } };
 }, 3, 4);
 function render6() {
   const u = upd(), p = u.f.p[SEL.pos], tg = tgTok();
@@ -2210,7 +2300,7 @@ function render6() {
 }
 function render6eq() {
   const u = upd(), c = S6.cand, p = u.f.p[SEL.pos][c];
-  $('m6-eqh').innerHTML = `One of the ${V.n} scores: h · the row of ${wchip(c, 'vo')}`;
+  $('m6-eqh').innerHTML = `One of the ${V.n} scores: h · the embedding of ${wchip(c, 'vo')}`;
   EQ6.refresh();
   $('m6-p').innerHTML = `After the softmax over all ${V.n} scores, ${wchip(c, 'vo')} gets a probability of <b>${p < 0.001 ? (100 * p).toFixed(3) : (100 * p).toFixed(1)}%</b>.`;
   // the error for the same candidate: label 1 if it really came next, 0 if not
@@ -2261,18 +2351,18 @@ const gchain = (i, cls) => {
     + sc('', 'learning rate α', u.alpha.toFixed(4), 'at this point in training') + '<div class="op">=</div>'
     + sc('gval', 'scaling factor <span class="cg">g</span>', num(g, 5), g > 0 ? 'positive: toward h' : 'negative: away from h');
 };
+// Section 8 works out parts only: nothing is applied until section 9 adds every part up.
+// A candidate's part is g × h; the input token's part is α × the direction sent back to its input vector.
 const upEq = (i, cls) => () => {
-  const u = upd(), r = arr(rowOf(u.m, 'E', i)), h = arr(u.f.h2[SEL.pos]), { g } = g7(i);
-  return { left: [{ t: 'vec', label: 'row', sym: '<span class="cvo">row</span>', chip: wchip(i, cls), vals: r, cls: 'cvo' }, { t: 'op', s: '+' }, { t: 'paren', s: '(' },
-    { t: 'scal', label: '<span class="cg">g</span>', val: num(g, 4), cls: 'cg' }, { t: 'op', s: '×' }, { t: 'vec', label: 'after the layers', sym: H_SYM, chip: hChip(), vals: h, cls: 'ch' }, { t: 'paren', s: ')' }],
-    result: { label: 'moved row', chip: wchip(i, cls), vals: r.map((x, d) => x + g * h[d]), cls: 'cvo' } };
+  const u = upd(), h = arr(u.f.h2[SEL.pos]), { g } = g7(i);
+  return { left: [{ t: 'scal', label: '<span class="cg">g</span>', val: num(g, 4), cls: 'cg' }, { t: 'op', s: '×' }, { t: 'vec', label: 'after the layers', sym: H_SYM, chip: hChip(), vals: h, cls: 'ch' }],
+    result: { label: 'Δ from being scored', chip: `<span class="chip ${cls}">Δ ${tstr(i)}</span>`, vals: h.map(x => g * x), cls: 'cvo' } };
 };
 const EQ7U = VecEq($('m7-up'), () => upEq(tgTok(), 'tg')(), 4), EQ7D = VecEq($('m7-down'), () => upEq(S7.wrong, 'neg')(), 4);
 const EQ7I = VecEq($('m7-in'), () => {
-  const u = upd(), t = inTok(), r = arr(rowOf(u.m, 'E', t)), sig = arr(u.one[SEL.pos].dh0[SEL.pos]).map(x => -x);
-  return { left: [{ t: 'vec', label: 'token row', sym: SV, chip: wchip(t, 'v'), vals: r, cls: 'cv' }, { t: 'op', s: '+' }, { t: 'paren', s: '(' },
-    { t: 'scal', label: 'α', val: u.alpha.toFixed(4) }, { t: 'op', s: '×' }, { t: 'vec', label: 'sent back', sym: '<i class="ch-h">∇</i>', chip: `<span class="chip">sent back to ${SEL.pos}</span>`, vals: sig, cls: 'ch' }, { t: 'paren', s: ')' }],
-    result: { label: 'moved row', chip: wchip(t, 'v'), vals: r.map((x, d) => x + u.alpha * sig[d]), cls: 'cv' } };
+  const u = upd(), t = inTok(), sig = arr(u.one[SEL.pos].dh0[SEL.pos]).map(x => -x);
+  return { left: [{ t: 'scal', label: 'α', val: u.alpha.toFixed(4) }, { t: 'op', s: '×' }, { t: 'vec', label: 'error-reducing nudge', sym: '<i class="ch-h">∇</i>', chip: `<span class="hlab"><span>for the input at</span><span>${wchip(t)} <span class="hpos">(${SEL.pos})</span></span></span>`, vals: sig, cls: 'ch' }],
+    result: { label: 'Δ from being the input', chip: `<span class="chip v">Δ ${tstr(t)}</span>`, vals: sig.map(x => u.alpha * x), cls: 'cv' } };
 }, 4);
 function render7() {
   const u = upd(), p = u.f.p[SEL.pos], tg = tgTok(), wrongs = V.ids.map((_, i) => i).filter(i => i !== tg).sort((a, b) => p[b] - p[a]);
@@ -2286,35 +2376,49 @@ $('m7-wrong').addEventListener('change', e => setCand(+e.target.value));
 
 // ---------- 8 adding up one sentence's update for one row ----------
 const S8 = { row: null };
-const EQ8S = VecEq($('m8-sum'), () => {
-  const u = upd(), f = u.f, r = S8.row, left = [];
-  parts8().forEach((q, i) => { if (i) left.push({ t: 'op', s: '+' }); left.push(q); });
-  return { left, result: { label: `Δ${SV}`, chip: wchip(r, 'v'), vals: delta8(), cls: 'cv' } };
-}, 4, 'compact');
+// The chosen row's parts, one line per prediction (each is what section 8 works out, for this row),
+// then the input parts, then their sum: the row's whole change in this step. The row gets parts in
+// both roles, so here it is shown in neither color.
+const SROW = '<i class="crow">E</i>';
 const EQ8A = VecEq($('m8-apply'), () => {
   const u = upd(), r = arr(rowOf(u.m, 'E', S8.row)), dl = delta8();
-  return { left: [{ t: 'vec', label: 'row', sym: SV, chip: wchip(S8.row, 'v'), vals: r, cls: 'cv' }, { t: 'op', s: '+' }, { t: 'vec', label: `Δ${SV}`, sym: `Δ${SV}`, chip: wchip(S8.row, 'v'), vals: dl, cls: 'cp' }],
-    result: { label: `new ${SV}`, chip: wchip(S8.row, 'v'), vals: r.map((x, d) => x + dl[d]), cls: 'cv' } };
+  return { left: [{ t: 'vec', label: 'the embedding', sym: SROW, chip: wchip(S8.row), vals: r, cls: 'cp' }, { t: 'op', s: '+' }, { t: 'vec', label: 'total change', sym: `Δ${SROW}`, chip: `<span class="chip">total Δ ${tstr(S8.row)}</span>`, vals: dl, cls: 'cp' }],
+    result: { label: 'new embedding', chip: wchip(S8.row), vals: r.map((x, d) => x + dl[d]), cls: 'cp' } };
 }, 4);
-// a row's parts: one where rows are scored for every position (right or wrong answer there), and one at the
-// bottom for every position where it is the input
 function parts8() {
   const u = upd(), f = u.f, r = S8.row, out = [];
   for (let t = 0; t < f.n; t++) {
     const lab = f.tg[t] === r ? 1 : 0, g = (lab - f.p[t][r]) * u.alpha;
-    out.push({ t: 'vec', label: `position ${t}`, sym: `<span class="cg">g</span><span class="gx">·</span>${H_SYM}`, chip: `<span class="chip ${lab ? 'tg' : 'neg'}">${lab ? 'answer' : 'wrong'} at ${t}</span>`,
-      vals: arr(f.h2[t]).map(x => g * x), cls: 'cp', top: true });
+    out.push({ t, kind: lab ? 'came' : 'not', what: `${wchip(f.inp[t])} → ?`, p: f.p[t][r], vals: arr(f.h2[t]).map(x => g * x) });
   }
-  for (let t = 0; t < f.n; t++) if (f.inp[t] === r) out.push({ t: 'vec', label: `position ${t}`, sym: `α<span class="gx">·</span><i class="ch-h">∇</i>`, chip: `<span class="chip v">input at ${t}</span>`,
-    vals: arr(u.full.dh0[t]).map(x => -u.alpha * x), cls: 'cp' });
+  // as the input at t: what backprop sends back to the input vector there, from every prediction that can
+  // see position t (mostly the one at t itself; later ones add a little through attention)
+  for (let t = 0; t < f.n; t++) if (f.inp[t] === r) out.push({ t, kind: 'input', what: `${wchip(r)} is the input at ${t}`, vals: arr(u.full.dh0[t]).map(x => -u.alpha * x) });
   return out;
+}
+const ROLE8 = { came: ['tg', 'came next'], not: ['neg', 'didn’t come next'], input: ['v', 'the input'] };
+function renderSum8() {
+  const u = upd(), f = u.f, parts = parts8(), tot = delta8(), r = S8.row, top = Math.max(1e-12, ...parts.flatMap(p => p.vals.map(Math.abs)), ...tot.map(Math.abs));
+  const cells = v => v.map(x => `<span class="rc" style="background:${heatColor(x, top * 1.4)}">${num(x, 4)}</span>`).join('');
+  const pct = p => p < 0.001 ? (100 * p).toFixed(3) + '%' : (100 * p).toFixed(1) + '%';
+  // what you're looking at: the sentence's predictions, and what each does to this one embedding
+  const came = f.tg.map((x, t) => x === r ? t : -1).filter(t => t >= 0), inp = f.inp.map((x, t) => x === r ? t : -1).filter(t => t >= 0), n = f.n, rc = wchip(r);
+  const at = ts => ts.length === 1 ? `position ${ts[0]}` : `positions ${ts.join(' and ')}`;
+  const intro = !came.length && !inp.length
+    ? `${rc} isn’t in this sentence. But each of its ${n} predictions still scores every token, ${rc} included, so each pushes ${rc}’s embedding away a little, by how likely it thought ${rc} was.`
+    : `${rc} ${came.length ? `comes next at ${at(came)}` : 'never comes next'}${inp.length ? ` and is the input at ${at(inp)}` : ''}. The other predictions still score it, and push its embedding away a little, by how likely they thought it was.`;
+  $('m8-sum').innerHTML = `<p class="m8intro">${intro}</p><div class="m8t"><div class="m8r m8h"><span>prediction</span><span class="pc" title="the probability the model gave ${esc(plain(r))} there">p</span><span>came next?</span><span>its Δ, one number per dimension</span></div>
+    ${parts.map(p => { const [c, l] = ROLE8[p.kind];
+      const ans = p.kind === 'input' ? '<span class="badge inb">input</span>' : p.kind === 'came' ? '<span class="badge pos">yes</span>' : '<span class="badge neg">no</span>';
+      return `<div class="m8r${p.kind === 'input' ? ' inp' : ''}"><span class="w"><span class="pn">${p.t}</span>${p.what}</span><span class="pc">${p.kind === 'input' ? '' : pct(p.p)}</span><span class="m8ans">${ans}</span><span class="cells">${cells(p.vals)}</span></div>`; }).join('')}
+    <div class="m8r m8tot"><span class="w">total Δ ${rc}: all ${parts.length} added up</span><span></span><span></span><span class="cells">${cells(tot)}</span></div></div>
+    <p class="note" style="margin:8px 0 0">At each position the model gives every token a probability; this table follows one of them, ${rc}. Each line is the same calculation as section 8: (label − p) × α × h at that position, where the label is 1 if ${rc} came next and 0 if not. An input line is α × the error-reducing nudge for the input vector at that position: mostly from the prediction made there, plus a little from later predictions, whose attention can look back at it.</p>`;
 }
 function delta8() { const u = upd(), D0 = LAYOUT.E[0] + S8.row * D; return Array.from({ length: D }, (_, d) => -u.alpha * u.full.g[D0 + d]); }
 function render8() {
   const u = upd(); if (S8.row == null) S8.row = tgTok(); syncPass();
-  $('m8-sent').innerHTML = `<span class="lab">its predictions</span> ${seqSel().map(t => wchip(t)).join('')}`;
   $('m8-row').innerHTML = V.ids.map((_, i) => `<option value="${i}">${esc(optLabel(i))}</option>`).join(''); $('m8-row').value = S8.row;
-  EQ8S.refresh(); EQ8A.refresh();
+  renderSum8(); EQ8A.refresh();
   // every row's step, largest first: colored by its role in this sentence
   const s = new Set(seqSel()), tgs = new Set(u.f.tg), mag = V.ids.map((_, i) => Math.hypot(...Array.from({ length: D }, (_, d) => u.full.g[LAYOUT.E[0] + i * D + d])) * u.alpha);
   const ord = mag.map((x, i) => i).sort((a, b) => mag[b] - mag[a]), mx = mag[ord[0]] || 1, W0 = 700, H0 = 170, l = 8, bt = 70, top = 8, bw = (W0 - l - 4) / V.n, Y = v => top + (1 - v / mx) * (H0 - bt - top);
@@ -2327,8 +2431,9 @@ function render8() {
   $('m8-all').innerHTML = svg + `<line x1="${l}" x2="${W0}" y1="${Y(0)}" y2="${Y(0)}" stroke="var(--axis)"/></svg>
     <div class="legend"><span><i style="background:var(--violet)"></i>an input in this sentence (and maybe an answer too)</span><span><i style="background:var(--blue)"></i>only an answer</span><span><i style="background:#f6c3ad"></i>not in the sentence: only pushed away</span></div>`;
 }
-$('m8-row').addEventListener('change', e => { S8.row = +e.target.value; render8(); });
-$('m8-all').addEventListener('click', e => { const g = e.target.closest('[data-r]'); if (g) { S8.row = +g.dataset.r; render8(); } });
+$('m8-row').addEventListener('change', e => { S8.row = +e.target.value; render8(); renderStatebar(); });
+$('sb-sentview').addEventListener('click', e => { const c = e.target.closest('[data-t]'); if (c) { S8.row = +c.dataset.t; render8(); renderStatebar(); } });
+$('m8-all').addEventListener('click', e => { const g = e.target.closest('[data-r]'); if (g) { S8.row = +g.dataset.r; render8(); renderStatebar(); } });
 
 // ---------- 9 two tokens drawing together ----------
 const S9 = { a: tokIx(' coffee'), b: tokIx(' tea'), key: '', series: null };
@@ -2464,10 +2569,10 @@ function render11() {
   const vrow = variants.map(v => { const ids = BPE.encode(v); return `<span class="m11v">${ids.map(id => `<span class="chip">${gstr(id)}</span>`).join('')}<span class="note">${ids.length === 1 ? 'ID ' + ids[0] : ids.length + ' tokens'}</span></span>`; }).join('');
   const ids = BPE.encode(' ' + w), r = ids.length === 1 ? NN.at.get(ids[0]) : undefined;
   let nn;
-  if (ids.length > 1) nn = `<p class="note">“${vis(' ' + w)}” is ${ids.length} tokens in GPT-2, so it has no row of its own.</p>`;
+  if (ids.length > 1) nn = `<p class="note">“${vis(' ' + w)}” is ${ids.length} tokens in GPT-2, so it has no embedding of its own.</p>`;
   else if (r === undefined) nn = `<p class="note">“${vis(' ' + w)}” is token ${ids[0]}, but its neighbours aren’t included on this page. Try a more common word.</p>`;
   else nn = `<table class="data"><tbody>${Array.from({ length: NN.k }, (_, j) => { const id = NN.ids[r * NN.k + j], c = NN.cos[r * NN.k + j] / 255; return `<tr><td class="n rk">${j + 1}</td><td class="mono">${gstr(id)}</td><td class="n mono">${id}</td><td class="n">${c.toFixed(2)}</td><td class="bar"><i style="width:${c * 100}%"></i></td></tr>`; }).join('')}</tbody></table>`;
-  out.innerHTML = `<h4>The word as GPT-2 tokens</h4><div class="m11vs">${vrow}</div><h4 style="margin-top:14px">The 10 rows nearest to ${ids.length === 1 ? `“${gstr(ids[0])}”` : 'it'}, out of 50,257</h4>${nn}`;
+  out.innerHTML = `<h4>The word as GPT-2 tokens</h4><div class="m11vs">${vrow}</div><h4 style="margin-top:14px">The 10 embeddings nearest to ${ids.length === 1 ? `“${gstr(ids[0])}”` : 'it'}, out of 50,257</h4>${nn}`;
 }
 $('m11-ex').innerHTML = M11_EX.map(w => `<button data-w="${w}">${w}</button>`).join('');
 $('m11-ex').addEventListener('click', e => { const b = e.target.closest('button'); if (b) { $('m11-word').value = b.dataset.w; render11(); } });
@@ -2490,10 +2595,10 @@ function render11g() {
   // labels alternate above and below their dots so neighbours don't collide
   const mark = (id, c, k) => `<circle cx="${X(id)}" cy="${Y(DMU[id])}" r="4" fill="none" stroke="var(--${c})" stroke-width="1.6"/><text x="${X(id)}" y="${Y(DMU[id]) + (k % 2 ? 17 : -9)}" text-anchor="middle" font-size="10.5" font-family="var(--mono)" fill="var(--${c})">${esc(BPE.str(id).replace(/^ /, '·'))}</text>`;
   MARK11.forEach(([id, c], k) => { svg += mark(id, c, k); });
-  svg += `<text transform="translate(10,${t + (H0 - t - b) / 2}) rotate(-90)" text-anchor="middle" font-size="10">distance from the average row</text>`;
+  svg += `<text transform="translate(10,${t + (H0 - t - b) / 2}) rotate(-90)" text-anchor="middle" font-size="10">distance from the average embedding</text>`;
   svg += `<g id="m11g-hov"></g>`;
   $('m11g-svg').innerHTML = svg;
-  const read = () => { $('m11g-read').innerHTML = `Each dot is one of the 50,257 rows. Height is its distance from the average row. The red rows sit nearest the middle: glitch tokens GPT-2 almost never saw in training. The dots at the far left, just as low, are byte values that never occur in ordinary text. Hover to read any dot.`; $('m11g-hov').innerHTML = ''; };
+  const read = () => { $('m11g-read').innerHTML = `Each dot is one of the 50,257 token embeddings. Height is its distance from the average embedding. The red ones sit nearest the middle: glitch tokens GPT-2 almost never saw in training. The dots at the far left, just as low, are byte values that never occur in ordinary text. Hover to read any dot.`; $('m11g-hov').innerHTML = ''; };
   read();
   cv.addEventListener('pointermove', e => {
     const rc = cv.getBoundingClientRect(), mx = e.clientX - rc.left, my = e.clientY - rc.top, span = 3 / (W0 - l - r) * 50256, c = (mx - l) / (W0 - l - r) * 50256;
@@ -2501,7 +2606,7 @@ function render11g() {
     for (let id = Math.max(0, Math.floor(c - span)); id <= Math.min(50256, Math.ceil(c + span)); id++) { const d = Math.hypot(X(id) - mx, Y(DMU[id]) - my); if (d < bd) { bd = d; best = id; } }
     if (best < 0 || bd > 14) { read(); return; }
     $('m11g-hov').innerHTML = `<circle cx="${X(best)}" cy="${Y(DMU[best])}" r="5" fill="none" stroke="var(--ink)" stroke-width="1.5"/>`;
-    $('m11g-read').innerHTML = `token <b>${best}</b>, <span class="mono">${gstr(best)}</span>: distance from the average row <b>${DMU[best].toFixed(2)}</b>`;
+    $('m11g-read').innerHTML = `token <b>${best}</b>, <span class="mono">${gstr(best)}</span>: distance from the average embedding <b>${DMU[best].toFixed(2)}</b>`;
   });
   cv.addEventListener('pointerleave', read);
 }
