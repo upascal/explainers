@@ -168,6 +168,8 @@ table.vocab tr.on td { background: var(--violet-100); }
 table.vocab td.rk { color: var(--muted); width: 2em; }
 td.bar { width: 40%; }
 td.bar i { display: block; height: 8px; border-radius: 2px; background: var(--axis); }
+table.vocab td.bar i { background: #b3a9e6; }
+table.vocab tr.on td.bar i { background: var(--violet); }
 #m8-nn td.bar i { background: var(--violet); opacity: 0.6; }
 #m8-nn tr { cursor: pointer; }
 
@@ -268,6 +270,20 @@ svg .dg-s { font-family: var(--serif); font-size: 14px; fill: var(--ink); }
 .m1blank.bad { background: var(--orange-100); color: #8a3a1a; border-bottom: 2px solid var(--orange); }
 .m1fb { margin: 12px 0 0; min-height: 1.4em; }
 .m1w.used { opacity: 0.4; }
+
+/* 2: one input vector: the word, an arrow, its numbers in brackets */
+.m2v-row { display: flex; flex-wrap: nowrap; align-items: center; gap: 12px 10px; margin: 18px 0 6px; }
+.m2v-word { display: inline-flex; flex-direction: column; align-items: center; padding: 10px 14px; border-radius: 10px; background: var(--violet-100); color: var(--violet); font-family: var(--serif); font-size: 1.35rem; font-weight: 600; line-height: 1.1; }
+.m2v-word .sub { font-family: var(--sans); font-size: 0.68rem; font-weight: 500; letter-spacing: 0.06em; text-transform: uppercase; opacity: 0.75; margin-top: 3px; }
+.m2v-arrow { font-size: 1.4rem; color: var(--muted); }
+.m2v-br { position: relative; display: inline-flex; gap: 5px; padding: 8px 11px 4px; }
+.m2v-br::before, .m2v-br::after { content: ""; position: absolute; top: 0; bottom: 0; width: 8px; border: 2px solid var(--ink-2); }
+.m2v-br::before { left: 0; border-right: 0; border-radius: 4px 0 0 4px; }
+.m2v-br::after { right: 0; border-left: 0; border-radius: 0 4px 4px 0; }
+.m2v-cell { display: inline-flex; flex-direction: column; align-items: center; gap: 3px; }
+.m2v-cell .v { min-width: 50px; padding: 9px 5px; border-radius: 6px; text-align: center; font-size: 1rem; font-weight: 600; font-variant-numeric: tabular-nums; color: var(--ink); transition: background 0.3s; }
+.m2v-cell .d { font-size: 0.68rem; color: var(--muted); }
+@media (max-width: 560px) { .m2v-arrow { display: none; } .m2v-row { flex-direction: column; align-items: flex-start; } .m2v-cell .v { min-width: 0; width: 52px; font-size: 0.88rem; } .m2v-br { gap: 4px; padding: 8px 10px 4px; } }
 </style>
 </head>
 <body>
@@ -364,12 +380,6 @@ svg .dg-s { font-family: var(--serif); font-size: 14px; fill: var(--ink); }
 </table>
 <h2 id="s2"><span class="num">2</span>The vocabulary and two tables</h2>
 <p>Training begins with bookkeeping. The program splits the corpus into words, counts each one, and builds the <em>vocabulary</em>: the list of every distinct word. The real program drops words that appear fewer than five times. The toy corpus keeps them all.</p>
-<p>Then every word gets <strong>two</strong> vectors, each a row of numbers, one per dimension:</p>
-<ul>
-<li>The <strong>input vector <em>v</em></strong> describes the word when it is the center of attention. It starts out random, with each number drawn uniformly from the range ±0.5/<em>d</em>, where <em>d</em> is the number of dimensions. That is ±0.1 here, and ±0.0017 at 300 dimensions.</li>
-<li>The <strong>output vector <em>v</em>′</strong> describes the word when it appears as someone else’s context. It starts out as all zeros.</li>
-</ul>
-<p>All the input vectors together form one table, and all the output vectors form another. Training adjusts both tables. At the end, the input table is usually the one people keep and call “the word embeddings.”</p>
 <div class="module" id="m2">
   <div class="row">
     <span class="note" id="m2-stats"></span>
@@ -378,14 +388,28 @@ svg .dg-s { font-family: var(--serif); font-size: 14px; fill: var(--ink); }
     <div><h4>Corpus</h4><div class="corpus" id="m2-corpus"></div></div>
     <div><h4>Vocabulary, by count</h4><div class="vocabwrap" id="m2-vocab"></div></div>
   </div>
-  <h4 style="margin-top:18px">The selected word's two rows</h4>
-  <div id="m2-vecs"></div>
-  <div class="row" style="margin:12px 0 0">
+  <p class="note" style="margin:10px 0 0">Click any word to find it in the corpus and the vocabulary.</p>
+</div>
+<p>Then every word gets <strong>two</strong> vectors, each a row of numbers, one per dimension:</p>
+<ul>
+<li>The <strong>input vector <em>v</em></strong> describes the word when it is the center of attention. It starts out random, with each number drawn uniformly from the range ±0.5/<em>d</em>, where <em>d</em> is the number of dimensions. That is ±0.1 here, and ±0.0017 at 300 dimensions.</li>
+<li>The <strong>output vector <em>v</em>′</strong> describes the word when it appears as someone else’s context. It starts out as all zeros.</li>
+</ul>
+<p>Here is one input vector, as it starts and as it ends up after training.</p>
+<div class="module" id="m2v">
+  <div class="row">
+    <label class="ctl">word <span class="seg" id="m2v-word"><button data-v="coffee" class="on">coffee</button><button data-v="tea">tea</button><button data-v="dog">dog</button><button data-v="cat">cat</button></span></label>
+    <span class="seg" id="m2v-state"><button data-v="untrained" class="on">untrained</button><button data-v="trained">trained</button></span>
+  </div>
+  <div id="m2v-vec"></div>
+  <p class="note" id="m2v-note" style="margin:10px 0 0"></p>
+  <div class="row" style="margin:14px 0 0">
     <button id="reroll">Re-roll initialization</button>
     <span class="note" id="m2-seed"></span>
   </div>
-  <p class="note" style="margin:6px 0 0">Click any word to see its rows. Re-rolling draws new random input vectors and restarts training for the rest of the page.</p>
+  <p class="note" style="margin:6px 0 0">Re-rolling draws new random input vectors and restarts training for the rest of the page.</p>
 </div>
+<p>All the input vectors together form one table, and all the output vectors form another. Training adjusts both tables. At the end, the input table is usually the one people keep and call “the word embeddings.”</p>
 <div class="callout">
   <div class="t">Why two tables?</div>
   With a single table, a word would be scored against itself using the same vector twice. The score would be |<i>v</i>|², a squared length, which is never negative, so the probability of section 5 would never drop below 0.5. Every word would be predicted to sit next to itself. Two tables also change what “close” means. A word’s input vector is pulled toward the output vectors of its neighbours. So two words end up with similar input vectors when they share neighbours, not when they sit side by side.
@@ -1035,15 +1059,40 @@ function render2() {
   const sel = V.index.get(S2.sel), maxc = Math.max(...V.count);
   $('m2-corpus').innerHTML = V.sents.map(s => `<div class="sline">${s.map(w => `<span class="w${w === sel ? ' on' : ''}" data-w="${W[w]}">${W[w]}</span>`).join(' ')}</div>`).join('');
   $('m2-vocab').innerHTML = `<table class="data vocab"><tbody>${W.map((w, i) => `<tr class="${i === sel ? 'on' : ''}" data-w="${w}"><td class="n rk">${i + 1}</td><td class="mono">${w}</td><td class="n">${V.count[i]}</td><td class="bar"><i style="width:${100 * V.count[i] / maxc}%"></i></td></tr>`).join('')}</tbody></table>`;
-  const vi = G.model.Win[sel], vo = G.model.Wout[sel];
-  $('m2-vecs').innerHTML = `<div class="tscroll"><table class="data vec"><thead><tr><th>${esc(S2.sel)}</th>${dimHead()}</tr></thead><tbody>
-    <tr class="r-v"><th>input v</th>${vecCells(vi)}</tr><tr class="r-vo"><th>output v′</th>${vecCells(vo)}</tr></tbody></table></div>`;
   $('m2-stats').textContent = `${W.length} words in the vocabulary · ${V.total} words of running text · ${V.sents.length} sentences`;
   $('m2-seed').textContent = G.step === 0 && G.phase === 0 ? `seed ${G.seed}, untrained` : `seed ${G.seed}, after ${commas(G.step)} pair updates`;
 }
 function selWord2(w) { if (w && V.index.has(w)) { S2.sel = w; render2(); } }
 ['m2-corpus', 'm2-vocab'].forEach(id => $(id).addEventListener('click', e => { const el = e.target.closest('[data-w]'); if (el) selWord2(el.dataset.w); }));
 $('reroll').addEventListener('click', () => { stopAll(); G.seed = 1 + Math.floor(Math.random() * 9999); resetTraining(); restart4(); renderAll(); });
+
+// ---------- 2 an example input vector, before and after training ----------
+// "trained" runs the whole stream on a private copy (what 8 does), so this works whatever
+// state the shared model is in.
+const S2V = { word: 'coffee', trained: false, cache: null };
+function trainedWin() {
+  if (S2V.cache && S2V.cache.seed === G.seed) return S2V.cache.Win;
+  const m = cloneModel(G.init);
+  for (let i = 0; i < G.stream.total; i++) { const p = G.stream.get(i); trainPair(m, p, alphaAt(p.wordsDone)); }
+  S2V.cache = { seed: G.seed, Win: m.Win };
+  return m.Win;
+}
+function render2v() {
+  const i = V.index.get(S2V.word), T = trainedWin(), v = (S2V.trained ? T : G.init.Win)[i];
+  const top = Math.max(...T.flat().map(Math.abs));          // one scale for both views
+  const cell = (x, d) => `<span class="m2v-cell"><span class="v" style="background:${x >= 0 ? 'rgba(42,120,214,' : 'rgba(235,104,52,'}${(0.08 + 0.42 * Math.abs(x) / top).toFixed(3)})">${num(x, 2)}</span><span class="d">d${d + 1}</span></span>`;
+  $('m2v-vec').innerHTML = `<div class="m2v-row">
+    <span class="m2v-word">${esc(S2V.word)}<span class="sub">input vector</span></span>
+    <span class="m2v-arrow" aria-hidden="true">→</span>
+    <span class="m2v-br">${v.map(cell).join('')}</span></div>`;
+  $('m2v-note').textContent = S2V.trained
+    ? 'Training nudges the numbers up and down to bring similar words closer together. Notice how the numbers for “coffee” are more similar to “tea” than to “dog”.'
+    : `Five random numbers between −0.1 and 0.1. Nothing about “${S2V.word}” is in them yet.`;
+  document.querySelectorAll('#m2v-word button').forEach(b => b.classList.toggle('on', b.dataset.v === S2V.word));
+  document.querySelectorAll('#m2v-state button').forEach(b => b.classList.toggle('on', (b.dataset.v === 'trained') === S2V.trained));
+}
+$('m2v-word').addEventListener('click', e => { const b = e.target.closest('button'); if (b) { S2V.word = b.dataset.v; render2v(); } });
+$('m2v-state').addEventListener('click', e => { const b = e.target.closest('button'); if (b) { S2V.trained = b.dataset.v === 'trained'; render2v(); } });
 
 // ---------- 3 the window ----------
 const S3 = { ci: 0 };
@@ -1345,7 +1394,7 @@ function render10() {
 // ---------- everything ----------
 function stopAll() { BARS.forEach(b => b.playing && b.stop()); }
 function renderAll() {
-  renderStatebar(); render2(); render3(); render6(); render7(); render8(); refreshBars();
+  renderStatebar(); render2(); render2v(); render3(); render6(); render7(); render8(); refreshBars();
 }
 G.stream = makeStream(G.streamSeed);
 resetTraining(); preset4('start');

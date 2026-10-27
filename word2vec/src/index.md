@@ -38,14 +38,18 @@ The settings below compare the toy model with the real thing. They are small eno
 
 Training begins with bookkeeping. The program splits the corpus into words, counts each one, and builds the *vocabulary*: the list of every distinct word. The real program drops words that appear fewer than five times. The toy corpus keeps them all.
 
+<!-- module: m2 -->
+
 Then every word gets **two** vectors, each a row of numbers, one per dimension:
 
 - The **input vector *v*** describes the word when it is the center of attention. It starts out random, with each number drawn uniformly from the range ±0.5/*d*, where *d* is the number of dimensions. That is ±0.1 here, and ±0.0017 at 300 dimensions.
 - The **output vector *v*′** describes the word when it appears as someone else’s context. It starts out as all zeros.
 
-All the input vectors together form one table, and all the output vectors form another. Training adjusts both tables. At the end, the input table is usually the one people keep and call “the word embeddings.”
+Here is one input vector, as it starts and as it ends up after training.
 
-<!-- module: m2 -->
+<!-- module: m2v -->
+
+All the input vectors together form one table, and all the output vectors form another. Training adjusts both tables. At the end, the input table is usually the one people keep and call “the word embeddings.”
 
 <div class="callout">
   <div class="t">Why two tables?</div>

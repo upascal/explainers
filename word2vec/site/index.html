@@ -103,12 +103,6 @@
 </table>
 <h2 id="s2"><span class="num">2</span>The vocabulary and two tables</h2>
 <p>Training begins with bookkeeping. The program splits the corpus into words, counts each one, and builds the <em>vocabulary</em>: the list of every distinct word. The real program drops words that appear fewer than five times. The toy corpus keeps them all.</p>
-<p>Then every word gets <strong>two</strong> vectors, each a row of numbers, one per dimension:</p>
-<ul>
-<li>The <strong>input vector <em>v</em></strong> describes the word when it is the center of attention. It starts out random, with each number drawn uniformly from the range ±0.5/<em>d</em>, where <em>d</em> is the number of dimensions. That is ±0.1 here, and ±0.0017 at 300 dimensions.</li>
-<li>The <strong>output vector <em>v</em>′</strong> describes the word when it appears as someone else’s context. It starts out as all zeros.</li>
-</ul>
-<p>All the input vectors together form one table, and all the output vectors form another. Training adjusts both tables. At the end, the input table is usually the one people keep and call “the word embeddings.”</p>
 <div class="module" id="m2">
   <div class="row">
     <span class="note" id="m2-stats"></span>
@@ -117,14 +111,28 @@
     <div><h4>Corpus</h4><div class="corpus" id="m2-corpus"></div></div>
     <div><h4>Vocabulary, by count</h4><div class="vocabwrap" id="m2-vocab"></div></div>
   </div>
-  <h4 style="margin-top:18px">The selected word's two rows</h4>
-  <div id="m2-vecs"></div>
-  <div class="row" style="margin:12px 0 0">
+  <p class="note" style="margin:10px 0 0">Click any word to find it in the corpus and the vocabulary.</p>
+</div>
+<p>Then every word gets <strong>two</strong> vectors, each a row of numbers, one per dimension:</p>
+<ul>
+<li>The <strong>input vector <em>v</em></strong> describes the word when it is the center of attention. It starts out random, with each number drawn uniformly from the range ±0.5/<em>d</em>, where <em>d</em> is the number of dimensions. That is ±0.1 here, and ±0.0017 at 300 dimensions.</li>
+<li>The <strong>output vector <em>v</em>′</strong> describes the word when it appears as someone else’s context. It starts out as all zeros.</li>
+</ul>
+<p>Here is one input vector, as it starts and as it ends up after training.</p>
+<div class="module" id="m2v">
+  <div class="row">
+    <label class="ctl">word <span class="seg" id="m2v-word"><button data-v="coffee" class="on">coffee</button><button data-v="tea">tea</button><button data-v="dog">dog</button><button data-v="cat">cat</button></span></label>
+    <span class="seg" id="m2v-state"><button data-v="untrained" class="on">untrained</button><button data-v="trained">trained</button></span>
+  </div>
+  <div id="m2v-vec"></div>
+  <p class="note" id="m2v-note" style="margin:10px 0 0"></p>
+  <div class="row" style="margin:14px 0 0">
     <button id="reroll">Re-roll initialization</button>
     <span class="note" id="m2-seed"></span>
   </div>
-  <p class="note" style="margin:6px 0 0">Click any word to see its rows. Re-rolling draws new random input vectors and restarts training for the rest of the page.</p>
+  <p class="note" style="margin:6px 0 0">Re-rolling draws new random input vectors and restarts training for the rest of the page.</p>
 </div>
+<p>All the input vectors together form one table, and all the output vectors form another. Training adjusts both tables. At the end, the input table is usually the one people keep and call “the word embeddings.”</p>
 <div class="callout">
   <div class="t">Why two tables?</div>
   With a single table, a word would be scored against itself using the same vector twice. The score would be |<i>v</i>|², a squared length, which is never negative, so the probability of section 5 would never drop below 0.5. Every word would be predicted to sit next to itself. Two tables also change what “close” means. A word’s input vector is pulled toward the output vectors of its neighbours. So two words end up with similar input vectors when they share neighbours, not when they sit side by side.

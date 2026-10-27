@@ -158,6 +158,8 @@ table.vocab tr.on td { background: var(--violet-100); }
 table.vocab td.rk { color: var(--muted); width: 2em; }
 td.bar { width: 40%; }
 td.bar i { display: block; height: 8px; border-radius: 2px; background: var(--axis); }
+table.vocab td.bar i { background: #b3a9e6; }
+table.vocab tr.on td.bar i { background: var(--violet); }
 #m8-nn td.bar i { background: var(--violet); opacity: 0.6; }
 #m8-nn tr { cursor: pointer; }
 
@@ -258,3 +260,17 @@ svg .dg-s { font-family: var(--serif); font-size: 14px; fill: var(--ink); }
 .m1blank.bad { background: var(--orange-100); color: #8a3a1a; border-bottom: 2px solid var(--orange); }
 .m1fb { margin: 12px 0 0; min-height: 1.4em; }
 .m1w.used { opacity: 0.4; }
+
+/* 2: one input vector: the word, an arrow, its numbers in brackets */
+.m2v-row { display: flex; flex-wrap: nowrap; align-items: center; gap: 12px 10px; margin: 18px 0 6px; }
+.m2v-word { display: inline-flex; flex-direction: column; align-items: center; padding: 10px 14px; border-radius: 10px; background: var(--violet-100); color: var(--violet); font-family: var(--serif); font-size: 1.35rem; font-weight: 600; line-height: 1.1; }
+.m2v-word .sub { font-family: var(--sans); font-size: 0.68rem; font-weight: 500; letter-spacing: 0.06em; text-transform: uppercase; opacity: 0.75; margin-top: 3px; }
+.m2v-arrow { font-size: 1.4rem; color: var(--muted); }
+.m2v-br { position: relative; display: inline-flex; gap: 5px; padding: 8px 11px 4px; }
+.m2v-br::before, .m2v-br::after { content: ""; position: absolute; top: 0; bottom: 0; width: 8px; border: 2px solid var(--ink-2); }
+.m2v-br::before { left: 0; border-right: 0; border-radius: 4px 0 0 4px; }
+.m2v-br::after { right: 0; border-left: 0; border-radius: 0 4px 4px 0; }
+.m2v-cell { display: inline-flex; flex-direction: column; align-items: center; gap: 3px; }
+.m2v-cell .v { min-width: 50px; padding: 9px 5px; border-radius: 6px; text-align: center; font-size: 1rem; font-weight: 600; font-variant-numeric: tabular-nums; color: var(--ink); transition: background 0.3s; }
+.m2v-cell .d { font-size: 0.68rem; color: var(--muted); }
+@media (max-width: 560px) { .m2v-arrow { display: none; } .m2v-row { flex-direction: column; align-items: flex-start; } .m2v-cell .v { min-width: 0; width: 52px; font-size: 0.88rem; } .m2v-br { gap: 4px; padding: 8px 10px 4px; } }

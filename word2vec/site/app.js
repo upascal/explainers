@@ -315,15 +315,40 @@ function render2() {
   const sel = V.index.get(S2.sel), maxc = Math.max(...V.count);
   $('m2-corpus').innerHTML = V.sents.map(s => `<div class="sline">${s.map(w => `<span class="w${w === sel ? ' on' : ''}" data-w="${W[w]}">${W[w]}</span>`).join(' ')}</div>`).join('');
   $('m2-vocab').innerHTML = `<table class="data vocab"><tbody>${W.map((w, i) => `<tr class="${i === sel ? 'on' : ''}" data-w="${w}"><td class="n rk">${i + 1}</td><td class="mono">${w}</td><td class="n">${V.count[i]}</td><td class="bar"><i style="width:${100 * V.count[i] / maxc}%"></i></td></tr>`).join('')}</tbody></table>`;
-  const vi = G.model.Win[sel], vo = G.model.Wout[sel];
-  $('m2-vecs').innerHTML = `<div class="tscroll"><table class="data vec"><thead><tr><th>${esc(S2.sel)}</th>${dimHead()}</tr></thead><tbody>
-    <tr class="r-v"><th>input v</th>${vecCells(vi)}</tr><tr class="r-vo"><th>output v′</th>${vecCells(vo)}</tr></tbody></table></div>`;
   $('m2-stats').textContent = `${W.length} words in the vocabulary · ${V.total} words of running text · ${V.sents.length} sentences`;
   $('m2-seed').textContent = G.step === 0 && G.phase === 0 ? `seed ${G.seed}, untrained` : `seed ${G.seed}, after ${commas(G.step)} pair updates`;
 }
 function selWord2(w) { if (w && V.index.has(w)) { S2.sel = w; render2(); } }
 ['m2-corpus', 'm2-vocab'].forEach(id => $(id).addEventListener('click', e => { const el = e.target.closest('[data-w]'); if (el) selWord2(el.dataset.w); }));
 $('reroll').addEventListener('click', () => { stopAll(); G.seed = 1 + Math.floor(Math.random() * 9999); resetTraining(); restart4(); renderAll(); });
+
+// ---------- 2 an example input vector, before and after training ----------
+// "trained" runs the whole stream on a private copy (what 8 does), so this works whatever
+// state the shared model is in.
+const S2V = { word: 'coffee', trained: false, cache: null };
+function trainedWin() {
+  if (S2V.cache && S2V.cache.seed === G.seed) return S2V.cache.Win;
+  const m = cloneModel(G.init);
+  for (let i = 0; i < G.stream.total; i++) { const p = G.stream.get(i); trainPair(m, p, alphaAt(p.wordsDone)); }
+  S2V.cache = { seed: G.seed, Win: m.Win };
+  return m.Win;
+}
+function render2v() {
+  const i = V.index.get(S2V.word), T = trainedWin(), v = (S2V.trained ? T : G.init.Win)[i];
+  const top = Math.max(...T.flat().map(Math.abs));          // one scale for both views
+  const cell = (x, d) => `<span class="m2v-cell"><span class="v" style="background:${x >= 0 ? 'rgba(42,120,214,' : 'rgba(235,104,52,'}${(0.08 + 0.42 * Math.abs(x) / top).toFixed(3)})">${num(x, 2)}</span><span class="d">d${d + 1}</span></span>`;
+  $('m2v-vec').innerHTML = `<div class="m2v-row">
+    <span class="m2v-word">${esc(S2V.word)}<span class="sub">input vector</span></span>
+    <span class="m2v-arrow" aria-hidden="true">→</span>
+    <span class="m2v-br">${v.map(cell).join('')}</span></div>`;
+  $('m2v-note').textContent = S2V.trained
+    ? 'Training nudges the numbers up and down to bring similar words closer together. Notice how the numbers for “coffee” are more similar to “tea” than to “dog”.'
+    : `Five random numbers between −0.1 and 0.1. Nothing about “${S2V.word}” is in them yet.`;
+  document.querySelectorAll('#m2v-word button').forEach(b => b.classList.toggle('on', b.dataset.v === S2V.word));
+  document.querySelectorAll('#m2v-state button').forEach(b => b.classList.toggle('on', (b.dataset.v === 'trained') === S2V.trained));
+}
+$('m2v-word').addEventListener('click', e => { const b = e.target.closest('button'); if (b) { S2V.word = b.dataset.v; render2v(); } });
+$('m2v-state').addEventListener('click', e => { const b = e.target.closest('button'); if (b) { S2V.trained = b.dataset.v === 'trained'; render2v(); } });
 
 // ---------- 3 the window ----------
 const S3 = { ci: 0 };
@@ -625,7 +650,7 @@ function render10() {
 // ---------- everything ----------
 function stopAll() { BARS.forEach(b => b.playing && b.stop()); }
 function renderAll() {
-  renderStatebar(); render2(); render3(); render6(); render7(); render8(); refreshBars();
+  renderStatebar(); render2(); render2v(); render3(); render6(); render7(); render8(); refreshBars();
 }
 G.stream = makeStream(G.streamSeed);
 resetTraining(); preset4('start');
