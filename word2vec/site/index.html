@@ -144,17 +144,17 @@
 <p>Before the window is placed, very frequent words are randomly dropped. Words like “the” and “a” appear next to everything and say little about any particular word. Dropping some of their occurrences speeds up training and gives the rarer, more informative words more room in each window. In the paper, a word that makes up a fraction <em>f</em> of the corpus is dropped with probability 1 − √(<em>t</em>/<em>f</em>), with <em>t</em> around 10⁻⁵. The released code uses a slightly different formula, with a default <em>t</em> of 10⁻³. This page uses the code’s formula, with <em>t</em> raised to 0.01 so that it has an effect on so small a corpus.</p>
 <p>Each (center, context) pair inside the window becomes one training example.</p>
 <div class="module" id="m3">
+  <h4 class="m3title">Explore how window size affects training pairs</h4>
+  <p class="note" style="margin:0 0 14px">Pick a sentence, then drag the window along it or click a word to make it the center.</p>
   <div class="row">
-    <span id="m3-bar"></span>
-    <label class="ctl">Max window <input type="range" id="win" min="1" max="5" step="1" value="5"> <b id="win-v">5</b></label>
-    <span class="note">changing it restarts training</span>
+    <label class="m3pick"><span class="lab">Sentence</span><select id="m3-sent-pick"></select></label>
+    <span class="m3step"><span class="lab">Window size</span><button id="m3-minus" aria-label="smaller window">−</button><b id="m3-bv" aria-live="polite">2</b><button id="m3-plus" aria-label="larger window">+</button></span>
   </div>
-  <div class="sentwalk" id="m3-sent"></div>
-  <h4 style="margin-top:22px">Training pairs from this center word</h4>
+  <div class="m3scroll"><div class="m3track" id="m3-track"></div></div>
+  <h4>Training pairs from this window</h4>
   <div class="pairs" id="m3-pairs"></div>
-  <p class="note" id="m3-note" style="margin:12px 0 0"></p>
 </div>
-<p>Greyed-out words were dropped by subsampling for this pass. Hover a word to see the probability that it is kept. Drops and window sizes are drawn fresh on every pass, so the same sentence yields different pairs each time.</p>
+<p>During training the window slides by itself: every word in the corpus takes a turn as the center, once per pass, 200 passes in all. The window size and the dropped words are drawn fresh each time, so the same sentence yields different pairs on every pass.</p>
 <h2 id="s4"><span class="num">4</span>The dot product</h2>
 <p>For each pair, the model needs a score: a single number saying how strongly it believes the two words belong together. word2vec uses the simplest score there is, the <em>dot product</em>. Multiply the center word’s input vector and the context word’s output vector dimension by dimension, then add up the results.</p>
 <div class="module" id="m4">

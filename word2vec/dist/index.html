@@ -213,9 +213,23 @@ svg .pp-lab { font-family: "JetBrains Mono", var(--mono); font-size: 11px; fill:
 svg .pp-ang { font-size: 10px; fill: var(--muted); }
 
 /* 3 */
-.sentwalk { display: flex; flex-wrap: wrap; gap: 26px 5px; align-items: center; padding: 14px 4px 26px; }
-.winbox { position: relative; display: inline-flex; gap: 5px; padding: 3px; border: 1px dotted var(--violet); border-radius: 7px; }
-.winlbl { position: absolute; top: 100%; left: 0; right: 0; margin-top: 3px; text-align: center; font-size: 0.66rem; letter-spacing: 0.05em; text-transform: uppercase; color: var(--violet); white-space: nowrap; }
+.m3pick { display: inline-flex; align-items: center; gap: 10px; min-width: 0; max-width: 100%; font-size: 0.9rem; color: var(--ink-2); }
+.m3pick select { font-family: var(--mono); font-size: 0.85rem; min-width: 0; height: 32px; padding: 0 32px 0 10px; -webkit-appearance: none; appearance: none; color: var(--ink);
+  background: white url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='10' height='6' viewBox='0 0 10 6'%3E%3Cpath d='M1 1l4 4 4-4' fill='none' stroke='%2352514e' stroke-width='1.5' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E") no-repeat right 12px center; }
+.m3scroll { overflow-x: auto; margin: 6px -4px 0; padding: 0 4px; }
+.m3track { position: relative; display: inline-flex; gap: 6px; padding: 30px 8px 28px; touch-action: none; user-select: none; -webkit-user-select: none; cursor: pointer; }
+.m3track .chip { position: relative; z-index: 1; font-size: 1rem; padding: 6px 11px; transition: background 0.15s, color 0.15s, border-color 0.15s; }
+.m3band { position: absolute; top: 22px; bottom: 20px; z-index: 2; pointer-events: none; border: 2px solid var(--violet); border-radius: 10px; background: rgba(74,58,167,0.05); cursor: grab; transition: left 0.15s ease, width 0.15s ease; }
+.m3track.dragging, .m3track.dragging .m3grip { cursor: grabbing; }
+.m3title { margin-bottom: 6px !important; color: var(--ink) !important; font-size: 0.85rem !important; }
+.m3step { display: inline-flex; align-items: center; gap: 0; font-size: 0.9rem; color: var(--ink-2); }
+.m3step .lab { margin-right: 10px; }
+.m3step button { width: 32px; height: 32px; padding: 0; font-size: 1.05rem; line-height: 1; }
+.m3step button:first-of-type { border-radius: 6px 0 0 6px; }
+.m3step button:last-of-type { border-radius: 0 6px 6px 0; }
+.m3step b { min-width: 36px; height: 32px; display: inline-flex; align-items: center; justify-content: center; border-top: 1px solid var(--axis); border-bottom: 1px solid var(--axis); background: white; color: var(--ink); font-variant-numeric: tabular-nums; }
+.m3lbl { position: absolute; bottom: 100%; left: 0; right: 0; margin-bottom: 3px; text-align: center; font-size: 0.68rem; letter-spacing: 0.05em; text-transform: uppercase; color: var(--violet); white-space: nowrap; }
+.m3grip { position: absolute; top: 100%; left: 50%; pointer-events: auto; cursor: grab; transform: translate(-50%, -50%); display: flex; align-items: center; justify-content: center; width: 34px; height: 16px; border-radius: 8px; background: var(--violet); color: white; box-shadow: 0 1px 3px rgba(11,11,11,0.2); }
 .pairs { display: flex; flex-wrap: wrap; gap: 8px; }
 .pairchip { display: inline-flex; gap: 2px; padding: 2px; border: 1px solid var(--blue-250); border-radius: 8px; background: white; }
 .pairchip .chip { font-size: 0.8rem; padding: 2px 7px; }
@@ -285,6 +299,7 @@ svg .dg-s { font-family: var(--serif); font-size: 14px; fill: var(--ink); }
 .m2v-cell .v { min-width: 50px; padding: 9px 5px; border-radius: 6px; text-align: center; font-size: 1rem; font-weight: 600; font-variant-numeric: tabular-nums; color: var(--ink); transition: background 0.3s; }
 .m2v-cell .d { font-size: 0.68rem; color: var(--muted); }
 @media (max-width: 560px) { .m2v-arrow { display: none; } .m2v-row { flex-direction: column; align-items: flex-start; } .m2v-cell .v { min-width: 0; width: 52px; font-size: 0.88rem; } .m2v-br { gap: 4px; padding: 8px 10px 4px; } }
+@media (max-width: 560px) { .m3track { gap: 3px; padding: 30px 6px 28px; } .m3track .chip { font-size: 0.74rem; padding: 5px 4px; } }
 </style>
 </head>
 <body>
@@ -422,17 +437,17 @@ svg .dg-s { font-family: var(--serif); font-size: 14px; fill: var(--ink); }
 <p>Before the window is placed, very frequent words are randomly dropped. Words like “the” and “a” appear next to everything and say little about any particular word. Dropping some of their occurrences speeds up training and gives the rarer, more informative words more room in each window. In the paper, a word that makes up a fraction <em>f</em> of the corpus is dropped with probability 1 − √(<em>t</em>/<em>f</em>), with <em>t</em> around 10⁻⁵. The released code uses a slightly different formula, with a default <em>t</em> of 10⁻³. This page uses the code’s formula, with <em>t</em> raised to 0.01 so that it has an effect on so small a corpus.</p>
 <p>Each (center, context) pair inside the window becomes one training example.</p>
 <div class="module" id="m3">
+  <h4 class="m3title">Explore how window size affects training pairs</h4>
+  <p class="note" style="margin:0 0 14px">Pick a sentence, then drag the window along it or click a word to make it the center.</p>
   <div class="row">
-    <span id="m3-bar"></span>
-    <label class="ctl">Max window <input type="range" id="win" min="1" max="5" step="1" value="5"> <b id="win-v">5</b></label>
-    <span class="note">changing it restarts training</span>
+    <label class="m3pick"><span class="lab">Sentence</span><select id="m3-sent-pick"></select></label>
+    <span class="m3step"><span class="lab">Window size</span><button id="m3-minus" aria-label="smaller window">−</button><b id="m3-bv" aria-live="polite">2</b><button id="m3-plus" aria-label="larger window">+</button></span>
   </div>
-  <div class="sentwalk" id="m3-sent"></div>
-  <h4 style="margin-top:22px">Training pairs from this center word</h4>
+  <div class="m3scroll"><div class="m3track" id="m3-track"></div></div>
+  <h4>Training pairs from this window</h4>
   <div class="pairs" id="m3-pairs"></div>
-  <p class="note" id="m3-note" style="margin:12px 0 0"></p>
 </div>
-<p>Greyed-out words were dropped by subsampling for this pass. Hover a word to see the probability that it is kept. Drops and window sizes are drawn fresh on every pass, so the same sentence yields different pairs each time.</p>
+<p>During training the window slides by itself: every word in the corpus takes a turn as the center, once per pass, 200 passes in all. The window size and the dropped words are drawn fresh each time, so the same sentence yields different pairs on every pass.</p>
 <h2 id="s4"><span class="num">4</span>The dot product</h2>
 <p>For each pair, the model needs a score: a single number saying how strongly it believes the two words belong together. word2vec uses the simplest score there is, the <em>dot product</em>. Multiply the center word’s input vector and the context word’s output vector dimension by dimension, then add up the results.</p>
 <div class="module" id="m4">
@@ -1104,35 +1119,63 @@ document.querySelectorAll('.reveal-btn').forEach(b => b.addEventListener('click'
 }));
 
 // ---------- 3 the window ----------
-const S3 = { ci: 0 };
+// A sandbox, separate from training: pick a sentence, drag the window, see the pairs it makes.
+// (Training shrinks the window at random and drops frequent words; the text explains that.)
+const S3 = { sent: 0, pos: 2, b: 2 };
 function render3() {
-  const C = G.stream.centers, c = C[S3.ci], s = V.sents[c.sent];
-  const live = s.map((w, i) => i).filter(i => c.kept[i]), li = live.indexOf(c.pos);
-  const inWin = new Set(live.filter((_, j) => j !== li && Math.abs(j - li) <= c.b));
-  const lo = live[Math.max(0, li - c.b)], hi = live[Math.min(live.length - 1, li + c.b)];
-  let html = '';
-  s.forEach((w, i) => {
-    if (i === lo) html += '<span class="winbox">';
-    const cls = i === c.pos ? 'v' : !c.kept[i] ? 'drop' : inWin.has(i) ? 'vo' : '';
-    const t = !c.kept[i] ? `dropped by subsampling (kept with probability ${V.keep[w].toFixed(2)})` : `kept with probability ${V.keep[w].toFixed(2)}`;
-    html += `<span class="chip ${cls}" title="${t}">${W[w]}</span>`;
-    if (i === hi) html += `<span class="winlbl">window ${c.b} (max ${CFG.WINDOW})</span></span>`;
-  });
-  $('m3-sent').innerHTML = html;
-  const mine = Array.from({ length: c.n }, (_, k) => G.stream.get(c.first + k));
-  $('m3-pairs').innerHTML = mine.length ? mine.map(p => `<span class="pairchip">${wchip(W[p.center], 'v')}${wchip(W[p.ctx], 'vo')}</span>`).join('') : '<span class="note">no pairs: every other word in this sentence was dropped</span>';
-  const done = c.first + c.n;
-  $('m3-note').textContent = `center word ${S3.ci + 1} of ${C.length} in the first pass · sentence ${c.sent + 1} · ${commas(done)} pairs so far · ${commas(G.stream.total)} pairs over all ${CFG.EPOCHS} passes`;
-  $('win-v').textContent = CFG.WINDOW;
+  const s = V.sents[S3.sent], c = S3.pos, b = S3.b;
+  $('m3-track').innerHTML = s.map((w, i) => `<span class="chip ${i === c ? 'v' : Math.abs(i - c) <= b ? 'vo' : ''}" data-i="${i}">${W[w]}</span>`).join('')
+    + `<span class="m3band" id="m3-band"><span class="m3lbl">window ±${b}</span><span class="m3grip" aria-hidden="true"><svg viewBox="0 0 16 6" width="16" height="6"><g fill="currentColor"><circle cx="2" cy="1.2" r="1.1"/><circle cx="8" cy="1.2" r="1.1"/><circle cx="14" cy="1.2" r="1.1"/><circle cx="2" cy="4.8" r="1.1"/><circle cx="8" cy="4.8" r="1.1"/><circle cx="14" cy="4.8" r="1.1"/></g></svg></span></span>`;
+  place3();
+  const ctx = s.map((w, i) => i).filter(i => i !== c && Math.abs(i - c) <= b);
+  $('m3-pairs').innerHTML = ctx.map(i => `<span class="pairchip">${wchip(W[s[c]], 'v')}${wchip(W[s[i]], 'vo')}</span>`).join('');
+  $('m3-sent-pick').value = S3.sent;
+  $('m3-bv').textContent = b; $('m3-minus').disabled = b <= 1; $('m3-plus').disabled = b >= CFG.WINDOW;
 }
-const bar3 = PlayBar($('m3-bar'), {
-  ms: 700, canStep: () => S3.ci < G.stream.centers.length - 1, canReset: () => S3.ci > 0,
-  step: () => { S3.ci++; render3(); }, end: () => { S3.ci = G.stream.centers.length - 1; render3(); }, reset: () => { S3.ci = 0; render3(); },
-});
-$('win').addEventListener('input', e => {
-  stopAll(); CFG.WINDOW = +e.target.value; G.stream = makeStream(G.streamSeed);
-  S3.ci = Math.min(S3.ci, G.stream.centers.length - 1); resetTraining(); restart4(); renderAll();
-});
+// size the band to cover the window's chips; only classes and the band move during a drag
+function place3() {
+  const chips = [...$('m3-track').querySelectorAll('.chip')], n = chips.length;
+  const lo = chips[Math.max(0, S3.pos - S3.b)], hi = chips[Math.min(n - 1, S3.pos + S3.b)], band = $('m3-band');
+  band.style.left = (lo.offsetLeft - 5) + 'px';
+  band.style.width = (hi.offsetLeft + hi.offsetWidth - lo.offsetLeft + 10) + 'px';
+  chips.forEach((ch, i) => ch.className = 'chip ' + (i === S3.pos ? 'v' : Math.abs(i - S3.pos) <= S3.b ? 'vo' : ''));
+  // on a narrow screen the sentence can overflow: keep the window in view
+  const sc = $('m3-track').parentElement, L = lo.offsetLeft - 8, R = hi.offsetLeft + hi.offsetWidth + 8;
+  if (R > sc.scrollLeft + sc.clientWidth) sc.scrollLeft = R - sc.clientWidth;
+  if (L < sc.scrollLeft) sc.scrollLeft = L;
+}
+function setCenter3(i) {
+  if (i === S3.pos) return;
+  S3.pos = i; place3();
+  const s = V.sents[S3.sent];
+  $('m3-pairs').innerHTML = s.map((w, k) => k).filter(k => k !== i && Math.abs(k - i) <= S3.b).map(k => `<span class="pairchip">${wchip(W[s[i]], 'v')}${wchip(W[s[k]], 'vo')}</span>`).join('');
+}
+function setSent3(k) { S3.sent = k; S3.pos = Math.min(S3.pos, V.sents[S3.sent].length - 1); render3(); }
+$('m3-sent-pick').innerHTML = V.sents.map((s, k) => `<option value="${k}">${s.map(w => W[w]).join(' ')}</option>`).join('');
+$('m3-sent-pick').addEventListener('change', e => setSent3(+e.target.value));
+$('m3-minus').addEventListener('click', () => { S3.b = Math.max(1, S3.b - 1); render3(); });
+$('m3-plus').addEventListener('click', () => { S3.b = Math.min(CFG.WINDOW, S3.b + 1); render3(); });
+window.addEventListener('resize', () => place3());
+(function drag3() {
+  // press and drag moves the window; a press that doesn't move picks the word as center
+  const track = $('m3-track'); let g = null;
+  const mid = el => el.offsetLeft + el.offsetWidth / 2;
+  const nearest = x => { let best = 0, d = Infinity; track.querySelectorAll('.chip').forEach((ch, i) => { const e = Math.abs(mid(ch) - x); if (e < d) { d = e; best = i; } }); return best; };
+  const xOf = e => e.clientX - track.getBoundingClientRect().left;
+  track.addEventListener('pointerdown', e => {
+    const chip = e.target.closest('.chip'), x = xOf(e);
+    g = { x0: x, off: x - mid(track.querySelectorAll('.chip')[S3.pos]), chip: chip ? +chip.dataset.i : null, moved: false };
+    track.setPointerCapture(e.pointerId); track.classList.add('dragging'); e.preventDefault();
+  });
+  track.addEventListener('pointermove', e => {
+    if (!g) return;
+    const x = xOf(e);
+    if (!g.moved && Math.abs(x - g.x0) < 5) return;
+    g.moved = true; setCenter3(nearest(x - g.off));
+  });
+  const end = e => { if (g && !g.moved && g.chip != null && e.type === 'pointerup') setCenter3(g.chip); g = null; track.classList.remove('dragging'); };
+  track.addEventListener('pointerup', end); track.addEventListener('pointercancel', end);
+})();
 
 // ---------- 4 the dot product ----------
 const S4 = { preset: 'start', v: null, u: null, ph: 0, cw: '', ow: '' };

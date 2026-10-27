@@ -1,11 +1,11 @@
 <div class="module" id="m3">
+  <h4 class="m3title">Explore how window size affects training pairs</h4>
+  <p class="note" style="margin:0 0 14px">Pick a sentence, then drag the window along it or click a word to make it the center.</p>
   <div class="row">
-    <span id="m3-bar"></span>
-    <label class="ctl">Max window <input type="range" id="win" min="1" max="5" step="1" value="5"> <b id="win-v">5</b></label>
-    <span class="note">changing it restarts training</span>
+    <label class="m3pick"><span class="lab">Sentence</span><select id="m3-sent-pick"></select></label>
+    <span class="m3step"><span class="lab">Window size</span><button id="m3-minus" aria-label="smaller window">−</button><b id="m3-bv" aria-live="polite">2</b><button id="m3-plus" aria-label="larger window">+</button></span>
   </div>
-  <div class="sentwalk" id="m3-sent"></div>
-  <h4 style="margin-top:22px">Training pairs from this center word</h4>
+  <div class="m3scroll"><div class="m3track" id="m3-track"></div></div>
+  <h4>Training pairs from this window</h4>
   <div class="pairs" id="m3-pairs"></div>
-  <p class="note" id="m3-note" style="margin:12px 0 0"></p>
 </div>

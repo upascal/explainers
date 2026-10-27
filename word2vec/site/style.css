@@ -203,9 +203,23 @@ svg .pp-lab { font-family: "JetBrains Mono", var(--mono); font-size: 11px; fill:
 svg .pp-ang { font-size: 10px; fill: var(--muted); }
 
 /* 3 */
-.sentwalk { display: flex; flex-wrap: wrap; gap: 26px 5px; align-items: center; padding: 14px 4px 26px; }
-.winbox { position: relative; display: inline-flex; gap: 5px; padding: 3px; border: 1px dotted var(--violet); border-radius: 7px; }
-.winlbl { position: absolute; top: 100%; left: 0; right: 0; margin-top: 3px; text-align: center; font-size: 0.66rem; letter-spacing: 0.05em; text-transform: uppercase; color: var(--violet); white-space: nowrap; }
+.m3pick { display: inline-flex; align-items: center; gap: 10px; min-width: 0; max-width: 100%; font-size: 0.9rem; color: var(--ink-2); }
+.m3pick select { font-family: var(--mono); font-size: 0.85rem; min-width: 0; height: 32px; padding: 0 32px 0 10px; -webkit-appearance: none; appearance: none; color: var(--ink);
+  background: white url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='10' height='6' viewBox='0 0 10 6'%3E%3Cpath d='M1 1l4 4 4-4' fill='none' stroke='%2352514e' stroke-width='1.5' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E") no-repeat right 12px center; }
+.m3scroll { overflow-x: auto; margin: 6px -4px 0; padding: 0 4px; }
+.m3track { position: relative; display: inline-flex; gap: 6px; padding: 30px 8px 28px; touch-action: none; user-select: none; -webkit-user-select: none; cursor: pointer; }
+.m3track .chip { position: relative; z-index: 1; font-size: 1rem; padding: 6px 11px; transition: background 0.15s, color 0.15s, border-color 0.15s; }
+.m3band { position: absolute; top: 22px; bottom: 20px; z-index: 2; pointer-events: none; border: 2px solid var(--violet); border-radius: 10px; background: rgba(74,58,167,0.05); cursor: grab; transition: left 0.15s ease, width 0.15s ease; }
+.m3track.dragging, .m3track.dragging .m3grip { cursor: grabbing; }
+.m3title { margin-bottom: 6px !important; color: var(--ink) !important; font-size: 0.85rem !important; }
+.m3step { display: inline-flex; align-items: center; gap: 0; font-size: 0.9rem; color: var(--ink-2); }
+.m3step .lab { margin-right: 10px; }
+.m3step button { width: 32px; height: 32px; padding: 0; font-size: 1.05rem; line-height: 1; }
+.m3step button:first-of-type { border-radius: 6px 0 0 6px; }
+.m3step button:last-of-type { border-radius: 0 6px 6px 0; }
+.m3step b { min-width: 36px; height: 32px; display: inline-flex; align-items: center; justify-content: center; border-top: 1px solid var(--axis); border-bottom: 1px solid var(--axis); background: white; color: var(--ink); font-variant-numeric: tabular-nums; }
+.m3lbl { position: absolute; bottom: 100%; left: 0; right: 0; margin-bottom: 3px; text-align: center; font-size: 0.68rem; letter-spacing: 0.05em; text-transform: uppercase; color: var(--violet); white-space: nowrap; }
+.m3grip { position: absolute; top: 100%; left: 50%; pointer-events: auto; cursor: grab; transform: translate(-50%, -50%); display: flex; align-items: center; justify-content: center; width: 34px; height: 16px; border-radius: 8px; background: var(--violet); color: white; box-shadow: 0 1px 3px rgba(11,11,11,0.2); }
 .pairs { display: flex; flex-wrap: wrap; gap: 8px; }
 .pairchip { display: inline-flex; gap: 2px; padding: 2px; border: 1px solid var(--blue-250); border-radius: 8px; background: white; }
 .pairchip .chip { font-size: 0.8rem; padding: 2px 7px; }
@@ -275,3 +289,4 @@ svg .dg-s { font-family: var(--serif); font-size: 14px; fill: var(--ink); }
 .m2v-cell .v { min-width: 50px; padding: 9px 5px; border-radius: 6px; text-align: center; font-size: 1rem; font-weight: 600; font-variant-numeric: tabular-nums; color: var(--ink); transition: background 0.3s; }
 .m2v-cell .d { font-size: 0.68rem; color: var(--muted); }
 @media (max-width: 560px) { .m2v-arrow { display: none; } .m2v-row { flex-direction: column; align-items: flex-start; } .m2v-cell .v { min-width: 0; width: 52px; font-size: 0.88rem; } .m2v-br { gap: 4px; padding: 8px 10px 4px; } }
+@media (max-width: 560px) { .m3track { gap: 3px; padding: 30px 6px 28px; } .m3track .chip { font-size: 0.74rem; padding: 5px 4px; } }

@@ -357,35 +357,63 @@ document.querySelectorAll('.reveal-btn').forEach(b => b.addEventListener('click'
 }));
 
 // ---------- 3 the window ----------
-const S3 = { ci: 0 };
+// A sandbox, separate from training: pick a sentence, drag the window, see the pairs it makes.
+// (Training shrinks the window at random and drops frequent words; the text explains that.)
+const S3 = { sent: 0, pos: 2, b: 2 };
 function render3() {
-  const C = G.stream.centers, c = C[S3.ci], s = V.sents[c.sent];
-  const live = s.map((w, i) => i).filter(i => c.kept[i]), li = live.indexOf(c.pos);
-  const inWin = new Set(live.filter((_, j) => j !== li && Math.abs(j - li) <= c.b));
-  const lo = live[Math.max(0, li - c.b)], hi = live[Math.min(live.length - 1, li + c.b)];
-  let html = '';
-  s.forEach((w, i) => {
-    if (i === lo) html += '<span class="winbox">';
-    const cls = i === c.pos ? 'v' : !c.kept[i] ? 'drop' : inWin.has(i) ? 'vo' : '';
-    const t = !c.kept[i] ? `dropped by subsampling (kept with probability ${V.keep[w].toFixed(2)})` : `kept with probability ${V.keep[w].toFixed(2)}`;
-    html += `<span class="chip ${cls}" title="${t}">${W[w]}</span>`;
-    if (i === hi) html += `<span class="winlbl">window ${c.b} (max ${CFG.WINDOW})</span></span>`;
-  });
-  $('m3-sent').innerHTML = html;
-  const mine = Array.from({ length: c.n }, (_, k) => G.stream.get(c.first + k));
-  $('m3-pairs').innerHTML = mine.length ? mine.map(p => `<span class="pairchip">${wchip(W[p.center], 'v')}${wchip(W[p.ctx], 'vo')}</span>`).join('') : '<span class="note">no pairs: every other word in this sentence was dropped</span>';
-  const done = c.first + c.n;
-  $('m3-note').textContent = `center word ${S3.ci + 1} of ${C.length} in the first pass · sentence ${c.sent + 1} · ${commas(done)} pairs so far · ${commas(G.stream.total)} pairs over all ${CFG.EPOCHS} passes`;
-  $('win-v').textContent = CFG.WINDOW;
+  const s = V.sents[S3.sent], c = S3.pos, b = S3.b;
+  $('m3-track').innerHTML = s.map((w, i) => `<span class="chip ${i === c ? 'v' : Math.abs(i - c) <= b ? 'vo' : ''}" data-i="${i}">${W[w]}</span>`).join('')
+    + `<span class="m3band" id="m3-band"><span class="m3lbl">window ±${b}</span><span class="m3grip" aria-hidden="true"><svg viewBox="0 0 16 6" width="16" height="6"><g fill="currentColor"><circle cx="2" cy="1.2" r="1.1"/><circle cx="8" cy="1.2" r="1.1"/><circle cx="14" cy="1.2" r="1.1"/><circle cx="2" cy="4.8" r="1.1"/><circle cx="8" cy="4.8" r="1.1"/><circle cx="14" cy="4.8" r="1.1"/></g></svg></span></span>`;
+  place3();
+  const ctx = s.map((w, i) => i).filter(i => i !== c && Math.abs(i - c) <= b);
+  $('m3-pairs').innerHTML = ctx.map(i => `<span class="pairchip">${wchip(W[s[c]], 'v')}${wchip(W[s[i]], 'vo')}</span>`).join('');
+  $('m3-sent-pick').value = S3.sent;
+  $('m3-bv').textContent = b; $('m3-minus').disabled = b <= 1; $('m3-plus').disabled = b >= CFG.WINDOW;
 }
-const bar3 = PlayBar($('m3-bar'), {
-  ms: 700, canStep: () => S3.ci < G.stream.centers.length - 1, canReset: () => S3.ci > 0,
-  step: () => { S3.ci++; render3(); }, end: () => { S3.ci = G.stream.centers.length - 1; render3(); }, reset: () => { S3.ci = 0; render3(); },
-});
-$('win').addEventListener('input', e => {
-  stopAll(); CFG.WINDOW = +e.target.value; G.stream = makeStream(G.streamSeed);
-  S3.ci = Math.min(S3.ci, G.stream.centers.length - 1); resetTraining(); restart4(); renderAll();
-});
+// size the band to cover the window's chips; only classes and the band move during a drag
+function place3() {
+  const chips = [...$('m3-track').querySelectorAll('.chip')], n = chips.length;
+  const lo = chips[Math.max(0, S3.pos - S3.b)], hi = chips[Math.min(n - 1, S3.pos + S3.b)], band = $('m3-band');
+  band.style.left = (lo.offsetLeft - 5) + 'px';
+  band.style.width = (hi.offsetLeft + hi.offsetWidth - lo.offsetLeft + 10) + 'px';
+  chips.forEach((ch, i) => ch.className = 'chip ' + (i === S3.pos ? 'v' : Math.abs(i - S3.pos) <= S3.b ? 'vo' : ''));
+  // on a narrow screen the sentence can overflow: keep the window in view
+  const sc = $('m3-track').parentElement, L = lo.offsetLeft - 8, R = hi.offsetLeft + hi.offsetWidth + 8;
+  if (R > sc.scrollLeft + sc.clientWidth) sc.scrollLeft = R - sc.clientWidth;
+  if (L < sc.scrollLeft) sc.scrollLeft = L;
+}
+function setCenter3(i) {
+  if (i === S3.pos) return;
+  S3.pos = i; place3();
+  const s = V.sents[S3.sent];
+  $('m3-pairs').innerHTML = s.map((w, k) => k).filter(k => k !== i && Math.abs(k - i) <= S3.b).map(k => `<span class="pairchip">${wchip(W[s[i]], 'v')}${wchip(W[s[k]], 'vo')}</span>`).join('');
+}
+function setSent3(k) { S3.sent = k; S3.pos = Math.min(S3.pos, V.sents[S3.sent].length - 1); render3(); }
+$('m3-sent-pick').innerHTML = V.sents.map((s, k) => `<option value="${k}">${s.map(w => W[w]).join(' ')}</option>`).join('');
+$('m3-sent-pick').addEventListener('change', e => setSent3(+e.target.value));
+$('m3-minus').addEventListener('click', () => { S3.b = Math.max(1, S3.b - 1); render3(); });
+$('m3-plus').addEventListener('click', () => { S3.b = Math.min(CFG.WINDOW, S3.b + 1); render3(); });
+window.addEventListener('resize', () => place3());
+(function drag3() {
+  // press and drag moves the window; a press that doesn't move picks the word as center
+  const track = $('m3-track'); let g = null;
+  const mid = el => el.offsetLeft + el.offsetWidth / 2;
+  const nearest = x => { let best = 0, d = Infinity; track.querySelectorAll('.chip').forEach((ch, i) => { const e = Math.abs(mid(ch) - x); if (e < d) { d = e; best = i; } }); return best; };
+  const xOf = e => e.clientX - track.getBoundingClientRect().left;
+  track.addEventListener('pointerdown', e => {
+    const chip = e.target.closest('.chip'), x = xOf(e);
+    g = { x0: x, off: x - mid(track.querySelectorAll('.chip')[S3.pos]), chip: chip ? +chip.dataset.i : null, moved: false };
+    track.setPointerCapture(e.pointerId); track.classList.add('dragging'); e.preventDefault();
+  });
+  track.addEventListener('pointermove', e => {
+    if (!g) return;
+    const x = xOf(e);
+    if (!g.moved && Math.abs(x - g.x0) < 5) return;
+    g.moved = true; setCenter3(nearest(x - g.off));
+  });
+  const end = e => { if (g && !g.moved && g.chip != null && e.type === 'pointerup') setCenter3(g.chip); g = null; track.classList.remove('dragging'); };
+  track.addEventListener('pointerup', end); track.addEventListener('pointercancel', end);
+})();
 
 // ---------- 4 the dot product ----------
 const S4 = { preset: 'start', v: null, u: null, ph: 0, cw: '', ow: '' };

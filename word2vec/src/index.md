@@ -69,7 +69,7 @@ Each (center, context) pair inside the window becomes one training example.
 
 <!-- module: m3 -->
 
-Greyed-out words were dropped by subsampling for this pass. Hover a word to see the probability that it is kept. Drops and window sizes are drawn fresh on every pass, so the same sentence yields different pairs each time.
+During training the window slides by itself: every word in the corpus takes a turn as the center, once per pass, 200 passes in all. The window size and the dropped words are drawn fresh each time, so the same sentence yields different pairs on every pass.
 
 ## 4 The dot product
 
