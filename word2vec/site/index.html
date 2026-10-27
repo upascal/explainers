@@ -167,8 +167,7 @@
     <span id="m4-kind"></span>
     <label class="ctl">training <span class="seg" id="m4-stage"><button data-v="start" class="on">start</button><button data-v="middle">middle</button><button data-v="trained">end</button></span></label>
   </div>
-  <div class="row"><span id="m4-bar"></span></div>
-  <div class="tscroll" id="m4-table"></div>
+  <div class="m4wrap"><div class="m5eq m4eq" id="m4-eq"></div><div class="m4ctl" id="m4-ctl" hidden><span id="m4-bar"></span></div></div>
   <p class="sumline" id="m4-sum" style="margin-top:12px"></p>
 </div>
 <p>When the two vectors point the same way, most of the products are positive and the score is large. When they point in opposite directions, the score is negative. When they are unrelated, the positive and negative products cancel out and the score is near zero. At the start of training every output vector is zero, so every score is exactly zero.</p>
@@ -180,10 +179,10 @@
   <div class="row">
     <label class="ctl">center <select id="m5-center"></select></label>
     <label class="ctl">context <select id="m5-ctx"></select></label>
+    <span id="m5-kind"></span>
     <label class="ctl">training <span class="seg" id="m5-stage"><button data-v="start" class="on">start</button><button data-v="middle">middle</button><button data-v="trained">end</button></span></label>
   </div>
-  <p class="note" style="margin:0 0 12px">The same pair as section 4: changing it here changes it there too.</p>
-  <div class="m5chain m6chain" id="m5-chain"></div>
+  <div id="m5-chain"></div>
   <div id="m5-chart"></div>
 </div>
 <p>At the start of training every score is 0, so σ is 0.5 and the first error is exactly 0.5: the model is a coin toss.</p>

@@ -416,7 +416,7 @@ const isReal = (c, x) => REAL.has(V.index.get(c) + ',' + V.index.get(x));
 function selectPair(c, x, from) {
   S4.center = c; S4.ctx = x;
   if (from !== '3') sync3(); else pairs3();
-  load4(); render4(); render5(); renderStatebar(); follow2v(); sync6(); refreshBars();
+  load4(); if (S4.math) play4(); else render4(); render5(); renderStatebar(); follow2v(); sync6(); refreshBars();
 }
 // 6–7 step through the selected pair; a negative pair never gets a positive update, so then
 // they show the center word with its most common real neighbour instead (and say so)
@@ -527,10 +527,10 @@ window.addEventListener('resize', () => place3());
 
 // ---------- 4 the dot product ----------
 // any center word's v against any context word's v′, at the start, middle or end of training
-const S4 = { center: 'coffee', ctx: 'hot', stage: 'start', edited: false, v: null, u: null, ph: 0 };
+const S4 = { center: 'coffee', ctx: 'hot', stage: 'start', edited: false, math: false, step: 0, v: null, u: null };
 function load4() {
   const M = { start: G.init, middle: G.mid, trained: G.final }[S4.stage];
-  S4.v = M.Win[V.index.get(S4.center)].slice(); S4.u = M.Wout[V.index.get(S4.ctx)].slice(); S4.ph = 0; S4.edited = false;
+  S4.v = M.Win[V.index.get(S4.center)].slice(); S4.u = M.Wout[V.index.get(S4.ctx)].slice(); S4.edited = false;
   ['m4', 'm5'].forEach(k => {               // 5 shows the same pair, with its own copy of the controls
     const cs = $(k + '-center'), xs = $(k + '-ctx');
     if (!cs.options.length) W.slice().sort().forEach(w => { cs.add(new Option(w, w)); xs.add(new Option(w, w)); });
@@ -541,67 +541,79 @@ function load4() {
 function restart4() { load4(); render4(); render5(); }   // after a re-roll: new initial and trained models
 function score4() { return dot(S4.v, S4.u); }
 function render4() {
-  const ph = S4.ph, prod = S4.v.map((x, d) => x * S4.u[d]);
-  let run = 0;
-  for (let d = 0; d < Math.min(ph, D); d++) run += prod[d];
-  // transposed: one row per dimension, columns for v, v′ and their product
-  const inp = (x, row, d) => `<td class="n ${ph - 1 === d ? 'merge' : ''}"><input type="number" step="0.05" data-r="${row}" data-d="${d}" value="${+x.toFixed(4)}"></td>`;
-  const done = ph > D;
-  const rows = prod.map((x, d) => `<tr class="${ph - 1 === d ? 'cur' : ''}"><th class="n">d${d + 1}</th>${inp(S4.v[d], 'v', d)}${inp(S4.u[d], 'u', d)}
-    ${d < ph ? `<td class="n prod ${ph - 1 === d ? 'pop' : ''}">${num(x, 4)}</td>` : '<td class="n dim">·</td>'}</tr>`).join('');
-  const tag = (k, cls) => S4.edited ? '<span class="note">(edited)</span>' : wchip(k, cls);
-  $('m4-table').innerHTML = `<table class="data vec m4t"><thead><tr><th></th>
-      <th class="c-v">center ${SV}<br>${tag(S4.center, 'v')}</th><th class="c-vo">context ${SVO}<br>${tag(S4.ctx, 'vo')}</th><th class="c-p">product</th></tr></thead>
-    <tbody>${rows}<tr class="sumrow"><th class="n">sum</th><td></td><td></td><td class="n score ${done ? 'pop' : ''}">${ph ? num(run, 4) : '·'}</td></tr></tbody></table>`;
-  // once the sum is complete, set it beside the center word's lowest score, for comparison
-  $('m4-sum').innerHTML = ph === 0 ? 'Press play to multiply the two vectors, one dimension at a time.' : done ? cmp4(run) : '';
-  // what kind of pair this is
-  const real = isReal(S4.center, S4.ctx);
-  $('m4-kind').innerHTML = S4.edited ? '' : `<span class="badge ${real ? 'pos' : 'neg'}">${real ? 'positive pair' : 'negative pair'}</span>`;
+  const prod = S4.v.map((x, d) => x * S4.u[d]), run = prod.reduce((a, b) => a + b, 0), real = isReal(S4.center, S4.ctx);
+  // "show math" opens each vector into its column (as in section 2) and works through one
+  // dimension at a time: the two numbers light up, their product appears, then the sum
+  // steps 1–5 multiply one dimension each; steps 6–10 add the products one by one; then done
+  const st = S4.math ? S4.step : 2 * D + 1, cur = st - 1, mult = st >= 1 && st <= D, k = st - D;   // k: products added so far
+  // the products column spells out the row being worked on: v × v′ = product
+  const col = (a, cls, isProd) => `<span class="m4br ${cls}${isProd && S4.math && st <= D ? ' working' : ''}">${a.map((x, d) => {
+    const shown = !isProd || d < st, on = S4.math && mult && d === cur ? ' on' : '', summed = isProd && k >= 1 && k <= D && d < k ? (d === k - 1 ? ' on' : ' sumd') : '';
+    const txt = shown ? num(x, 2) : '·';
+    const fresh = isProd && mult && d === cur ? ' cur' : '';   // the product just made
+    return `<span class="c${on}${summed}${fresh}">${txt}</span>`;
+  }).join('')}</span>`;
+  const term = (l, v, f, cls = '') => `<div class="term ${cls}"><div class="l">${l}</div><div class="v">${v}</div><div class="f">${f}</div></div>`;
+  const cc = wchip(S4.center, 'v'), xc = wchip(S4.ctx, real ? 'vo' : 'neg'), done = st > 2 * D, adding = k >= 1 && k <= D;
+  const sofar = adding ? prod.slice(0, k).reduce((a, b) => a + b, 0) : run;
+  $('m4-eq').innerHTML = (S4.math
+    ? term(cc, col(S4.v, 'cv'), '', 'sym open') + '<div class="op"><span class="dotch">·</span></div>' + term(xc, col(S4.u, 'cvo'), '', 'sym open')
+      + '<div class="op"><span class="eqch">=</span> <span class="sumw">sum</span></div>' + term('products', `<span class="m4paren">${col(prod, 'cp', true)}</span>`, '', 'sym open')
+    : term('center', SV, cc, 'sym') + '<div class="op"><span class="dotch">·</span></div>' + term('context', SVO, xc, 'sym'))
+    + '<div class="op">=</div>' + term(adding ? 'sum so far' : 'score', done || adding ? num(adding ? sofar : run, 3) : '?', adding ? `${k} of ${D} products` : '', 'score' + (adding ? ' adding' : ''))
+    + `<button class="m4math" id="m4-math">${S4.math ? 'Hide math' : 'Show math'}</button>`;
+  $('m4-ctl').hidden = !S4.math; $('m4-eq').classList.toggle('mathon', S4.math);
+  // on the row being worked on, a × and an = sit between its three numbers
+  $('m4-eq').classList.toggle('working', S4.math && !done);
+  $('m4-eq').classList.toggle('mult', S4.math && mult); $('m4-eq').classList.toggle('adding', S4.math && adding);
+  if (S4.math && mult) {
+    const box = $('m4-eq').getBoundingClientRect(), cell = k => $('m4-eq').querySelectorAll(`.m4br.${k} .c`)[cur].getBoundingClientRect();
+    const a = cell('cv'), b = cell('cvo'), c = cell('cp'), y = a.top + a.height / 2 - box.top;
+    const mark = (x, t) => `<span class="m4op" style="left:${x - box.left}px;top:${y}px">${t}</span>`;
+    // each badge sits right over the faded sign it stands for
+    const over = q => { const r = $('m4-eq').querySelector(q).getBoundingClientRect(); return r.left + r.width / 2; };
+    // one band across the whole row, from the v number to its product
+    const band = `<span class="m4band" style="left:${a.left - 14 - box.left}px;top:${a.top - 5 - box.top}px;width:${c.right - a.left + 28}px;height:${a.height + 10}px"></span>`;
+    $('m4-eq').insertAdjacentHTML('beforeend', band + mark(over('.dotch'), '×') + mark((b.right + c.left) / 2, '='));   // = halfway between the v′ number and its product
+  }
+  // while adding, one band around the products added so far, growing a row each step,
+  // and a + between the product just added and the one above it
+  if (S4.math && adding) {
+    const box = $('m4-eq').getBoundingClientRect(), cs = $('m4-eq').querySelectorAll('.m4br.cp .c'), f = cs[0].getBoundingClientRect(), l = cs[k - 1].getBoundingClientRect();
+    // room on the left inside the band for the +, which sits on the newest (bottom) row
+    let h = `<span class="m4band" style="left:${f.left - 30 - box.left}px;top:${f.top - 5 - box.top}px;width:${f.width + 38}px;height:${l.bottom - f.top + 10}px"></span>`;
+    if (k >= 2) h += `<span class="m4op plus" style="left:${f.left - 15 - box.left}px;top:${l.top + l.height / 2 - box.top}px">+</span>`;
+    $('m4-eq').insertAdjacentHTML('beforeend', h);
+  }
+  $('m4-sum').innerHTML = cmp4(run);
+  const kind = `<span class="badge ${real ? 'pos' : 'neg'}">${real ? 'positive pair' : 'negative pair'}</span>`;
+  $('m4-kind').innerHTML = kind; $('m5-kind').innerHTML = kind;   // 5 shows the same pair
 }
-$('m4-table').addEventListener('change', e => {
-  const el = e.target.closest('input'); if (!el) return;
-  const x = parseFloat(el.value); if (!isFinite(x)) return;
-  (el.dataset.r === 'v' ? S4.v : S4.u)[+el.dataset.d] = x;
-  S4.edited = true; S4.ph = D + 1;
-  render4(); render5(); refreshBars();
+// the math runs on the page's usual play bar: 2 × 5 steps (multiply each dimension, then add each product)
+const bar4 = PlayBar($('m4-bar'), {
+  ms: () => S4.step < D ? 700 : 600, canStep: () => S4.step <= 2 * D, canReset: () => S4.step > 0, rewind: () => { S4.step = 0; },
+  step: () => { S4.step++; render4(); }, end: () => { S4.step = 2 * D + 1; render4(); }, reset: () => { S4.step = 0; render4(); },
 });
-function pick4() { stopAll(); load4(); render4(); render5(); renderStatebar(); refreshBars(); }
+function play4() { bar4.stop(); S4.step = 0; render4(); refreshBars(); bar4.act('play'); }
+$('m4-eq').addEventListener('click', e => {
+  if (e.target.closest('#m4-math')) { S4.math = !S4.math; if (S4.math) play4(); else { bar4.stop(); render4(); } }
+});
+function pick4() { stopAll(); load4(); if (S4.math) play4(); else render4(); render5(); renderStatebar(); refreshBars(); }
 ['m4', 'm5'].forEach(k => {
   $(k + '-center').addEventListener('change', e => { stopAll(); selectPair(e.target.value, S4.ctx, k); });
   $(k + '-ctx').addEventListener('change', e => { stopAll(); selectPair(S4.center, e.target.value, k); });
   $(k + '-stage').addEventListener('click', e => { const b = e.target.closest('button'); if (b) { S4.stage = b.dataset.v; pick4(); } });
 });
-const bar4 = PlayBar($('m4-bar'), {
-  ms: 650, canStep: () => S4.ph <= D, canReset: () => S4.ph > 0,
-  step: () => { S4.ph++; render4(); fly4(); render5(); }, end: () => { S4.ph = D + 1; render4(); render5(); }, reset: () => { S4.ph = 0; render4(); render5(); },
-});
 
 // beside the sum: the same center word's lowest score with any word, for comparison
 function cmp4(run) {
   if (S4.edited) return '';
-  if (Math.abs(run) < 1e-12) return 'Sum 0: every score is 0 at the start, because v′ is all zeros.';
+  if (Math.abs(run) < 1e-12) return '<b>Score: 0.</b> Every score is 0 at the start, because v′ is all zeros.';
   const M = { start: G.init, middle: G.mid, trained: G.final }[S4.stage], v = M.Win[V.index.get(S4.center)];
   let lo = 0; M.Wout.forEach((u, i) => { if (dot(v, u) < dot(v, M.Wout[lo])) lo = i; });
-  const me = `<b>${wchip(S4.center, 'v')} · ${wchip(S4.ctx, isReal(S4.center, S4.ctx) ? 'vo' : 'neg')} = ${num(run, 2)}</b>`;
-  if (W[lo] === S4.ctx) return `${me}: the lowest score of any word with “${esc(S4.center)}”.`;
-  return `${me}. Compare ${wchip(S4.center, 'v')} · ${wchip(W[lo], 'neg')} = ${num(dot(v, M.Wout[lo]), 2)}, the lowest score of any word with “${esc(S4.center)}”.`;
-}
-
-// on a step, copies of the row's two numbers fly together into the product cell
-function fly4() {
-  const d = S4.ph - 1; if (d < 0 || d >= D || matchMedia('(prefers-reduced-motion: reduce)').matches) return;
-  const row = $('m4-table').querySelectorAll('tbody tr')[d], [cv, cu, cp] = [1, 2, 3].map(k => row.children[k]);
-  const to = cp.getBoundingClientRect(), tx = to.left + to.width / 2, ty = to.top + to.height / 2;
-  [[cv, 'v', S4.v[d]], [cu, 'vo', S4.u[d]]].forEach(([cell, cls, x]) => {
-    const r = cell.querySelector('input').getBoundingClientRect();
-    const g = Object.assign(document.createElement('div'), { className: 'm4fly ' + cls, textContent: num(x, 4) });
-    g.style.left = r.left + r.width / 2 + 'px'; g.style.top = r.top + r.height / 2 + 'px';
-    document.body.appendChild(g);
-    g.animate([{ transform: 'translate(-50%, -50%)', opacity: 1 },
-      { transform: `translate(calc(-50% + ${tx - r.left - r.width / 2}px), calc(-50% + ${ty - r.top - r.height / 2}px)) scale(0.7)`, opacity: 0.2 }],
-      { duration: 420, easing: 'cubic-bezier(0.5, 0, 0.75, 0)' }).onfinish = () => g.remove();
-  });
+  const me = `<b>Score</b> for ${wchip(S4.center, 'v')} · ${wchip(S4.ctx, isReal(S4.center, S4.ctx) ? 'vo' : 'neg')}: <b>${num(run, 2)}</b>`;
+  if (W[lo] === S4.ctx) return `${me}, the lowest score of any word with “${esc(S4.center)}”.`;
+  return `${me}. Compare ${wchip(S4.center, 'v')} · ${wchip(W[lo], 'neg')}: ${num(dot(v, M.Wout[lo]), 2)}, the lowest score of any word with “${esc(S4.center)}”.`;
 }
 
 // ---------- 5 the sigmoid ----------
@@ -617,21 +629,22 @@ function render5() {
   $('m5-chart').innerHTML = `<svg viewBox="0 0 ${W0} ${H0}" width="100%" style="display:block">${yt}${ticks}
     <line x1="${X(0)}" y1="${t}" x2="${X(0)}" y2="${Y(0)}" stroke="var(--grid)"/>
     <path d="${path}" fill="none" stroke="var(--ink)" stroke-width="2"/>
-    <line x1="${X(x)}" y1="${Y(s)}" x2="${X(x)}" y2="${Y(lab)}" stroke="var(--blue)" stroke-width="2" opacity="0.35"/>
-    <line x1="${l}" y1="${Y(s)}" x2="${X(x)}" y2="${Y(s)}" stroke="var(--blue)" stroke-dasharray="3 3"/>
-    <circle cx="${X(x)}" cy="${Y(s)}" r="7" fill="var(--blue)" stroke="white" stroke-width="2"/>
-    <text x="${X(x) + (x > 5 ? -12 : 12)}" y="${Y(lab) + (Y(s) - Y(lab)) / 2}" font-size="11" fill="var(--blue)" text-anchor="${x > 5 ? 'end' : 'start'}" dominant-baseline="middle">error ${num(lab - s, 3)}</text>
+    <line x1="${X(x)}" y1="${Y(s)}" x2="${X(x)}" y2="${Y(lab)}" stroke="var(--orange)" stroke-width="2"/>
+    <line x1="${l}" y1="${Y(s)}" x2="${X(x)}" y2="${Y(s)}" stroke="var(--ink-2)" stroke-dasharray="3 3"/>
+    <circle cx="${X(x)}" cy="${Y(s)}" r="7" fill="var(--ink)" stroke="white" stroke-width="2"/>
+    <circle cx="${X(x)}" cy="${Y(lab)}" r="6" fill="${lab ? '#1d5fae' : '#8a3a1a'}" stroke="white" stroke-width="2"/>
+    <text x="${X(x) + (x > 5 ? 11 : -11)}" y="${Y(lab) + (lab ? 4 : -2)}" font-size="11" font-weight="600" fill="${lab ? '#1d5fae' : '#8a3a1a'}" text-anchor="${x > 5 ? 'start' : 'end'}">label = ${lab}</text>
+    <text x="${X(x) + (x > 5 ? -12 : 12)}" y="${Y(lab) + (Y(s) - Y(lab)) / 2}" font-size="11" font-weight="600" fill="var(--orange)" text-anchor="${x > 5 ? 'end' : 'start'}" dominant-baseline="middle">error = ${num(lab - s, 3)}</text>
     <text x="${l + (W0 - l - r) / 2}" y="${H0 - 6}" text-anchor="middle" font-size="12" font-weight="600" fill="var(--ink-2)">score (v · v′)${off ? ' — off the chart' : ''}</text>
     <text transform="translate(16,${t + (Y(0) - t) / 2}) rotate(-90)" text-anchor="middle" font-size="12" font-weight="600" fill="var(--ink-2)">probability σ(score)</text>
   </svg>`;
-  // score → probability, then right answer − probability → error; two by two, like 6
-  const who = S4.edited ? 'edited vectors' : `${wchip(S4.center, 'v')} · ${wchip(S4.ctx, isReal(S4.center, S4.ctx) ? 'vo' : 'neg')}`;   // mirrors v · v′ in the label
-  const ch = (l, f, v, cls = '') => `<div class="ch${cls}"><div class="l">${l}</div><div class="f">${f}</div><div class="v">${v}</div></div>`;
-  $('m5-chain').innerHTML =
-    `<div class="grp">${ch(`score (${SV} · ${SVO})`, who, num(x, 3))}</div>`
-    + `<div class="grp"><div class="op">σ →</div>${ch('probability', `σ(${num(x, 2)})`, s.toFixed(3))}</div>`
-    + `<div class="grp">${ch('right answer (label)', `<span class="badge ${lab ? 'pos' : 'neg'}">${lab ? 'positive pair' : 'negative pair'}</span>`, lab, lab ? ' lab1' : ' lab0')}</div>`
-    + `<div class="grp"><div class="op">− prob. →</div>${ch('error', `${lab} − ${s.toFixed(3)}`, num(lab - s, 3), ' err')}</div>`;
+  // the pair and its score, then one equation read left to right: label − σ(score) = error
+  const who = S4.edited ? 'edited vectors' : `${wchip(S4.center, 'v')} · ${wchip(S4.ctx, isReal(S4.center, S4.ctx) ? 'vo' : 'neg')}`;
+  const term = (cls, l, v, f) => `<div class="term ${cls}"><div class="l">${l}</div><div class="v">${v}</div><div class="f">${f}</div></div>`;
+  $('m5-chain').innerHTML = `<div class="m5pair">${who}<span>score (${SV} · ${SVO}) = <b>${num(x, 3)}</b></span></div>
+    <div class="m5eq">${term(lab ? 'lab1' : 'lab0', 'label', lab, lab ? 'positive pair' : 'negative pair')}<div class="op">−</div>
+      ${term('prob', 'σ(score)', s.toFixed(3), `σ(${num(x, 3)})`)}<div class="op">=</div>
+      ${term('err', 'error', num(lab - s, 3), '&nbsp;')}</div>`;
 }
 
 

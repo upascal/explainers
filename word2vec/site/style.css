@@ -413,3 +413,105 @@ table.m6t thead th { white-space: normal; max-width: 92px; line-height: 1.25; } 
 .m5chain .ch.lab1 .v { color: #1d5fae; }
 .m5chain .ch.lab0 .v { color: #8a3a1a; }
 .m5chain .ch .f .badge { font-size: 0.66rem; }
+
+/* 5: error = label − σ(score), as one equation */
+.m5pair { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 10px; font-size: 0.9rem; color: var(--ink-2); margin: 0 0 12px; }
+.m5pair .chip { font-size: 0.8rem; padding: 1px 6px; }
+.m5pair b { color: var(--ink); font-variant-numeric: tabular-nums; }
+.m5eq { display: flex; align-items: flex-start; justify-content: center; gap: 4px 14px; background: white; border: 1px solid var(--grid); border-radius: 8px; padding: 12px 14px; margin: 0 0 14px; }
+.m5eq .term { text-align: center; min-width: 72px; }
+.m5eq .term .l { font-size: 0.8rem; color: var(--muted); }
+.m5eq .term .v { font-size: 1.6rem; font-weight: 600; font-variant-numeric: tabular-nums; line-height: 1.3; }
+.m5eq .term .f { font-size: 0.74rem; color: var(--ink-2); }
+.m5eq .op { font-size: 1.6rem; color: var(--muted); padding-top: 16px; }
+.m5eq .err .v { color: var(--orange); }
+.m5eq .lab1 .v { color: #1d5fae; }
+.m5eq .lab0 .v { color: #8a3a1a; }
+.m4eq { margin: 4px 0 14px; }
+.m4eq .term.sym > .v { font-family: var(--serif); font-style: italic; font-size: 2rem; line-height: 1.15; }
+.m4eq .term .f .chip { font-size: 0.78rem; padding: 0 6px; }
+.m4eq .term.score { min-width: 110px; }
+.m4eq .term .f, .m4eq .term .f .chip { font-style: normal; }
+
+/* 4: v · v′ = score, with the vectors opened up as bracketed columns */
+.m4eq { flex-wrap: wrap; align-items: center; position: relative; padding-bottom: 40px; }
+.m4eq .term .l .chip { font-size: 0.76rem; padding: 0 6px; }
+.m4eq .term.open > .v { font-size: 1rem; }
+.m4eq .op { padding-top: 0; }
+.m4br { position: relative; display: inline-flex; flex-direction: column; gap: 3px; padding: 5px 9px; vertical-align: middle; }
+.m4br::before, .m4br::after { content: ""; position: absolute; top: 0; bottom: 0; width: 6px; border: 2px solid var(--ink-2); }
+.m4br::before { left: 0; border-right: 0; border-radius: 3px 0 0 3px; }
+.m4br::after { right: 0; border-left: 0; border-radius: 0 3px 3px 0; }
+.m4br .c { display: block; min-width: 46px; padding: 2px 4px; border-radius: 4px; text-align: right; font-family: "JetBrains Mono", var(--mono); font-size: 0.82rem; font-weight: 500; }
+.m4br.cv .c { background: var(--violet-100); color: var(--violet); }
+.m4br.cvo .c { background: var(--aqua-100); color: #0e7a53; }
+.m4br.cp .c { background: #eeede8; color: var(--ink); }
+.m4br .c.in { animation: popIn .4s ease both; }
+.m4eq .sumw { font-family: var(--sans); font-size: 0.95rem; font-weight: 400; color: var(--muted); margin-left: 4px; vertical-align: middle; }
+.m4math { position: absolute; bottom: 8px; right: 10px; font-size: 0.78rem; padding: 3px 10px; }
+.m4wrap { position: relative; }
+.m4ctl { position: absolute; left: 10px; bottom: 8px; z-index: 4; }
+.m4ctl .playbar button { width: 32px; height: 26px; }
+.m4wrap .m4eq { padding-bottom: 46px; }
+.m4eq .term.sym.open > .v { font-style: normal; font-family: var(--sans); }
+.m4eq .term.sym.open { min-width: 0; }
+.m4eq.m5eq { gap: 4px 8px; }
+.m4br { padding: 4px 8px; }
+.m4br .c { min-width: 0; padding: 1px 3px; font-size: 0.78rem; }
+.m4eq .term.score { min-width: 80px; }
+.m4br .c.on { outline: 2px solid var(--ink); outline-offset: 0; }
+.m4work { flex-basis: 100%; text-align: center; font-family: "JetBrains Mono", var(--mono); font-size: 0.9rem; color: var(--ink-2); margin-top: 6px; min-height: 1.4em; }
+.m4work b { color: var(--ink); }
+.m4br.cp .c .cv, .m4br.cp .c .cvo { font-weight: 600; }
+
+/* the × and = on the row being worked out */
+.m4op { position: absolute; z-index: 3; transform: translate(-50%, -50%); width: 20px; height: 20px; display: flex; align-items: center; justify-content: center; border-radius: 50%; background: var(--ink); color: white; font-size: 0.85rem; font-weight: 700; line-height: 1; animation: m4op 0.25s ease both; }
+@keyframes m4op { from { opacity: 0; transform: translate(-50%, -50%) scale(0.5); } to { opacity: 1; transform: translate(-50%, -50%) scale(1); } }
+@media (prefers-reduced-motion: reduce) { .m4op { animation: none; } }
+.m4eq > .op { transition: opacity 0.2s; }
+.m4eq.working > .op { opacity: 0.4; }
+.m4eq.working > .op .sumw { opacity: 1; }
+.m4br.cp .c.sumd { background: #e2e0d8; }
+.m4eq .term.adding > .v { color: var(--ink-2); }
+.m4op.plus { width: 18px; height: 18px; font-size: 0.8rem; }
+.m4br.cp .c { min-width: 40px; }
+.m4wrap .m4eq.mathon { padding: 26px 14px 64px; row-gap: 10px; }
+/* keep the equation still: anchored left, fixed widths, so coffee and cup stay put on show / hide and while it plays */
+.m4wrap .m4eq { justify-content: flex-start; padding-left: 28px; flex-wrap: nowrap; }
+.m4eq .term.sym, .m4eq .term.sym.open { width: 68px; min-width: 68px; flex: 0 0 68px; }
+.m4eq .term.score { width: 112px; min-width: 112px; flex: 0 0 112px; }
+.m4eq > .op { flex: 0 0 auto; }
+@media (max-width: 560px) { .m4wrap .m4eq { padding-left: 8px; flex-wrap: wrap; } }
+.m4wrap .m4eq.mathon { padding-left: 28px; } @media (max-width: 560px) { .m4wrap .m4eq.mathon { padding-left: 8px; } }
+/* while working: everything but the numbers in play is dimmed */
+.m4br .c { transition: opacity 0.2s; }
+.m4eq.mult .m4br .c:not(.on):not(.cur), .m4eq.adding .m4br.cv .c, .m4eq.adding .m4br.cvo .c { opacity: 0.3; }
+.m4eq .eqch { display: inline-block; margin: 0 10px 0 8px; } .m4eq .dotch { display: inline-block; margin: 0 4px; }
+.m4wrap .m4eq, .m4wrap .m4eq.mathon { padding-left: 14px; padding-right: 10px; } .m4eq .term.score { width: 104px; min-width: 104px; flex: 0 0 104px; }
+.m4eq .term.open > .l { margin-bottom: 9px; }
+/* open view: labels float above their columns, so operators and the score centre on the vectors */
+.m4eq.mathon .term { position: relative; }
+.m4eq.mathon .term > .l { position: absolute; left: 0; right: 0; bottom: calc(100% + 9px); margin: 0; white-space: nowrap; }
+.m4eq.mathon .term.score > .f { position: absolute; left: 0; right: 0; top: 100%; white-space: nowrap; }
+.m4wrap .m4eq.mathon { padding-top: 46px; }
+/* sum( [products] ): tall, thin, light parentheses around the products column */
+.m4paren { position: relative; display: inline-block; padding: 0 9px; vertical-align: middle; }
+.m4paren::before, .m4paren::after { content: ""; position: absolute; top: -4px; bottom: -4px; width: 7px; border: 1.5px solid var(--muted); }
+.m4paren::before { left: 0; border-right: 0; border-radius: 10px 0 0 10px / 50% 0 0 50%; }
+.m4paren::after { right: 0; border-left: 0; border-radius: 0 10px 10px 0 / 0 50% 50% 0; }
+.m4eq .term.sym.open:has(.m4paren) { width: 86px; min-width: 86px; flex: 0 0 86px; }
+.m4eq .term.score { width: 92px; min-width: 92px; flex: 0 0 92px; } .m4eq .term.score > .v { font-size: 1.45rem; }
+/* "= sum" as one centred row, and a little less padding so sum( … ) fits */
+.m4eq > .op:has(.eqch) { display: inline-flex; align-items: center; }
+.m4eq .sumw { vertical-align: baseline; line-height: 1; position: relative; top: -1px; }
+.m4eq .eqch { margin: 0 8px 0 6px; }
+/* the brackets and sum( ) step back too while the numbers are worked out */
+.m4br::before, .m4br::after, .m4paren::before, .m4paren::after { transition: opacity 0.2s; }
+.m4eq.working .m4br::before, .m4eq.working .m4br::after, .m4eq.working .m4paren::before, .m4eq.working .m4paren::after { opacity: 0.4; }
+/* the row being multiplied: one band across it instead of an outline per number */
+.m4band { position: absolute; z-index: 2; border: 1.5px solid var(--ink); border-radius: 8px; background: rgba(255,255,255,0.82); pointer-events: none; }
+.m4eq.mult .m4br .c.on, .m4eq.mult .m4br .c.cur { outline: none; position: relative; z-index: 3; }
+.m4eq.mult .m4br .c.on, .m4eq.mult .m4br .c.cur { box-shadow: none; }
+.m4band { transition: height 0.25s ease; }
+.m4eq.adding .m4br.cp .c.on, .m4eq.adding .m4br.cp .c.sumd { outline: none; position: relative; z-index: 3; }
+.m4eq.adding .m4br.cp .c:not(.on):not(.sumd) { opacity: 0.3; }
