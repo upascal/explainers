@@ -47,10 +47,11 @@ code { font-family: var(--mono); font-size: 0.88em; background: #f0efec; padding
 hr { border: 0; border-top: 1px solid var(--grid); margin: 48px 0; }
 ul { padding-left: 1.2em; }
 li { margin-bottom: 0.4em; }
-blockquote { margin: 1.5em 0; padding-left: 1em; border-left: 3px solid var(--axis); color: var(--ink-2); }
-.callout { background: var(--surface); border: 1px solid var(--border); border-left: 3px solid var(--blue); padding: 14px 18px; margin: 1.5em 0; font-family: var(--sans); font-size: 0.95rem; }
-.callout.warn { border-left-color: var(--orange); }
+blockquote { margin: 1.5em 0; color: var(--ink-2); }
+.callout { background: var(--surface); border: 1px solid var(--border); border-radius: 10px; padding: 14px 18px; margin: 1.5em 0; font-family: var(--sans); font-size: 0.95rem; }
 .callout .t { font-weight: 600; margin-bottom: 4px; }
+.callout .reveal-btn { margin-top: 6px; }
+.callout .reveal-body { margin-top: 10px; }
 .note { font-family: var(--sans); font-size: 0.85rem; color: var(--ink-2); }
 
 /* controls */
@@ -411,9 +412,10 @@ svg .dg-s { font-family: var(--serif); font-size: 14px; fill: var(--ink); }
   <p class="note" style="margin:6px 0 0">Re-rolling draws new random input vectors and restarts training for the rest of the page.</p>
 </div>
 <p>All the input vectors together form one table, and all the output vectors form another. Training adjusts both tables. At the end, the input table is usually the one people keep and call “the word embeddings.”</p>
-<div class="callout">
+<div class="callout reveal">
   <div class="t">Why two tables?</div>
-  With a single table, a word would be scored against itself using the same vector twice. The score would be |<i>v</i>|², a squared length, which is never negative, so the probability of section 5 would never drop below 0.5. Every word would be predicted to sit next to itself. Two tables also change what “close” means. A word’s input vector is pulled toward the output vectors of its neighbours. So two words end up with similar input vectors when they share neighbours, not when they sit side by side.
+  <button class="reveal-btn" aria-expanded="false">Reveal answer</button>
+  <div class="reveal-body" hidden>With a single table, a word would be scored against itself using the same vector twice. The score would be |<i>v</i>|², a squared length, which is never negative, so the probability of section 5 would never drop below 0.5. Every word would be predicted to sit next to itself. Two tables also change what “close” means. A word’s input vector is pulled toward the output vectors of its neighbours. So two words end up with similar input vectors when they share neighbours, not when they sit side by side.</div>
 </div>
 <h2 id="s3"><span class="num">3</span>The window</h2>
 <p>Training walks through the text <strong>in order</strong>, word by word, and each word takes a turn as the <em>center</em>. The words around it are its <em>context</em>. word2vec looks up to five words to either side. But for each center word, it first shrinks the window at random to somewhere between 1 and 5. A word right next to the center is inside the window every time; a word five places away only one time in five. So nearer words count more.</p>
@@ -1094,6 +1096,12 @@ function render2v() {
 }
 $('m2v-word').addEventListener('click', e => { const b = e.target.closest('button'); if (b) { S2V.word = b.dataset.v; render2v(); } });
 $('m2v-state').addEventListener('click', e => { const b = e.target.closest('button'); if (b) { S2V.trained = b.dataset.v === 'trained'; render2v(); } });
+
+// ---------- callouts with a hidden answer ----------
+document.querySelectorAll('.reveal-btn').forEach(b => b.addEventListener('click', () => {
+  const body = b.nextElementSibling, open = body.hidden;
+  body.hidden = !open; b.setAttribute('aria-expanded', open); b.textContent = open ? 'Hide answer' : 'Reveal answer';
+}));
 
 // ---------- 3 the window ----------
 const S3 = { ci: 0 };

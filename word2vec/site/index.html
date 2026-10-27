@@ -134,9 +134,10 @@
   <p class="note" style="margin:6px 0 0">Re-rolling draws new random input vectors and restarts training for the rest of the page.</p>
 </div>
 <p>All the input vectors together form one table, and all the output vectors form another. Training adjusts both tables. At the end, the input table is usually the one people keep and call “the word embeddings.”</p>
-<div class="callout">
+<div class="callout reveal">
   <div class="t">Why two tables?</div>
-  With a single table, a word would be scored against itself using the same vector twice. The score would be |<i>v</i>|², a squared length, which is never negative, so the probability of section 5 would never drop below 0.5. Every word would be predicted to sit next to itself. Two tables also change what “close” means. A word’s input vector is pulled toward the output vectors of its neighbours. So two words end up with similar input vectors when they share neighbours, not when they sit side by side.
+  <button class="reveal-btn" aria-expanded="false">Reveal answer</button>
+  <div class="reveal-body" hidden>With a single table, a word would be scored against itself using the same vector twice. The score would be |<i>v</i>|², a squared length, which is never negative, so the probability of section 5 would never drop below 0.5. Every word would be predicted to sit next to itself. Two tables also change what “close” means. A word’s input vector is pulled toward the output vectors of its neighbours. So two words end up with similar input vectors when they share neighbours, not when they sit side by side.</div>
 </div>
 <h2 id="s3"><span class="num">3</span>The window</h2>
 <p>Training walks through the text <strong>in order</strong>, word by word, and each word takes a turn as the <em>center</em>. The words around it are its <em>context</em>. word2vec looks up to five words to either side. But for each center word, it first shrinks the window at random to somewhere between 1 and 5. A word right next to the center is inside the window every time; a word five places away only one time in five. So nearer words count more.</p>

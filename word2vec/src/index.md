@@ -53,9 +53,10 @@ Here is one input vector, as it starts and as it ends up after training.
 
 All the input vectors together form one table, and all the output vectors form another. Training adjusts both tables. At the end, the input table is usually the one people keep and call “the word embeddings.”
 
-<div class="callout">
+<div class="callout reveal">
   <div class="t">Why two tables?</div>
-  With a single table, a word would be scored against itself using the same vector twice. The score would be |<i>v</i>|², a squared length, which is never negative, so the probability of section 5 would never drop below 0.5. Every word would be predicted to sit next to itself. Two tables also change what “close” means. A word’s input vector is pulled toward the output vectors of its neighbours. So two words end up with similar input vectors when they share neighbours, not when they sit side by side.
+  <button class="reveal-btn" aria-expanded="false">Reveal answer</button>
+  <div class="reveal-body" hidden>With a single table, a word would be scored against itself using the same vector twice. The score would be |<i>v</i>|², a squared length, which is never negative, so the probability of section 5 would never drop below 0.5. Every word would be predicted to sit next to itself. Two tables also change what “close” means. A word’s input vector is pulled toward the output vectors of its neighbours. So two words end up with similar input vectors when they share neighbours, not when they sit side by side.</div>
 </div>
 
 ## 3 The window

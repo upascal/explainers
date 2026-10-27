@@ -350,6 +350,12 @@ function render2v() {
 $('m2v-word').addEventListener('click', e => { const b = e.target.closest('button'); if (b) { S2V.word = b.dataset.v; render2v(); } });
 $('m2v-state').addEventListener('click', e => { const b = e.target.closest('button'); if (b) { S2V.trained = b.dataset.v === 'trained'; render2v(); } });
 
+// ---------- callouts with a hidden answer ----------
+document.querySelectorAll('.reveal-btn').forEach(b => b.addEventListener('click', () => {
+  const body = b.nextElementSibling, open = body.hidden;
+  body.hidden = !open; b.setAttribute('aria-expanded', open); b.textContent = open ? 'Hide answer' : 'Reveal answer';
+}));
+
 // ---------- 3 the window ----------
 const S3 = { ci: 0 };
 function render3() {
