@@ -32,11 +32,18 @@
 <h2 id="s1"><span class="num">1</span>The problem</h2>
 <p>Computers handle numbers, not meanings. To do anything useful with language, a program needs some numeric description of a word that captures what the word means. The simplest approach gives each word an arbitrary ID: “coffee” is 17, “tea” is 18. But the IDs say nothing about meaning. 17 is no closer to 18 than it is to 9,000.</p>
 <p>word2vec starts from an old observation in linguistics, the <em>distributional hypothesis</em>: words that appear in similar contexts tend to have similar meanings. As the linguist J.R. Firth put it, “you shall know a word by the company it keeps.” You may never have seen “coffee” and “tea” in the same sentence, but you have seen both next to “hot”, “cup” and “drink”. Their shared company is the clue.</p>
-<p>The toy corpus on this page is written to make that clue easy to see. Here are all of its sentences about coffee and tea.</p>
+<p>You can use the same clue yourself. Each sentence below, taken from the toy corpus on this page, is missing a word.</p>
 <div class="module" id="m1">
-  <div id="m1-body"></div>
+  <div class="row m1top">
+    <div class="m1bank" id="m1-bank" role="group" aria-label="Words to place"></div>
+    <button id="m1-reset">Start over</button>
+  </div>
+  <p class="note" style="margin:0 0 12px"><b>Can you guess a word by the company it keeps?</b><br>Drag each word to the sentence it fits best, or tap a word and then a blank. Tap a filled blank to empty it.</p>
+  <div class="m1sents" id="m1-sents"></div>
+  <p class="note m1fb" id="m1-fb" aria-live="polite"></p>
 </div>
-<p>By the end of the page, the model will have placed “coffee” and “tea” close together, without ever seeing them side by side. It gets there through shared neighbours alone.</p>
+<p>“purr” and “fur” each fit one sentence, next to “cat” and “dog”. “coffee” and “tea” fit either of the last two equally well, because they keep the same company.</p>
+<p>word2vec has only this kind of evidence: which words appear near which. In the corpus’s 14 sentences about coffee and tea, the two words never appear together and have nearly the same neighbours. By the end of the page, the model will have placed “coffee” and “tea” close together through those shared neighbours alone.</p>
 <p>The settings below compare the toy model with the real thing. They are small enough to train in under a second, and the training procedure is the same one the real program uses.</p>
 <table>
 <thead>

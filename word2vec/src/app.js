@@ -222,16 +222,92 @@ function renderStatebar() {
 }
 
 // ---------- 1 the problem ----------
-function render1() {
-  const ci = V.index.get('coffee'), ti = V.index.get('tea');
-  const near = w => new Set(V.sents.filter(s => s.includes(w)).flat().filter(x => x !== w));
-  const STOP = new Set(['the', 'a', 'i', 'my', 'is', 'of', 'into', 'with', 'to', 'and', 'can', 'has'].map(w => V.index.get(w)));
-  const nc = near(ci), nt = near(ti), shared = new Set([...nc].filter(x => nt.has(x) && !STOP.has(x)));
-  const together = V.sents.some(s => s.includes(ci) && s.includes(ti));
-  const col = w => V.sents.filter(s => s.includes(w)).map(s => `<div class="sline">${s.map(x => x === w ? `<b class="hl">${W[x]}</b>` : shared.has(x) ? `<span class="sh">${W[x]}</span>` : W[x]).join(' ')}</div>`).join('');
-  $('m1-body').innerHTML = `<div class="cols2"><div><h4>sentences with “coffee”</h4>${col(ci)}</div><div><h4>sentences with “tea”</h4>${col(ti)}</div></div>
-    <p class="note" style="margin:12px 0 0">${together ? '' : '“coffee” and “tea” never appear in the same sentence. '}Besides small words like “the” and “my”, they share ${shared.size} neighbours, shaded: ${[...shared].sort((a, b) => V.count[b] - V.count[a]).map(x => `<span class="sh">${W[x]}</span>`).join(' ')}.</p>`;
+// A fill-in-the-blank puzzle from four corpus sentences: the reader matches words by their
+// company, the way word2vec does. Each word goes in one blank; coffee and tea fit either cup.
+const M1_WORDS = ['coffee', 'tea', 'purr', 'fur'];
+// `no` holds a hand-written reply for each wrong word: playful, and never naming the answer
+const M1_SENTS = [
+  { pre: 'the dog has soft', post: '', ok: ['fur'], yes: 'Yes!',
+    no: { purr: 'A soft purr is lovely, but it isn’t something a dog has.', coffee: 'A dog with soft coffee? Try again.', tea: 'A dog with soft tea? Try again.' } },
+  { pre: 'the cat can', post: '', ok: ['purr'], yes: 'Yes!',
+    no: { fur: 'Unfortunately, “fur” is not something a cat can do.', coffee: 'Unfortunately, “coffee” is not something a cat can do.', tea: 'Unfortunately, “tea” is not something a cat can do.' } },
+  { pre: 'a cup of hot', post: 'with milk', ok: ['coffee', 'tea'], yes: 'Yes!',
+    no: { fur: 'Sorry, I don’t think that would taste good.', purr: 'Try again, this time pick a word that makes sense!' } },
+  { pre: 'pour the', post: 'into my cup', ok: ['coffee', 'tea'], yes: 'Yes!',
+    no: { fur: 'While technically possible, there is a more delicious option.', purr: 'You can’t pour a purr. Try again.' } },
+];
+const m1 = { fill: M1_SENTS.map(() => null), sel: null, last: null, dragged: false };
+
+function m1Message(i, w) {
+  const s = M1_SENTS[i];
+  if (!s.ok.includes(w)) return s.no[w];
+  const o = s.ok.find(x => x !== w);
+  return o ? `${s.yes} “${o}” would work here too.` : s.yes;
 }
+
+function render1() {
+  const used = new Set(m1.fill);
+  $('m1-bank').innerHTML = M1_WORDS.map(w => `<button class="m1w${m1.sel === w ? ' on' : ''}${used.has(w) ? ' used' : ''}" data-m1w="${w}" aria-pressed="${m1.sel === w}">${w}</button>`).join('');
+  $('m1-sents').innerHTML = M1_SENTS.map((s, i) => {
+    const w = m1.fill[i], cls = w == null ? '' : s.ok.includes(w) ? ' ok' : ' bad';
+    const blank = `<button class="m1blank${cls}" data-m1b="${i}" aria-label="${w == null ? 'empty blank' : 'blank filled with ' + w}">${w ?? '&nbsp;'}</button>`;
+    return `<div class="sline m1line">${[s.pre, blank, s.post].filter(Boolean).join(' ')}</div>`;
+  }).join('');
+  const right = m1.fill.filter((w, i) => w != null && M1_SENTS[i].ok.includes(w)).length;
+  let fb = m1.last != null && m1.fill[m1.last] != null ? m1Message(m1.last, m1.fill[m1.last]) : '';
+  if (right === M1_SENTS.length) fb += ' <b>Every word is in a sentence it fits.</b>';
+  $('m1-fb').innerHTML = fb;
+}
+
+// each word sits in one blank, so placing it again moves it
+function m1Place(i, w) { m1.fill = m1.fill.map(x => x === w ? null : x); m1.fill[i] = w; m1.last = i; m1.sel = null; render1(); }
+
+// tap a word, then a blank; tapping a filled blank with no word selected empties it
+$('m1').addEventListener('click', e => {
+  if (m1.dragged) return;
+  const wb = e.target.closest('[data-m1w]'), bb = e.target.closest('[data-m1b]');
+  if (wb) { m1.sel = m1.sel === wb.dataset.m1w ? null : wb.dataset.m1w; render1(); }
+  else if (bb) {
+    const i = +bb.dataset.m1b;
+    if (m1.sel) m1Place(i, m1.sel);
+    else if (m1.fill[i] != null) { m1.fill[i] = null; m1.last = null; render1(); }
+  }
+});
+$('m1-reset').addEventListener('click', () => { m1.fill.fill(null); m1.sel = m1.last = null; render1(); });
+
+// drag a word onto a blank (pointer events, so touch works too); a short press is a tap
+(function m1Drag() {
+  let drag = null;
+  const blankAt = (x, y) => document.elementFromPoint(x, y)?.closest('[data-m1b]');
+  const hover = el => document.querySelectorAll('.m1blank.over').forEach(b => b !== el && b.classList.remove('over'));
+  $('m1-bank').addEventListener('pointerdown', e => {
+    const wb = e.target.closest('[data-m1w]'); if (!wb || e.button) return;
+    e.preventDefault();              // no text selection while dragging
+    drag = { w: wb.dataset.m1w, x: e.clientX, y: e.clientY, ghost: null };
+  });
+  document.addEventListener('pointermove', e => {
+    if (!drag) return;
+    if (!drag.ghost) {
+      if (Math.hypot(e.clientX - drag.x, e.clientY - drag.y) < 6) return;
+      drag.ghost = Object.assign(document.createElement('div'), { className: 'm1w m1ghost', textContent: drag.w });
+      document.body.appendChild(drag.ghost);
+    }
+    drag.ghost.style.left = e.clientX + 'px'; drag.ghost.style.top = e.clientY + 'px';
+    const b = blankAt(e.clientX, e.clientY); hover(b); b?.classList.add('over');
+  });
+  const end = e => {
+    if (!drag) return;
+    const d = drag; drag = null;
+    if (!d.ghost) return;            // never moved: the click handler treats it as a tap
+    d.ghost.remove(); hover(null);
+    const b = e.type === 'pointerup' && blankAt(e.clientX, e.clientY);
+    if (b) m1Place(+b.dataset.m1b, d.w);
+    // ignore the click that may follow a drag, so it doesn't also select or clear anything
+    m1.dragged = true; setTimeout(() => { m1.dragged = false; }, 0);
+  };
+  document.addEventListener('pointerup', end);
+  document.addEventListener('pointercancel', end);
+})();
 
 // ---------- 2 vocabulary and the two tables ----------
 const S2 = { sel: 'coffee' };

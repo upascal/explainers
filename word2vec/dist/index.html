@@ -251,6 +251,23 @@ svg .dg-s { font-family: var(--serif); font-size: 14px; fill: var(--ink); }
 @media (max-width: 640px) { .below { grid-template-columns: minmax(0, 1fr); } }
 @media (max-width: 600px) { #statebar .sb-sent { display: none; } #statebar .sb-vals { gap: 10px; } }
 @media (max-width: 600px) { .stat { grid-template-columns: repeat(2, minmax(0, 1fr)); } .stat .s .v { font-size: 1.25rem; } }
+
+/* 1: fill-in-the-blank */
+.m1top { justify-content: space-between; margin-bottom: 10px; }
+.m1bank { display: flex; flex-wrap: wrap; gap: 8px; }
+.m1w { font-family: var(--mono); font-size: 0.9rem; padding: 5px 12px; border: 1px solid #c4bdea; border-radius: 6px; background: var(--violet-100); color: var(--violet); cursor: grab; touch-action: none; user-select: none; -webkit-user-select: none; }
+.m1w:hover { border-color: var(--violet); }
+.m1w.on { background: var(--violet); color: white; border-color: var(--violet); }
+.m1ghost { position: fixed; z-index: 50; pointer-events: none; transform: translate(-50%, -60%); box-shadow: 0 4px 14px rgba(11,11,11,0.18); cursor: grabbing; }
+.m1sents { padding: 4px 14px; border: 1px solid var(--grid); border-radius: 8px; background: white; }
+.m1line { line-height: 1.9; font-size: 0.95rem; padding: 7px 0; }
+.m1line + .m1line { border-top: 1px solid var(--grid); }
+.m1blank { font-family: var(--mono); font-size: 0.9rem; line-height: 1.5; vertical-align: baseline; min-width: 6.5em; padding: 2px 8px; border: 0; border-bottom: 2px dashed var(--axis); border-radius: 4px 4px 0 0; background: #f4f3ef; color: var(--ink); }
+.m1blank:hover, .m1blank.over { background: var(--violet-100); border-bottom-color: var(--violet); }
+.m1blank.ok { background: var(--aqua-100); color: #0e7a53; border-bottom: 2px solid var(--aqua); }
+.m1blank.bad { background: var(--orange-100); color: #8a3a1a; border-bottom: 2px solid var(--orange); }
+.m1fb { margin: 12px 0 0; min-height: 1.4em; }
+.m1w.used { opacity: 0.4; }
 </style>
 </head>
 <body>
@@ -276,11 +293,18 @@ svg .dg-s { font-family: var(--serif); font-size: 14px; fill: var(--ink); }
 <h2 id="s1"><span class="num">1</span>The problem</h2>
 <p>Computers handle numbers, not meanings. To do anything useful with language, a program needs some numeric description of a word that captures what the word means. The simplest approach gives each word an arbitrary ID: “coffee” is 17, “tea” is 18. But the IDs say nothing about meaning. 17 is no closer to 18 than it is to 9,000.</p>
 <p>word2vec starts from an old observation in linguistics, the <em>distributional hypothesis</em>: words that appear in similar contexts tend to have similar meanings. As the linguist J.R. Firth put it, “you shall know a word by the company it keeps.” You may never have seen “coffee” and “tea” in the same sentence, but you have seen both next to “hot”, “cup” and “drink”. Their shared company is the clue.</p>
-<p>The toy corpus on this page is written to make that clue easy to see. Here are all of its sentences about coffee and tea.</p>
+<p>You can use the same clue yourself. Each sentence below, taken from the toy corpus on this page, is missing a word.</p>
 <div class="module" id="m1">
-  <div id="m1-body"></div>
+  <div class="row m1top">
+    <div class="m1bank" id="m1-bank" role="group" aria-label="Words to place"></div>
+    <button id="m1-reset">Start over</button>
+  </div>
+  <p class="note" style="margin:0 0 12px"><b>Can you guess a word by the company it keeps?</b><br>Drag each word to the sentence it fits best, or tap a word and then a blank. Tap a filled blank to empty it.</p>
+  <div class="m1sents" id="m1-sents"></div>
+  <p class="note m1fb" id="m1-fb" aria-live="polite"></p>
 </div>
-<p>By the end of the page, the model will have placed “coffee” and “tea” close together, without ever seeing them side by side. It gets there through shared neighbours alone.</p>
+<p>“purr” and “fur” each fit one sentence, next to “cat” and “dog”. “coffee” and “tea” fit either of the last two equally well, because they keep the same company.</p>
+<p>word2vec has only this kind of evidence: which words appear near which. In the corpus’s 14 sentences about coffee and tea, the two words never appear together and have nearly the same neighbours. By the end of the page, the model will have placed “coffee” and “tea” close together through those shared neighbours alone.</p>
 <p>The settings below compare the toy model with the real thing. They are small enough to train in under a second, and the training procedure is the same one the real program uses.</p>
 <table>
 <thead>
@@ -918,16 +942,92 @@ function renderStatebar() {
 }
 
 // ---------- 1 the problem ----------
-function render1() {
-  const ci = V.index.get('coffee'), ti = V.index.get('tea');
-  const near = w => new Set(V.sents.filter(s => s.includes(w)).flat().filter(x => x !== w));
-  const STOP = new Set(['the', 'a', 'i', 'my', 'is', 'of', 'into', 'with', 'to', 'and', 'can', 'has'].map(w => V.index.get(w)));
-  const nc = near(ci), nt = near(ti), shared = new Set([...nc].filter(x => nt.has(x) && !STOP.has(x)));
-  const together = V.sents.some(s => s.includes(ci) && s.includes(ti));
-  const col = w => V.sents.filter(s => s.includes(w)).map(s => `<div class="sline">${s.map(x => x === w ? `<b class="hl">${W[x]}</b>` : shared.has(x) ? `<span class="sh">${W[x]}</span>` : W[x]).join(' ')}</div>`).join('');
-  $('m1-body').innerHTML = `<div class="cols2"><div><h4>sentences with “coffee”</h4>${col(ci)}</div><div><h4>sentences with “tea”</h4>${col(ti)}</div></div>
-    <p class="note" style="margin:12px 0 0">${together ? '' : '“coffee” and “tea” never appear in the same sentence. '}Besides small words like “the” and “my”, they share ${shared.size} neighbours, shaded: ${[...shared].sort((a, b) => V.count[b] - V.count[a]).map(x => `<span class="sh">${W[x]}</span>`).join(' ')}.</p>`;
+// A fill-in-the-blank puzzle from four corpus sentences: the reader matches words by their
+// company, the way word2vec does. Each word goes in one blank; coffee and tea fit either cup.
+const M1_WORDS = ['coffee', 'tea', 'purr', 'fur'];
+// `no` holds a hand-written reply for each wrong word: playful, and never naming the answer
+const M1_SENTS = [
+  { pre: 'the dog has soft', post: '', ok: ['fur'], yes: 'Yes!',
+    no: { purr: 'A soft purr is lovely, but it isn’t something a dog has.', coffee: 'A dog with soft coffee? Try again.', tea: 'A dog with soft tea? Try again.' } },
+  { pre: 'the cat can', post: '', ok: ['purr'], yes: 'Yes!',
+    no: { fur: 'Unfortunately, “fur” is not something a cat can do.', coffee: 'Unfortunately, “coffee” is not something a cat can do.', tea: 'Unfortunately, “tea” is not something a cat can do.' } },
+  { pre: 'a cup of hot', post: 'with milk', ok: ['coffee', 'tea'], yes: 'Yes!',
+    no: { fur: 'Sorry, I don’t think that would taste good.', purr: 'Try again, this time pick a word that makes sense!' } },
+  { pre: 'pour the', post: 'into my cup', ok: ['coffee', 'tea'], yes: 'Yes!',
+    no: { fur: 'While technically possible, there is a more delicious option.', purr: 'You can’t pour a purr. Try again.' } },
+];
+const m1 = { fill: M1_SENTS.map(() => null), sel: null, last: null, dragged: false };
+
+function m1Message(i, w) {
+  const s = M1_SENTS[i];
+  if (!s.ok.includes(w)) return s.no[w];
+  const o = s.ok.find(x => x !== w);
+  return o ? `${s.yes} “${o}” would work here too.` : s.yes;
 }
+
+function render1() {
+  const used = new Set(m1.fill);
+  $('m1-bank').innerHTML = M1_WORDS.map(w => `<button class="m1w${m1.sel === w ? ' on' : ''}${used.has(w) ? ' used' : ''}" data-m1w="${w}" aria-pressed="${m1.sel === w}">${w}</button>`).join('');
+  $('m1-sents').innerHTML = M1_SENTS.map((s, i) => {
+    const w = m1.fill[i], cls = w == null ? '' : s.ok.includes(w) ? ' ok' : ' bad';
+    const blank = `<button class="m1blank${cls}" data-m1b="${i}" aria-label="${w == null ? 'empty blank' : 'blank filled with ' + w}">${w ?? '&nbsp;'}</button>`;
+    return `<div class="sline m1line">${[s.pre, blank, s.post].filter(Boolean).join(' ')}</div>`;
+  }).join('');
+  const right = m1.fill.filter((w, i) => w != null && M1_SENTS[i].ok.includes(w)).length;
+  let fb = m1.last != null && m1.fill[m1.last] != null ? m1Message(m1.last, m1.fill[m1.last]) : '';
+  if (right === M1_SENTS.length) fb += ' <b>Every word is in a sentence it fits.</b>';
+  $('m1-fb').innerHTML = fb;
+}
+
+// each word sits in one blank, so placing it again moves it
+function m1Place(i, w) { m1.fill = m1.fill.map(x => x === w ? null : x); m1.fill[i] = w; m1.last = i; m1.sel = null; render1(); }
+
+// tap a word, then a blank; tapping a filled blank with no word selected empties it
+$('m1').addEventListener('click', e => {
+  if (m1.dragged) return;
+  const wb = e.target.closest('[data-m1w]'), bb = e.target.closest('[data-m1b]');
+  if (wb) { m1.sel = m1.sel === wb.dataset.m1w ? null : wb.dataset.m1w; render1(); }
+  else if (bb) {
+    const i = +bb.dataset.m1b;
+    if (m1.sel) m1Place(i, m1.sel);
+    else if (m1.fill[i] != null) { m1.fill[i] = null; m1.last = null; render1(); }
+  }
+});
+$('m1-reset').addEventListener('click', () => { m1.fill.fill(null); m1.sel = m1.last = null; render1(); });
+
+// drag a word onto a blank (pointer events, so touch works too); a short press is a tap
+(function m1Drag() {
+  let drag = null;
+  const blankAt = (x, y) => document.elementFromPoint(x, y)?.closest('[data-m1b]');
+  const hover = el => document.querySelectorAll('.m1blank.over').forEach(b => b !== el && b.classList.remove('over'));
+  $('m1-bank').addEventListener('pointerdown', e => {
+    const wb = e.target.closest('[data-m1w]'); if (!wb || e.button) return;
+    e.preventDefault();              // no text selection while dragging
+    drag = { w: wb.dataset.m1w, x: e.clientX, y: e.clientY, ghost: null };
+  });
+  document.addEventListener('pointermove', e => {
+    if (!drag) return;
+    if (!drag.ghost) {
+      if (Math.hypot(e.clientX - drag.x, e.clientY - drag.y) < 6) return;
+      drag.ghost = Object.assign(document.createElement('div'), { className: 'm1w m1ghost', textContent: drag.w });
+      document.body.appendChild(drag.ghost);
+    }
+    drag.ghost.style.left = e.clientX + 'px'; drag.ghost.style.top = e.clientY + 'px';
+    const b = blankAt(e.clientX, e.clientY); hover(b); b?.classList.add('over');
+  });
+  const end = e => {
+    if (!drag) return;
+    const d = drag; drag = null;
+    if (!d.ghost) return;            // never moved: the click handler treats it as a tap
+    d.ghost.remove(); hover(null);
+    const b = e.type === 'pointerup' && blankAt(e.clientX, e.clientY);
+    if (b) m1Place(+b.dataset.m1b, d.w);
+    // ignore the click that may follow a drag, so it doesn't also select or clear anything
+    m1.dragged = true; setTimeout(() => { m1.dragged = false; }, 0);
+  };
+  document.addEventListener('pointerup', end);
+  document.addEventListener('pointercancel', end);
+})();
 
 // ---------- 2 vocabulary and the two tables ----------
 const S2 = { sel: 'coffee' };
