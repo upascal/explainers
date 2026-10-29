@@ -221,9 +221,10 @@
   <button class="reveal-btn" aria-expanded="false">Reveal answer</button>
   <div class="reveal-body" hidden>Take “coffee” and “cup”. Over the whole run the pair is trained 176 times as a positive pair, with the right answer 1. But “cup” is a common word, so it is also drawn as a negative word for “coffee” 384 times, with the right answer 0. The model cannot tell these apart: it is the same two vectors, told “together” 176 times and “not together” 384 times. The best it can do is a score in between, below 0, so the error stays large. Every word is drawn as a negative word like this, which pulls all the scores down. What training still achieves is the difference: positive pairs score far higher than negative ones. In the real program, with 300 dimensions and billions of words of text, strong pairs end up well above 0.</div>
 </div>
-<div class="callout">
+<div class="callout reveal">
   <div class="t">Why not ask about every word at once?</div>
-  The natural question is “which word, out of the whole vocabulary, is the context?” That calls for a <em>softmax</em>, which scores every word in the vocabulary, millions of them, for every training pair. The first word2vec paper avoided that cost with <em>hierarchical softmax</em>, a chain of sigmoids down a binary tree of the vocabulary. The second paper replaced it with <em>negative sampling</em>, the approach on this page: one sigmoid for the real word and one for each of a handful of randomly drawn ones.
+  <button class="reveal-btn" aria-expanded="false">Reveal answer</button>
+  <div class="reveal-body" hidden>The natural question is “which word, out of the whole vocabulary, is the context?” That calls for a <em>softmax</em>, which scores every word in the vocabulary, millions of them, for every training pair. The first word2vec paper avoided that cost with <em>hierarchical softmax</em>, a chain of sigmoids down a binary tree of the vocabulary. The second paper replaced it with <em>negative sampling</em>, the approach on this page: one sigmoid for the real word and one for each of a handful of randomly drawn ones.</div>
 </div>
 <div class="slide-say" hidden>Move each vector by the scaling factor times the other one.</div>
 <h2 id="s6"><span class="num">6</span>One update</h2>
