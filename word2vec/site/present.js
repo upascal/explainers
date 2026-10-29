@@ -31,6 +31,7 @@ function collect() {
     }
     else if (el.matches('.module')) add('widget', el);
     else if (el.matches('.callout, table')) add('box', el);
+    else if (el.matches('.next-explainer')) add('next', el);   // a link on to the next explainer closes the deck
     else if (el.matches('.formula') && last) last.els.push(el);   // formulas go up on the slide they follow
     else if (el.matches('nav.toc, footer, .present-cta')) continue;
     else if (last) last.notes.push(el);
@@ -101,7 +102,7 @@ function go(n) {
   slides.forEach((s, i) => s.node.classList.toggle('on', i === cur));
   const E = window.EXPLAINER, sl = slides[cur].node;
   if (E) E.BARS.forEach(b => { if (b.playing && !sl.contains(b.host)) b.stop(); });
-  if (PCFG.statebarFrom) document.getElementById('statebar')?.classList.toggle('shown', cur >= sbFrom && slides[cur].kind !== 'title');
+  if (PCFG.statebarFrom) document.getElementById('statebar')?.classList.toggle('shown', cur >= sbFrom && slides[cur].kind !== 'title' && slides[cur].kind !== 'next');
   stage.querySelector('.pfoot').textContent = `${cur + 1} / ${slides.length}`;
   history.replaceState(null, '', `#present/${cur + 1}`);
   renderNotes();

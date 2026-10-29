@@ -5,8 +5,9 @@
 src/index.md        prose. Headings "## 4 Title" get id="s4" and the number span; the TOC
                     is generated from them at the <!-- toc --> marker. Widgets are pulled in
                     at <!-- module: NAME --> markers from src/modules/NAME.html.
-                    An optional <!-- slide: short line --> just before a heading, module, callout
-                    or table is the line shown on that slide in presentation mode.
+                    An optional <!-- slide: short line --> just before a heading, module, callout,
+                    table or <p class="next-explainer"> (the link on to the next page, its own
+                    closing slide) is the line shown on that slide in presentation mode.
 src/template.html   page shell with {{title}} {{css}} {{content}} {{js}}
 src/model.js        the toy word2vec (corpus, vocabulary, training stream, updates)
 src/app.js          the interactive code; src/style.css
@@ -32,7 +33,7 @@ def render_content():
 
     def say(m):
         nxt = html[m.end():m.end() + 40]
-        assert re.match(r"<h[123]|<!-- module:|<div class=\"callout|<table", nxt), f"slide line not before a slide: {m[1]!r}"
+        assert re.match(r"<h[123]|<!-- module:|<div class=\"callout|<table|<p class=\"next-explainer", nxt), f"slide line not before a slide: {m[1]!r}"
         return f'<div class="slide-say" hidden>{md.renderInline(m[1])}</div>\n'
 
     html = SAY.sub(say, html)

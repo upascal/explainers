@@ -206,7 +206,7 @@ One thing is the same. The table is **static**: a word gets one vector, whatever
 <!-- slide: One vector per token, whatever the sentence. -->
 <!-- module: m10 -->
 
-To see this table in a real language model, the next explainer, [How GPT-2 turns text into vectors](https://ulyssespascal.com/apps/gpt2-embeddings), opens up GPT-2’s token embeddings.
+<p class="next-explainer">To see this table in a real language model, the next explainer, <a href="https://ulyssespascal.com/apps/gpt2-embeddings">How GPT-2 turns text into vectors</a>, opens up GPT-2’s token embeddings.</p>
 
 <footer>
   <h4 class="fn-h">Footnotes</h4>

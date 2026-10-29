@@ -35,6 +35,9 @@ body.present > main { display: none; }
 .k-box .pbody > .callout .t { font-size: 1.3rem; margin-bottom: 0.4rem; }
 .k-box .pbody > table { font-size: 0.9rem; }
 
+/* the closing link to the next explainer */
+.k-next .pbody > .next-explainer { max-width: 40rem; margin: auto; font-size: 1.6rem; line-height: 1.4; text-align: center; }
+
 /* the status bar sits at the top of the stage */
 body.present #statebar { position: static; display: none; transform: none; transition: none; backdrop-filter: none; padding: 0.45rem 2.4rem; }
 body.present #statebar.shown { display: block; }
