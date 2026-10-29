@@ -118,10 +118,10 @@ footer ol.fn li::marker { color: var(--muted); font-variant-numeric: tabular-num
 .badge.neg { background: var(--orange-100); color: #8a3a1a; }
 .formula { font-size: 1.15rem; text-align: center; margin: 1em 0 1.1em; }
 table { font-variant-numeric: tabular-nums; }
-main > table { border-collapse: collapse; font-family: var(--sans); font-size: 0.85rem; width: 100%; margin: 1.2em 0 1.6em; }
-main > table th, main > table td { text-align: left; padding: 6px 8px; border-bottom: 1px solid var(--grid); vertical-align: top; }
-main > table th { font-size: 0.78rem; color: var(--ink-2); border-bottom-color: var(--axis); }
-main > table td:first-child { color: var(--ink-2); white-space: nowrap; }
+:is(main, .pbody) > table { border-collapse: collapse; font-family: var(--sans); font-size: 0.85rem; width: 100%; margin: 1.2em 0 1.6em; }
+:is(main, .pbody) > table th, :is(main, .pbody) > table td { text-align: left; padding: 6px 8px; border-bottom: 1px solid var(--grid); vertical-align: top; }
+:is(main, .pbody) > table th { font-size: 0.78rem; color: var(--ink-2); border-bottom-color: var(--axis); }
+:is(main, .pbody) > table td:first-child { color: var(--ink-2); white-space: nowrap; }
 
 /* sticky bar */
 #statebar .sb-row { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 16px; font-size: 0.78rem; color: var(--muted); }
@@ -588,3 +588,61 @@ table.m6t thead th { white-space: normal; max-width: 92px; line-height: 1.25; } 
 /* the header appears once the reader reaches section 3, where pairs are introduced */
 #statebar.shown { transform: none; }
 @media (prefers-reduced-motion: reduce) { #statebar { transition: none; } }
+
+/* presentation mode: the page as 16:9 slides (present.js). Everything is in rem, and present.js
+   sets the root font size from the stage width, so a slide looks the same on any screen. */
+.present-cta { margin: -0.4em 0 1.6em; }
+.present-cta .present-btn { margin-right: 6px; }
+body.present { overflow: hidden; background: #1b1b19; }
+body.present > main { display: none; }
+#deck { position: fixed; inset: 0; z-index: 50; display: grid; place-items: center; }
+#deck .stage { position: relative; display: flex; flex-direction: column; overflow: hidden; background: var(--page); }
+#deck .slides { position: relative; flex: 1; min-height: 0; }
+.pslide { position: absolute; inset: 0; display: flex; flex-direction: column; padding: 0.9rem 2.4rem 0.9rem; visibility: hidden; }
+.pslide.on { visibility: visible; }
+.phead { flex: none; font-family: var(--sans); font-size: 0.8rem; color: var(--muted); margin-bottom: 0.4rem; }
+.phead .num { margin-right: 0.6em; }
+.pbody { flex: 1; min-height: 0; overflow: auto; display: flex; flex-direction: column; }
+.pbody > :first-child { margin-top: auto; }
+.pbody > :last-child { margin-bottom: auto; }
+.pbody > .module, .pbody > .callout, .pbody > table, .pbody > .formula { flex: none; width: 100%; max-width: 66rem; margin-left: auto; margin-right: auto; }
+.pbody > .module { margin-top: 0; margin-bottom: 0; padding: 14px 18px; }
+.pbody > .module:first-child { margin-top: auto; }
+.pbody > .module:last-child { margin-bottom: auto; }
+.psay { flex: none; margin: 0.6rem auto 0; max-width: 52rem; text-align: center; font-size: 1.2rem; line-height: 1.35; color: var(--ink-2); }
+.pfoot { position: absolute; right: 1rem; bottom: 0.5rem; font-family: var(--sans); font-size: 0.65rem; color: var(--muted); font-variant-numeric: tabular-nums; }
+
+/* title slides */
+.k-title { padding: 2rem 5rem; }
+.k-title .pbody { align-items: flex-start; justify-content: center; }
+.k-title .pnum { font-family: var(--sans); font-size: 1.7rem; color: var(--muted); }
+.k-title .ptitle { font-size: 3.1rem; line-height: 1.08; margin: 0.15em 0 0.35em; max-width: 22em; }
+.k-title .psay { margin: 0; text-align: left; font-size: 1.45rem; max-width: 34rem; }
+.k-title .pbody > .formula { max-width: none; margin: 1.6rem 0 0; font-size: 1.3rem; align-items: flex-start; }
+.k-title .pbody > .formula + .formula { margin-top: 0.8rem; }
+
+/* callouts and the settings table */
+.k-box .pbody > .callout { max-width: 46rem; font-size: 1.15rem; padding: 1.1rem 1.4rem; }
+.k-box .pbody > .callout .t { font-size: 1.3rem; margin-bottom: 0.4rem; }
+.k-box .pbody > table { font-size: 0.9rem; }
+
+/* the status bar sits at the top of the stage */
+body.present #statebar { position: static; display: none; transform: none; transition: none; backdrop-filter: none; padding: 0.45rem 2.4rem; }
+body.present #statebar.shown { display: block; }
+body.present #statebar .in { max-width: 66rem; }
+
+/* widgets that are too tall for a slide get a wider, shorter layout */
+.pbody #m5-chart { max-width: 44rem; margin: 0 auto; }
+.pbody #m6-body { columns: 2; column-gap: 2.4rem; }
+.pbody #m6-body > * { break-inside: avoid; }
+.pbody #m6-body > h4:nth-of-type(3) { break-before: column; }
+/* 7: the chart with its controls beside it, then the two sums side by side */
+.pbody #m7-body { display: grid; grid-template-columns: 1fr 1fr; column-gap: 2rem; align-items: start;
+  grid-template-areas: "t1 ." "chart legend" "chart bar" "chart note" "chart ." "t2 t3" "sum app" "done app"; }
+.pbody #m7-body > h4 { margin: 6px 0 4px; }
+.pbody #m7 { padding-top: 12px; padding-bottom: 12px; }
+.pbody #m7-body > h4:nth-of-type(1) { grid-area: t1; } .pbody #m7-chart { grid-area: chart; } .pbody #m7-body > .legend { grid-area: legend; flex-direction: column; align-items: flex-start; gap: 4px; }
+.pbody #m7-body > .row { grid-area: bar; margin: 12px 0 8px !important; } .pbody #m7-note { grid-area: note; margin: 0 !important; }
+.pbody #m7-body > h4:nth-of-type(2) { grid-area: t2; } .pbody #m7-sum { grid-area: sum; }
+.pbody #m7-body > h4:nth-of-type(3) { grid-area: t3; } .pbody #m7-apply { grid-area: app; } .pbody #m7-applied { grid-area: done; }
+.pbody .split8 { grid-template-columns: minmax(0, 33rem) 13rem; justify-content: center; gap: 2.4rem; }

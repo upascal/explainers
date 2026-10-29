@@ -167,6 +167,7 @@ function PlayBar(host, o) {
   BARS.push(bar); return bar;
 }
 function refreshBars() { BARS.forEach(b => b.refresh()); }
+window.EXPLAINER = { BARS, active: () => ACTIVE };   // for present.js
 function pickBar() {
   const vis = BARS.filter(b => { const r = b.host.closest('.module').getBoundingClientRect(); return r.bottom > 0 && r.top < innerHeight; });
   if (ACTIVE && vis.includes(ACTIVE)) return ACTIVE;
@@ -174,6 +175,7 @@ function pickBar() {
   return vis.sort((a, b) => dist(a) - dist(b))[0] || null;
 }
 document.addEventListener('keydown', e => {
+  if (document.body.classList.contains('present')) return;   // present.js has the keys while presenting
   if (e.metaKey || e.ctrlKey || e.altKey || e.target.closest('input:not([type=checkbox]), select, textarea')) return;
   if (e.target.closest('button') && (e.key === ' ' || e.key === 'Enter')) return;
   let a = null;
@@ -265,7 +267,7 @@ function renderStatebar() {
 // the header only makes sense once pairs exist: show it from section 3's widget on
 (function headerWhenPairs() {
   let ticking = false;
-  const check = () => { ticking = false; $('statebar').classList.toggle('shown', $('m3').getBoundingClientRect().top < innerHeight * 0.75); };
+  const check = () => { ticking = false; if (document.body.classList.contains('present')) return; $('statebar').classList.toggle('shown', $('m3').getBoundingClientRect().top < innerHeight * 0.75); };
   addEventListener('scroll', () => { if (!ticking) { ticking = true; requestAnimationFrame(check); } }, { passive: true });
   addEventListener('resize', check); setTimeout(check, 0);
 })();
