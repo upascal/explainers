@@ -862,3 +862,46 @@ table.m6real tr.on td.bar i { background: var(--blue); }
 .m8nx .chip { font-size: 0.7rem; padding: 0 4px; }
 .m8r { grid-template-columns: 190px 70px 130px 351px; min-width: 781px; }
 #m7b .m4wrap .m4eq.mathon { padding-top: 66px; }
+
+/* presentation mode (the deck itself is shared/present.css): widgets that are too tall for a slide
+   get a wider, shorter layout */
+/* 2: the flowchart beside the controls and the corpus */
+.pbody #m2 { display: grid; grid-template-columns: 19rem minmax(0, 1fr); column-gap: 2rem; align-items: start; grid-template-areas: "t t" "flow row" "flow grid" "note note"; }
+.pbody #m2 > .m3title { grid-area: t; } .pbody #m2-flow { grid-area: flow; margin: 0; } .pbody #m2 > .row { grid-area: row; margin-top: 0; }
+.pbody #m2 > .m2grid { grid-area: grid; grid-template-columns: minmax(0, 1.5fr) minmax(0, 1fr); } .pbody #m2-note { grid-area: note; }
+/* 4: three columns, the readout and its note beside the plot */
+.pbody #m4g .cols2 { grid-template-columns: repeat(3, minmax(0, 1fr)); column-gap: 2rem; align-items: start; }
+.pbody #m4g .cols2 > div:first-child { grid-column: 1; grid-row: 1 / span 3; }
+.pbody #m4g .cols2 > div:last-child { display: contents; }
+.pbody #m4g-pchead { grid-column: 2; grid-row: 1; } .pbody #m4g-pc { grid-column: 2; grid-row: 2; } .pbody #m4g .m4gslide { grid-column: 2; grid-row: 3; }
+.pbody #m4g-readout { grid-column: 3; grid-row: 2; margin-top: 0; } .pbody #m4g-pcnote { grid-column: 3; grid-row: 2; align-self: end; }
+/* 7: the track across the top, the score beside the probability */
+.pbody #m6 { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); column-gap: 2rem; align-items: start; grid-template-areas: "t t" "road road" "rn rn" "eh p" "eq err"; }
+.pbody #m6 > .m3title { grid-area: t; } .pbody #m6 > .m6road { grid-area: road; } .pbody #m6 > p.note:not([id]) { grid-area: rn; }
+.pbody #m6-eqh { grid-area: eh; } .pbody #m6-eq { grid-area: eq; } .pbody #m6-p { grid-area: p; align-self: end; } .pbody #m6-err { grid-area: err; margin-top: 0 !important; }
+/* 8.1: the token that came next beside one that didn't */
+.pbody #m7 { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); column-gap: 2rem; align-items: start; grid-template-areas: "t t" "h1 h2" ". row" "g gw" "up down"; }
+.pbody #m7 .m6g .term .f { white-space: nowrap; } .pbody #m7 .m6g { padding-top: 6px; padding-bottom: 6px; }
+.pbody #m7 > .m3title { grid-area: t; } .pbody #m7 > h4:nth-of-type(2) { grid-area: h1; } .pbody #m7 > h4:nth-of-type(3) { grid-area: h2; margin-top: 0 !important; }
+.pbody #m7 > .row { grid-area: row; margin: 0; } .pbody #m7-g { grid-area: g; } .pbody #m7-gw { grid-area: gw; } .pbody #m7-up { grid-area: up; } .pbody #m7-down { grid-area: down; }
+.pbody #m7 > p.note { display: none; } .pbody #m7 { padding-top: 8px; padding-bottom: 6px; } .pbody #m7 > h4 { margin: 0 0 4px !important; }
+/* 9: the sum beside applying it, with a narrower table (in rem, so it scales with the slide) */
+.pbody #m8 { display: grid; grid-template-columns: minmax(0, 1fr) 25rem; column-gap: 2rem; align-items: start; grid-template-areas: "t t" "row h1" "sum apply" "sum h2" "sum all"; }
+.pbody #m8 > .m3title { grid-area: t; } .pbody #m8 > .row { grid-area: row; margin: 0; } .pbody #m8-sum { grid-area: sum; }
+.pbody #m8 > h4:nth-of-type(2) { grid-area: h1; margin-top: 0 !important; align-self: end; } .pbody #m8-apply { grid-area: apply; }
+.pbody #m8 > h4:nth-of-type(3) { grid-area: h2; } .pbody #m8-all { grid-area: all; }
+.pbody #m8-sum > p.note { display: none; }
+.pbody #m8 .m8r { grid-template-columns: 9.5rem 2.4rem 3.8rem auto; gap: 0.4rem; min-width: 0; padding: 0.15rem 0.5rem; }
+.pbody #m8 .m8r .cells { grid-template-columns: repeat(6, 3.1rem); gap: 2px; }
+.pbody #m8-all .legend { font-size: 0.7rem; gap: 2px 12px; }
+.pbody #m8-apply .m4eq.mathon { padding-top: 14px; }
+.pbody #m8 .m8r .rc { font-size: 0.62rem; }
+/* the "show math" button sits at the top left, so the equations need no room below them */
+.pbody .m4wrap .m4eq:not(.mathon) { padding-bottom: 12px; }
+.pbody .m4wrap .m4eq:not(.mathon) .m4math { top: 8px; bottom: auto; left: 10px; right: auto; }
+/* 6: the attention weights beside h */
+.pbody #mix { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); column-gap: 2rem; align-items: start; grid-template-areas: "t t" "wh h" "w eq" "wn eq" "note note"; }
+.pbody #mix > .m3title { grid-area: t; } .pbody #mix-wh { grid-area: wh; } .pbody #mix-w { grid-area: w; } .pbody #mix-wnote { grid-area: wn; }
+.pbody #mix > h4:not([id]):not(.m3title) { grid-area: h; } .pbody #mix-eq { grid-area: eq; } .pbody #mix > p.note:not([id]) { grid-area: note; }
+/* 11: a smaller map */
+.pbody #m10 .split8 { grid-template-columns: minmax(0, 40rem) 13rem; justify-content: center; gap: 2.4rem; }

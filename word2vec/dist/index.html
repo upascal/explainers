@@ -599,6 +599,23 @@ table.m6t thead th { white-space: normal; max-width: 92px; line-height: 1.25; } 
 #statebar.shown { transform: none; }
 @media (prefers-reduced-motion: reduce) { #statebar { transition: none; } }
 
+/* presentation mode (the deck itself is shared/present.css): widgets that are too tall for a slide
+   get a wider, shorter layout */
+.pbody #m5-chart { max-width: 44rem; margin: 0 auto; }
+.pbody #m6-body { columns: 2; column-gap: 2.4rem; }
+.pbody #m6-body > * { break-inside: avoid; }
+.pbody #m6-body > h4:nth-of-type(3) { break-before: column; }
+/* 7: the chart with its controls beside it, then the two sums side by side */
+.pbody #m7-body { display: grid; grid-template-columns: 1fr 1fr; column-gap: 2rem; align-items: start;
+  grid-template-areas: "t1 ." "chart legend" "chart bar" "chart note" "chart ." "t2 t3" "sum app" "done app"; }
+.pbody #m7-body > h4 { margin: 6px 0 4px; }
+.pbody #m7 { padding-top: 12px; padding-bottom: 12px; }
+.pbody #m7-body > h4:nth-of-type(1) { grid-area: t1; } .pbody #m7-chart { grid-area: chart; } .pbody #m7-body > .legend { grid-area: legend; flex-direction: column; align-items: flex-start; gap: 4px; }
+.pbody #m7-body > .row { grid-area: bar; margin: 12px 0 8px !important; } .pbody #m7-note { grid-area: note; margin: 0 !important; }
+.pbody #m7-body > h4:nth-of-type(2) { grid-area: t2; } .pbody #m7-sum { grid-area: sum; }
+.pbody #m7-body > h4:nth-of-type(3) { grid-area: t3; } .pbody #m7-apply { grid-area: app; } .pbody #m7-applied { grid-area: done; }
+.pbody .split8 { grid-template-columns: minmax(0, 33rem) 13rem; justify-content: center; gap: 2.4rem; }
+
 /* presentation mode: the page as 16:9 slides (present.js). Everything is in rem, and present.js
    sets the root font size from the stage width, so a slide looks the same on any screen. */
 .present-cta { margin: -0.4em 0 1.6em; }
@@ -640,29 +657,13 @@ body.present > main { display: none; }
 body.present #statebar { position: static; display: none; transform: none; transition: none; backdrop-filter: none; padding: 0.45rem 2.4rem; }
 body.present #statebar.shown { display: block; }
 body.present #statebar .in { max-width: 66rem; }
-
-/* widgets that are too tall for a slide get a wider, shorter layout */
-.pbody #m5-chart { max-width: 44rem; margin: 0 auto; }
-.pbody #m6-body { columns: 2; column-gap: 2.4rem; }
-.pbody #m6-body > * { break-inside: avoid; }
-.pbody #m6-body > h4:nth-of-type(3) { break-before: column; }
-/* 7: the chart with its controls beside it, then the two sums side by side */
-.pbody #m7-body { display: grid; grid-template-columns: 1fr 1fr; column-gap: 2rem; align-items: start;
-  grid-template-areas: "t1 ." "chart legend" "chart bar" "chart note" "chart ." "t2 t3" "sum app" "done app"; }
-.pbody #m7-body > h4 { margin: 6px 0 4px; }
-.pbody #m7 { padding-top: 12px; padding-bottom: 12px; }
-.pbody #m7-body > h4:nth-of-type(1) { grid-area: t1; } .pbody #m7-chart { grid-area: chart; } .pbody #m7-body > .legend { grid-area: legend; flex-direction: column; align-items: flex-start; gap: 4px; }
-.pbody #m7-body > .row { grid-area: bar; margin: 12px 0 8px !important; } .pbody #m7-note { grid-area: note; margin: 0 !important; }
-.pbody #m7-body > h4:nth-of-type(2) { grid-area: t2; } .pbody #m7-sum { grid-area: sum; }
-.pbody #m7-body > h4:nth-of-type(3) { grid-area: t3; } .pbody #m7-apply { grid-area: app; } .pbody #m7-applied { grid-area: done; }
-.pbody .split8 { grid-template-columns: minmax(0, 33rem) 13rem; justify-content: center; gap: 2.4rem; }
 </style>
 </head>
 <body>
 
 <div id="statebar"><div class="in" id="statebar-in"></div></div>
 
-<main>
+<main data-statebar-from="m3">
 <div class="slide-say" hidden>A small program reads text and gives every word a list of numbers. Here is how it learns them, one step at a time.</div>
 <h1>How word2vec learns</h1>
 <p class="lede">In 2013 a team at Google released <a href="https://code.google.com/archive/p/word2vec/">word2vec</a>, a small program that reads a lot of text and gives every word a list of numbers. Words used in similar ways end up with similar lists. The idea underlies much of modern language technology, including the first layer of every large language model. This page takes the training procedure apart one step at a time.</p>
@@ -2257,8 +2258,12 @@ render1(); render4(); render5(); render9(); render10(); renderAll();
 // title slide, and each widget, callout and table a slide of its own. The live nodes are moved
 // into the slides and back on Esc, so every widget keeps its state. The prose after a slide, up
 // to the next one, becomes its speaker notes (N opens them in a second window).
-const PCFG = { statebarFrom: 'm3' };   // the status bar shows from this widget's slide on
+// Shared by the explainers. The page sets it up on <main>: data-statebar-from="m3" shows the
+// status bar from that widget's slide on; without it the page handles the bar itself, on the
+// 'present:slide' event that every slide change sends (detail: { i, slide, slides }, or null on exit).
+// The page's app.js may expose window.EXPLAINER = { BARS, active() } for the play bars.
 const main = document.querySelector('main'), body = document.body, root = document.documentElement;
+const PCFG = { statebarFrom: main.dataset.statebarFrom || null };
 const on = () => body.classList.contains('present');
 let deck, stage, slides = [], cur = 0, moved = [], notesWin = null, t0 = 0, clock = null, sbFrom = Infinity;
 
@@ -2273,7 +2278,7 @@ function collect() {
   for (const el of main.children) {
     if (el.matches('.slide-say')) say = el.innerHTML;
     else if (el.matches('h1')) add('title', el, { title: el.innerHTML, num: '' });
-    else if (el.matches('h2')) {
+    else if (el.matches('h2, h3')) {
       const n = el.querySelector('.num');
       sec = { id: el.id, num: n ? n.textContent : '', title: [...el.childNodes].filter(c => c !== n).map(c => c.textContent).join('') };
       add('title', el, { title: sec.title, num: sec.num });
@@ -2312,7 +2317,7 @@ function enter(n) {
     else node.innerHTML = `<header class="phead">${s.sec ? `<span class="num">${s.sec.num}</span>${s.sec.title}` : ''}</header><div class="pbody"></div>${say}`;
     const pb = node.querySelector('.pbody');
     s.els.forEach(el => pb.append(park(el)));
-    if (s.els.some(el => el.id === PCFG.statebarFrom)) sbFrom = Math.min(sbFrom, i);
+    if (PCFG.statebarFrom && s.els.some(el => el.id === PCFG.statebarFrom)) sbFrom = Math.min(sbFrom, i);
     s.node = node; stage.querySelector('.slides').append(node);
   });
   const sb = document.getElementById('statebar');
@@ -2332,6 +2337,7 @@ function exit() {
   dispatchEvent(new Event('resize'));
   scrollTo({ top: anchor.getBoundingClientRect().top + scrollY - 70, behavior: 'instant' });
   if (notesWin && !notesWin.closed) notesWin.close();
+  document.dispatchEvent(new CustomEvent('present:slide', { detail: null }));
 }
 
 // a 16:9 stage that fits the window; everything inside is sized in rem, so it scales with it
@@ -2349,10 +2355,11 @@ function go(n) {
   slides.forEach((s, i) => s.node.classList.toggle('on', i === cur));
   const E = window.EXPLAINER, sl = slides[cur].node;
   if (E) E.BARS.forEach(b => { if (b.playing && !sl.contains(b.host)) b.stop(); });
-  document.getElementById('statebar')?.classList.toggle('shown', cur >= sbFrom && slides[cur].kind !== 'title');
+  if (PCFG.statebarFrom) document.getElementById('statebar')?.classList.toggle('shown', cur >= sbFrom && slides[cur].kind !== 'title');
   stage.querySelector('.pfoot').textContent = `${cur + 1} / ${slides.length}`;
   history.replaceState(null, '', `#present/${cur + 1}`);
   renderNotes();
+  document.dispatchEvent(new CustomEvent('present:slide', { detail: { i: cur, slide: slides[cur], slides } }));
 }
 
 // the play bar on this slide: the one used last if it is here, else the first visible one
@@ -2438,12 +2445,15 @@ function renderNotes() {
   tickClock();
 }
 
-// dev check: slides whose content doesn't fit (PRESENT.check() in the console)
+// dev check: slides whose content doesn't fit (PRESENT.check() in the console). Each slide is
+// measured while showing, since the status bar takes room on some.
 function check() {
-  return slides.map((s, i) => {
-    const b = s.node.querySelector('.pbody');
+  const was = cur;
+  const out = slides.map((s, i) => {
+    go(i); const b = s.node.querySelector('.pbody');
     return { slide: i + 1, label: label(s), over: b.scrollHeight - b.clientHeight, wide: b.scrollWidth - b.clientWidth };
   }).filter(r => r.over > 1 || r.wide > 1);
+  go(was); return out;
 }
 window.PRESENT = { enter, exit, go, check, get slides() { return slides; } };
 

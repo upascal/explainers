@@ -1,3 +1,4 @@
+<!-- slide: GPT-2’s first layer cuts text into tokens and looks up a list of numbers for each. Here is where both come from. -->
 # How GPT-2 turns text into vectors
 
 <p class="lede">Before a language model can do anything with a sentence, it has to turn the text into numbers. In GPT-2, released by OpenAI in 2019, that is the job of the first layer: it cuts the text into <em>tokens</em> and looks up a list of numbers for each one. Every large language model since starts the same way. This page takes that first layer apart: where the tokens come from, what the table of numbers holds, and how training fills it in.</p>
@@ -6,18 +7,21 @@
 
 <!-- toc -->
 
+<!-- slide: A model handles numbers, not letters. So which pieces of text get numbers? -->
 ## 1 The problem
 
 A model handles numbers, not letters. word2vec’s answer was to give every *word* a list of numbers. But a fixed list of words never covers all text. New words, names, typos, other languages and code keep turning up, and a word that isn’t on the list has no numbers at all. Going down to single letters fixes that, but then a sentence becomes a long string of pieces that each mean almost nothing.
 
 GPT-2 splits the difference. Its text is cut into *tokens*: common words are a single token, rarer ones are built from a few pieces, and anything at all can fall back to single bytes. Its vocabulary has 50,257 tokens, and each one has a number, its *token ID*.
 
+<!-- slide: Type anything, and GPT-2’s real tokenizer cuts it up. -->
 <!-- module: m1 -->
 
 Notice the spaces. A space belongs to the word after it, so <span class="tok"><span class="sp">·</span>coffee</span> (with its space) and “coffee” (at the start of a line) are different tokens, with different IDs. Capitals make different tokens too: <span class="tok"><span class="sp">·</span>coffee</span> is one token, <span class="tok"><span class="sp">·</span>COFFEE</span> is three. A dot marks the space: on this page a token written <span class="tok"><span class="sp">·</span>coffee</span> starts with a space.
 
 The toy model on this page uses GPT-2’s own tokens, only far fewer of them. The settings below compare the two.
 
+<!-- slide: The toy model on this page, next to GPT-2 small. -->
 | Setting | This page | GPT-2 small |
 |---|---|---|
 | Vocabulary | 41 tokens, all of them GPT-2’s own | 50,257 tokens |
@@ -31,62 +35,75 @@ The toy model on this page uses GPT-2’s own tokens, only far fewer of them. Th
 | Optimizer | plain gradient descent, learning rate 0.05, decaying linearly | not given in the paper; its predecessor used Adam |
 | LayerNorm | none | before each sublayer, and once more after the last layer |
 
+<!-- slide: The vocabulary was learned from text, one merge at a time. -->
 ## 2 Building the vocabulary
 
 GPT-2’s vocabulary was not written by hand. It was learned from text by *byte-pair encoding* (BPE), a compression trick from the 1990s. Start with every text written as single bytes. Count every pair of neighbouring pieces, merge the most common pair into a new piece, and repeat. Each merge adds one token to the vocabulary.
 
 Before counting, the text is split into words, numbers and punctuation, with each space kept on the word after it, and pairs are never counted across those pieces. That is why tokens are whole words or parts of words, and why <span class="tok"><span class="sp">·</span>the</span> and “the” come out as different tokens.
 
+<!-- slide: Count the neighbouring pairs, merge the most common one, repeat. -->
 <!-- module: m2 -->
 
 GPT-2 started from the 256 possible byte values, ran 50,000 merges over its training text, and added one special token, <code>&lt;|endoftext|&gt;</code>, which marks where one document ends and the next begins: 256 + 50,000 + 1 = 50,257.
 
 To tokenize new text, GPT-2 does not count anything. It replays its list of merges: within each word, it repeatedly applies whichever available merge it learned earliest, until none applies. A token’s ID is simply 256 plus the place of its merge in that list, so a low ID means a merge learned early, from a very common pair.
 
+<!-- slide: New text is cut by replaying the merges, earliest first. -->
 <!-- module: m2g -->
 
+<!-- slide: A token ID is a row number in one big table. -->
 ## 3 Token embeddings
 
 A token ID is just a row number. The first layer of GPT-2 is a table with one row for each of the 50,257 tokens and 768 numbers in each row. For every token in the text, it looks up that token’s row. Nothing is calculated: it is a lookup. A token’s row is called its *embedding*: the 768 numbers in row 6891 are <span class="tok"><span class="sp">·</span>coffee</span>’s embedding. GPT-2’s code calls the whole table `wte`, for word token embeddings; formulas usually call it *E*, and token *j*’s embedding *E*<sub>*j*</sub>. The table holds 38.6 million numbers, almost a third of GPT-2 small’s parameters.
 
 Here is the toy corpus, cut into GPT-2’s tokens, and its vocabulary.
 
+<!-- slide: The toy corpus, cut into GPT-2’s own tokens. -->
 <!-- module: m3 -->
 
 Before training, every number in the table is random, drawn from a normal distribution with a standard deviation of 0.02. Training then adjusts the embeddings, as sections 7 to 9 show. Here is one toy embedding, at any step of its training, next to the same token’s real embedding from GPT-2.
 
+<!-- slide: One row of the table: the toy’s at any step of training, and GPT-2’s. -->
 <!-- module: m3v -->
 
 word2vec gave every word two vectors, an input vector and an output vector, kept in two tables. GPT-2 has one token embedding table, and uses it twice: at the start, to look up each token, and at the end, to score which token comes next (section 7). Sharing one table this way is called *weight tying*.
 
+<!-- slide: word2vec kept two tables. GPT-2 keeps one. -->
 <div class="callout reveal">
   <div class="t">Why can GPT-2 get away with one table, when word2vec needed two?</div>
   <button class="reveal-btn" aria-expanded="false">Reveal answer</button>
   <div class="reveal-body" hidden>In word2vec, one table would score a word against its own vector. That score is a squared length, always positive, so every word would be predicted next to itself. In GPT-2 the vector scored at the end is not the embedding that went in at the start: it has passed through 12 layers, which have mixed in the rest of the text. So a token’s embedding is not automatically its own best match. One table also saves parameters: a second 50,257 × 768 table would add 38.6 million.</div>
 </div>
 
+<!-- slide: Attention can’t tell what came first, so every position gets an embedding too. -->
 ## 4 Position
 
 The layers that come next, attention layers, see the text as a set of vectors with nothing to say which came first. “the dog walks” and “walks the dog” would look the same. So GPT-2 has a second table, of *position embeddings*: one for each position from 0 to 1,023 (`wpe` in GPT-2’s code).
 
 These position embeddings are learned, just like the token embeddings. Nobody told GPT-2 that position 10 is close to position 11. But after training, the embeddings of nearby positions are nearly the same, and they drift apart smoothly with distance.
 
+<!-- slide: Nobody told GPT-2 which positions are neighbours. What did it learn? -->
 <!-- module: m4g -->
 
 The table holds position this precisely, but GPT-2 seems to use only a rough version of it. Averaging the embeddings of every 10 neighbouring positions, so that they share one, barely changes GPT-2’s predictions. Its precise sense of order seems to come from the attention layers that follow, which can see which tokens came before.
 
 For each token in the text, GPT-2 adds its position embedding to the token’s embedding. The sum is the vector that goes into the first layer. Here is that addition in the toy model, which has 8 positions.
 
+<!-- slide: Token plus position: the vector that goes into the first layer. -->
 <!-- module: m4 -->
 
+<!-- slide: One task trains the tables: predict the next token. -->
 ## 5 Predicting the next token
 
 GPT-2 learns its tables from one task: predict the next token from the prior context, every token up to that point. Every token in a text ends one such context, and makes one prediction. The vector at position *t* can look at the tokens up to *t*, never ahead, and has to say which token comes next. Each sentence here starts and ends with <code>&lt;|endoftext|&gt;</code>, as documents do in GPT-2’s training text, so a sentence of 7 tokens makes 8 predictions: its first token, from <code>&lt;|endoftext|&gt;</code> alone, each token after that, and the end. All of them are trained at once.
 
+<!-- slide: Every token ends a context, and every context makes a prediction. -->
 <!-- module: m5 -->
 
 Compare word2vec’s window from the other page: it made pairs of neighbouring words, in both directions. Here the context is everything that came before, and the order matters.
 
+<!-- slide: The layers mix the earlier tokens into each position’s vector. -->
 ## 6 Mixing in the context
 
 The input vector at a position only knows its own token and where it sits. To predict what comes next, it needs the rest of the prior context: after “ hot”, it matters whether “a cup of” came before. That is what the layers between looking up the embeddings and scoring them do.
@@ -97,10 +114,12 @@ Each layer has two parts. An *attention* part lets each position draw on the vec
 
 The toy has one such layer, so here it is in full for the selected prediction.
 
+<!-- slide: The toy’s one layer, in full, for the selected prediction. -->
 <!-- module: mix -->
 
 GPT-2 repeats this 12 times, with 12 attention parts working side by side in each layer, and normalizes the result once more after the last one. This page doesn’t open those layers up; what matters here is that *h* is built from the input vectors of the whole prior context, so training can reach every one of their embeddings.
 
+<!-- slide: Score h against every embedding in the table, then let the softmax share out the probability. -->
 ## 7 Scoring every token
 
 After GPT-2’s last layer, each position has one vector of 768 numbers. Call it *h*. As section 6 showed, it starts as the input vector of the token at that position, and the layers mix into it information from all the tokens before it. It belongs to one position but carries the whole context. To predict the next token, GPT-2 scores *h* against **every token embedding in the table**, the same table as in section 3, with the dot product, as word2vec did. That makes 50,257 scores, one for each token. The *softmax* turns them into probabilities that add up to 1:
@@ -109,14 +128,17 @@ After GPT-2’s last layer, each position has one vector of 768 numbers. Call it
 
 A higher score means a higher probability, and raising one token’s probability lowers all the others. On this page an embedding scored this way is a *candidate embedding*, in green; one looked up for a token in the text, as in section 4, is an *input embedding*, in purple. It is the same table either way, and the same token’s embedding can play both parts. word2vec turned each score into a probability on its own, with the sigmoid. The softmax makes the tokens compete.
 
+<!-- slide: One score and one probability for every token. -->
 <!-- module: m6 -->
 
 As in word2vec, the **error** is the right answer minus the guess. Now there is one for every token: the label is 1 for the token that really came next and 0 for every other token, so the error is label − p. At the start of training every probability is about 1/41, the model’s best guess when it knows nothing.
 
+<!-- slide: The error changes embeddings in two ways. -->
 ## 8 One update
 
 Now the table learns from the error. One prediction gives token embeddings a change, Δ, in two different ways: as candidates that were scored at the end, and, for the input token, as the input at the start. They use different formulas.
 
+<!-- slide: Every token was a candidate, so every token gets a Δ. -->
 ### 8.1 The Δ from being scored
 
 Each token gets a scaling factor, its error times the learning rate, exactly as in word2vec:
@@ -130,8 +152,10 @@ Each token’s embedding then gets a change, Δ, of its scaling factor times *h*
 - The token that really came next has a positive scaling factor, so its Δ points toward *h*. Once applied, *h* will score it higher next time.
 - **Every other token** has a negative scaling factor, so its Δ points away from *h*, in proportion to how likely the model thought it was. word2vec drew 5 random words to push away. GPT-2 pushes away all 50,256 wrong tokens, the likely ones hardest.
 
+<!-- slide: Pick a candidate and follow its Δ. -->
 <!-- module: m7 -->
 
+<!-- slide: The input embeddings sit behind the layers, so the error is worked backwards to reach them. -->
 ### 8.2 The Δ from being the input
 
 The embeddings looked up at the start, the input token’s and the position’s, learn too, but they are harder to reach: they affect the error only through the layers. To find which way each of them should move, GPT-2 works backwards from the error through the same steps that made the prediction, the scores, then each layer’s MLP and attention parts, down to the input vectors. At each step backwards it uses the chain rule of calculus. This is *backpropagation*. It gives a direction for every number in the model. The embeddings scored at the end are the first step back, which is why their change is so simple. word2vec never needed more than that first step, since nothing sits between its vectors and the score.
@@ -140,14 +164,17 @@ Further back, backpropagation gives directions for the layers’ own tables too,
 
 <div class="formula fxblock"><span class="fx"><span class="w"><span class="t tv">change to the input embedding</span><span class="g"><span class="o">=</span><span class="t">learning rate</span></span><span class="g"><span class="o">×</span><span class="t">error-reducing nudge</span></span></span><span class="s">Δ<span class="sv"><i>E</i><sub><i>x</i></sub></span> = α · ∇</span></span><span class="fxsw seg" role="group" aria-label="show formulas as"><button data-fx="w">words</button><button data-fx="s">symbols</button></span></div>
 
+<!-- slide: The backwards pass through the toy’s one layer, worked out exactly. -->
 <!-- module: m7b -->
 
+<!-- slide: Work out every part first, then change each embedding once. -->
 ## 9 Adding up an update
 
 A sentence makes several predictions, and every one of them moves every token embedding a little. The model works out all of these parts first, with the table as it stands, then adds them up and changes each embedding once. This is one training step.
 
 A token’s embedding can get three kinds of change from one sentence:
 
+<!-- slide: Three kinds of change one sentence can give a token’s embedding. -->
 | Where the token is | Its change | The size depends on |
 |---|---|---|
 | it came next, at some position | a pull toward *h*: (1 − p) × α × *h* | how surprised the model was: small p, big pull |
@@ -160,48 +187,59 @@ Only now does anything change. Each embedding moves once, by all of its Δs adde
 
 <div class="formula fxblock"><span class="fx"><span class="w"><span class="t">new embedding</span><span class="g"><span class="o">=</span><span class="t">embedding</span></span><span class="g"><span class="o">+</span><span class="t tvo">every change from being scored</span></span><span class="g"><span class="o">+</span><span class="t tv">every change from being the input</span></span></span><span class="s"><i>E</i><sub><i>j</i></sub> ← <i>E</i><sub><i>j</i></sub> + <span class="svo">Σ<sub><i>t</i></sub> <i>g</i><sub><i>t</i>,<i>j</i></sub> · <i>h</i><sub><i>t</i></sub></span> + <span class="sv">Σ<sub><i>t</i> : input is <i>j</i></sub> α · ∇<sub><i>t</i></sub></span></span></span><span class="fxsw seg" role="group" aria-label="show formulas as"><button data-fx="w">words</button><button data-fx="s">symbols</button></span></div>
 
+<!-- slide: One training step for one embedding, part by part. -->
 <!-- module: m8 -->
 
 An embedding gets parts from three roles: as the right answer at some positions, as a wrong answer at all the others, and as an input wherever its token appears in the sentence. One GPT-2 step adds up the parts from 512 × 1,024 = 524,288 predictions.
 
+<!-- slide: Two tokens that never share a sentence can still draw together. -->
 ## 10 Two tokens drawing together
 
 “coffee” and “tea” never appear in the same sentence. But the same tokens come before them, <span class="tok"><span class="sp">·</span>hot</span>, <span class="tok"><span class="sp">·</span>the</span> and <span class="tok"><span class="sp">·</span>my</span>, and the same tokens follow, <span class="tok"><span class="sp">·</span>with</span>, <span class="tok"><span class="sp">·</span>every</span> and <span class="tok"><span class="sp">·</span>is</span>. So the vectors *h* that should predict them are alike, which pulls both embeddings the same way when they are scored, and as inputs both embeddings should lead to the same predictions. Their embeddings drift together, through the same kind of shared company word2vec used.
 
 Any two embeddings lie together in one flat plane, so they can be drawn at their true lengths with the true angle between them. Drag through training, and try a token that shares no company with <span class="tok"><span class="sp">·</span>coffee</span>, such as <span class="tok"><span class="sp">·</span>dog</span>.
 
+<!-- slide: Any two embeddings, at their true angle. Drag through training. -->
 <!-- module: m9 -->
 
+<!-- slide: The same step over the whole corpus, 120 times. -->
 ## 11 Training at scale
 
 Now run the toy over the whole corpus, 120 times, one sentence per step: 3,600 steps. The *loss* is the error as the model measures it: −log p of the token that really came next, averaged over the sentence’s predictions. It starts at log 41 ≈ 3.7, a uniform guess among 41 tokens.
 
+<!-- slide: The loss starts at a blind guess among 41 tokens. How low can it get? -->
 <!-- module: m10l -->
 
 The loss cannot fall to zero, because the corpus doesn’t always say what comes next. After <span class="tok"><span class="sp">·</span>hot</span>, the corpus has <span class="tok"><span class="sp">·</span>coffee</span> twice, <span class="tok"><span class="sp">·</span>tea</span> twice, <span class="tok"><span class="sp">·</span>drink</span> once and the end of the sentence twice, so the best possible guess there splits its probability.
 
 To see the table itself, the map below projects the 6-number embeddings down to 2 numbers with PCA, which keeps the two directions in which the embeddings spread out most. The picture is approximate; the neighbour list beside it is computed in all 6 dimensions. Drag the slider under it to any point in training; playing above moves it too.
 
+<!-- slide: The whole table, flattened to two dimensions, at any point in training. -->
 <!-- module: m10 -->
 
 Watch <span class="tok"><span class="sp">·</span>coffee</span> and <span class="tok"><span class="sp">·</span>tea</span>, and <span class="tok"><span class="sp">·</span>dog</span> and <span class="tok"><span class="sp">·</span>cat</span>. The sentence-starting tokens “the”, “a”, “i”, “my” and “pour” also gather, apart from <span class="tok"><span class="sp">·</span>the</span>, <span class="tok"><span class="sp">·</span>a</span> and <span class="tok"><span class="sp">·</span>my</span> with their spaces: they are different tokens, used in different places. Turn on the position embeddings to see where the 8 positions sit among the tokens.
 
+<!-- slide: GPT-2’s real table, after 40 GB of text. -->
 ## 12 Inside GPT-2’s table
 
 The real table, after training on 40 GB of text, holds the same kind of structure at a far larger scale. Here are the nearest neighbours of any word in it, by the angle between embeddings. The embeddings themselves come straight from GPT-2’s released weights.
 
+<!-- slide: Pick any word and look at its neighbours. -->
 <!-- module: m11 -->
 
 Many of the neighbours are the same word in another form: capitalized, plural, or without its space. GPT-2 has to learn for itself that <span class="tok"><span class="sp">·</span>coffee</span> and <span class="tok"><span class="sp">·</span>Coffee</span> mean the same thing, and puts their embeddings close together. The rest are related words: for <span class="tok"><span class="sp">·</span>coffee</span>, <span class="tok"><span class="sp">·</span>espresso</span>, <span class="tok"><span class="sp">·</span>caffeine</span> and, as in the toy, <span class="tok"><span class="sp">·</span>tea</span>.
 
 The table has other habits. Its embeddings are not spread evenly in every direction: they all share a large common offset, so two random embeddings have a cosine similarity of about 0.27 instead of 0. Subtract the average embedding and that drops to about 0. And some embeddings barely moved at all. A token’s embedding only gets the pull toward *h* when that token comes next, which some tokens almost never did. The tokenizer seems to have been built from different text than the model was trained on, so it has tokens like <span class="tok"><span class="sp">·</span>TheNitrome</span>, <span class="tok"><span class="sp">·</span>RandomRedditor</span> and <span class="tok"><span class="sp">·</span>externalToEVA</span>: strings common in the tokenizer’s text that hardly appear in the model’s. They were found in 2023 as “glitch tokens”, which confuse the model. Their embeddings got almost no training, and sit close to the average embedding.
 
+<!-- slide: Not every row of the table got the same amount of training. -->
 <!-- module: m11g -->
 
+<!-- slide: A token gets the same numbers wherever it appears. -->
 ## 13 The table is static
 
 A token’s embedding is the same wherever the token appears. “plot” gets the same numbers in “the garden plot” and in “the secret plot”. Telling the two apart is the job of the 12 layers that follow: each layer mixes information from the other tokens into each vector. Coming out of the tables the two “plot” vectors are identical; layer by layer they move apart.
 
+<!-- slide: One word in two sentences, through GPT-2’s layers. -->
 <!-- module: m12 -->
 
 So the first layer is a starting point. It gives each token what is true of it everywhere, and the rest of the network builds what it means here.

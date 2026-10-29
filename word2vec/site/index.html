@@ -8,12 +8,13 @@
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;700&display=swap">
 <link rel="stylesheet" href="style.css">
+<link rel="stylesheet" href="present.css">
 </head>
 <body>
 
 <div id="statebar"><div class="in" id="statebar-in"></div></div>
 
-<main>
+<main data-statebar-from="m3">
 <div class="slide-say" hidden>A small program reads text and gives every word a list of numbers. Here is how it learns them, one step at a time.</div>
 <h1>How word2vec learns</h1>
 <p class="lede">In 2013 a team at Google released <a href="https://code.google.com/archive/p/word2vec/">word2vec</a>, a small program that reads a lot of text and gives every word a list of numbers. Words used in similar ways end up with similar lists. The idea underlies much of modern language technology, including the first layer of every large language model. This page takes the training procedure apart one step at a time.</p>

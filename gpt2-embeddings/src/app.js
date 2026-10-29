@@ -122,6 +122,7 @@ function PlayBar(host, o) {
 }
 function refreshBars() { BARS.forEach(b => b.refresh()); }
 function stopAll() { BARS.forEach(b => b.playing && b.stop()); }
+window.EXPLAINER = { BARS, active: () => ACTIVE };   // for present.js
 function pickBar() {
   const vis = BARS.filter(b => { const r = b.host.closest('.module').getBoundingClientRect(); return r.bottom > 0 && r.top < innerHeight && b.host.offsetParent; });
   if (ACTIVE && vis.includes(ACTIVE)) return ACTIVE;
@@ -129,6 +130,7 @@ function pickBar() {
   return vis.sort((a, b) => dist(a) - dist(b))[0] || null;
 }
 document.addEventListener('keydown', e => {
+  if (document.body.classList.contains('present')) return;   // present.js has the keys while presenting
   if (e.metaKey || e.ctrlKey || e.altKey || e.target.closest('input:not([type=checkbox]), select, textarea')) return;
   if (e.target.closest('button') && (e.key === ' ' || e.key === 'Enter')) return;
   let a = null;
@@ -321,15 +323,26 @@ function renderStatebar() {
 // the header only makes sense once predictions exist: show it from section 5's widget on
 (function headerWhenPreds() {
   let ticking = false;
+  const setMode = mode => { if (mode !== S6.sbMode) { S6.sbMode = mode; renderStatebar(); } };
   const check = () => {
-    ticking = false; const H = $('statebar').offsetHeight, top = id => $(id).getBoundingClientRect().top;
+    ticking = false; if (document.body.classList.contains('present')) return;
+    const H = $('statebar').offsetHeight, top = id => $(id).getBoundingClientRect().top;
     // shown once 5's widget is scrolled past, until the end of 9's (past that nothing uses the selected
     // prediction), and hidden while 7's own track is on screen, so there is never a second track in view
     const r7 = $('m6-track').getBoundingClientRect(), track7 = r7.bottom > H && r7.top < innerHeight;
     $('statebar').classList.toggle('shown', $('m5').getBoundingClientRect().bottom < H && !track7 && $('m8').getBoundingClientRect().bottom > H);
     const mode = top('s9') < H ? 'sent' : $('m6-track').getBoundingClientRect().bottom < H ? 'stack' : 'track';
-    if (mode !== S6.sbMode) { S6.sbMode = mode; renderStatebar(); }
+    setMode(mode);
   };
+  // presenting, the same rule by slide: after 5's widget up to 9's, not on 7's (it has its own track)
+  // nor on title slides; 7's stack once past it, the whole sentence from section 9 on
+  document.addEventListener('present:slide', e => {
+    if (!e.detail) return;
+    const { i, slide, slides } = e.detail, at = el => slides.findIndex(s => s.anchor === el || s.node.contains(el));
+    const m6 = at($('m6')), s9 = at($('s9'));
+    $('statebar').classList.toggle('shown', slide.kind !== 'title' && i > at($('m5')) && i <= at($('m8')) && i !== m6);
+    setMode(i >= s9 ? 'sent' : i > m6 ? 'stack' : 'track');
+  });
   addEventListener('scroll', () => { if (!ticking) { ticking = true; requestAnimationFrame(check); } }, { passive: true });
   addEventListener('resize', check); setTimeout(check, 0);
 })();

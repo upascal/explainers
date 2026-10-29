@@ -4,8 +4,12 @@
 // title slide, and each widget, callout and table a slide of its own. The live nodes are moved
 // into the slides and back on Esc, so every widget keeps its state. The prose after a slide, up
 // to the next one, becomes its speaker notes (N opens them in a second window).
-const PCFG = { statebarFrom: 'm3' };   // the status bar shows from this widget's slide on
+// Shared by the explainers. The page sets it up on <main>: data-statebar-from="m3" shows the
+// status bar from that widget's slide on; without it the page handles the bar itself, on the
+// 'present:slide' event that every slide change sends (detail: { i, slide, slides }, or null on exit).
+// The page's app.js may expose window.EXPLAINER = { BARS, active() } for the play bars.
 const main = document.querySelector('main'), body = document.body, root = document.documentElement;
+const PCFG = { statebarFrom: main.dataset.statebarFrom || null };
 const on = () => body.classList.contains('present');
 let deck, stage, slides = [], cur = 0, moved = [], notesWin = null, t0 = 0, clock = null, sbFrom = Infinity;
 
@@ -20,7 +24,7 @@ function collect() {
   for (const el of main.children) {
     if (el.matches('.slide-say')) say = el.innerHTML;
     else if (el.matches('h1')) add('title', el, { title: el.innerHTML, num: '' });
-    else if (el.matches('h2')) {
+    else if (el.matches('h2, h3')) {
       const n = el.querySelector('.num');
       sec = { id: el.id, num: n ? n.textContent : '', title: [...el.childNodes].filter(c => c !== n).map(c => c.textContent).join('') };
       add('title', el, { title: sec.title, num: sec.num });
@@ -59,7 +63,7 @@ function enter(n) {
     else node.innerHTML = `<header class="phead">${s.sec ? `<span class="num">${s.sec.num}</span>${s.sec.title}` : ''}</header><div class="pbody"></div>${say}`;
     const pb = node.querySelector('.pbody');
     s.els.forEach(el => pb.append(park(el)));
-    if (s.els.some(el => el.id === PCFG.statebarFrom)) sbFrom = Math.min(sbFrom, i);
+    if (PCFG.statebarFrom && s.els.some(el => el.id === PCFG.statebarFrom)) sbFrom = Math.min(sbFrom, i);
     s.node = node; stage.querySelector('.slides').append(node);
   });
   const sb = document.getElementById('statebar');
@@ -79,6 +83,7 @@ function exit() {
   dispatchEvent(new Event('resize'));
   scrollTo({ top: anchor.getBoundingClientRect().top + scrollY - 70, behavior: 'instant' });
   if (notesWin && !notesWin.closed) notesWin.close();
+  document.dispatchEvent(new CustomEvent('present:slide', { detail: null }));
 }
 
 // a 16:9 stage that fits the window; everything inside is sized in rem, so it scales with it
@@ -96,10 +101,11 @@ function go(n) {
   slides.forEach((s, i) => s.node.classList.toggle('on', i === cur));
   const E = window.EXPLAINER, sl = slides[cur].node;
   if (E) E.BARS.forEach(b => { if (b.playing && !sl.contains(b.host)) b.stop(); });
-  document.getElementById('statebar')?.classList.toggle('shown', cur >= sbFrom && slides[cur].kind !== 'title');
+  if (PCFG.statebarFrom) document.getElementById('statebar')?.classList.toggle('shown', cur >= sbFrom && slides[cur].kind !== 'title');
   stage.querySelector('.pfoot').textContent = `${cur + 1} / ${slides.length}`;
   history.replaceState(null, '', `#present/${cur + 1}`);
   renderNotes();
+  document.dispatchEvent(new CustomEvent('present:slide', { detail: { i: cur, slide: slides[cur], slides } }));
 }
 
 // the play bar on this slide: the one used last if it is here, else the first visible one
@@ -185,12 +191,15 @@ function renderNotes() {
   tickClock();
 }
 
-// dev check: slides whose content doesn't fit (PRESENT.check() in the console)
+// dev check: slides whose content doesn't fit (PRESENT.check() in the console). Each slide is
+// measured while showing, since the status bar takes room on some.
 function check() {
-  return slides.map((s, i) => {
-    const b = s.node.querySelector('.pbody');
+  const was = cur;
+  const out = slides.map((s, i) => {
+    go(i); const b = s.node.querySelector('.pbody');
     return { slide: i + 1, label: label(s), over: b.scrollHeight - b.clientHeight, wide: b.scrollWidth - b.clientWidth };
   }).filter(r => r.over > 1 || r.wide > 1);
+  go(was); return out;
 }
 window.PRESENT = { enter, exit, go, check, get slides() { return slides; } };
 
