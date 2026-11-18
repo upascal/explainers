@@ -8,7 +8,7 @@ Two kinds of numbers are on the page:
 
 - **Live.** GPT-2's real tokenizer runs in the browser from its own merge list, and a toy
   one-layer, one-head GPT (6 dimensions, tied embeddings, no LayerNorm, plain SGD) trains on the
-  corpus at load. Every toy number on the page is computed there.
+  corpus at load. Every number from the toy model is computed there.
 - **Precomputed from GPT-2 small** (`src/gpt2data.js`): the merge list, a few real rows, nearest
   neighbours for 14,940 word tokens, every row's distance from the average row, the position
   table's similarity and main directions, GPT-2's next-token guesses for the corpus, and the
@@ -35,7 +35,7 @@ python precompute/precompute.py                    # ~1 min; uses the cached `gp
 ```
 
 The training stream (sentence order) uses a fixed seed; the initialization seed can be re-rolled
-on the page. `CFG` in `src/model.js` holds the toy settings. Learning rates above about 0.06 make
-the toy blow up, which is why the page offers 0.05 at most. Changing the corpus or settings can
+on the page. `CFG` in `src/model.js` holds the toy model’s settings. Learning rates above about 0.06 make
+the toy model blow up, which is why the page offers 0.05 at most. Changing the corpus or settings can
 change whether the clusters form, so re-check the outcomes quoted in the prose (§11 and the last footnote)
 after editing them.

@@ -148,8 +148,8 @@
 <div class="slide-say" hidden>A token ID is a row number in one big table.</div>
 <h2 id="s3"><span class="num">3</span>Token embeddings</h2>
 <p>A token ID is just a row number. The first layer of GPT-2 is a table with one row for each of the 50,257 tokens and 768 numbers in each row. For every token in the text, it looks up that token’s row. Nothing is calculated: it is a lookup. A token’s row is called its <em>embedding</em>: the 768 numbers in row 6891 are <span class="tok"><span class="sp">·</span>coffee</span>’s embedding. GPT-2’s code calls the whole table <code>wte</code>, for word token embeddings; formulas usually call it <em>E</em>, and token <em>j</em>’s embedding <em>E</em><sub><em>j</em></sub>. The table holds 38.6 million numbers, almost a third of GPT-2 small’s parameters.</p>
-<p>Here is the toy corpus, cut into GPT-2’s tokens, and its vocabulary.</p>
-<div class="slide-say" hidden>The toy corpus, cut into GPT-2’s own tokens.</div>
+<p>Here is the toy model’s corpus, cut into GPT-2’s tokens, and its vocabulary.</p>
+<div class="slide-say" hidden>The toy model’s corpus, cut into GPT-2’s own tokens.</div>
 <div class="module" id="m3">
   <h4 class="m3title">The corpus as GPT-2 tokens, and its vocabulary</h4>
   <div class="row"><span class="note" id="m3-stats"></span></div>
@@ -159,8 +159,8 @@
   </div>
   <p class="note" style="margin:10px 0 0">Click any token to select it: it is highlighted here and shown in the embedding below.</p>
 </div>
-<p>Before training, every number in the table is random, drawn from a normal distribution with a standard deviation of 0.02. Training then adjusts the embeddings, as sections 7 to 9 show. Here is one toy embedding, at any step of its training, next to the same token’s real embedding from GPT-2.</p>
-<div class="slide-say" hidden>One row of the table: the toy’s at any step of training, and GPT-2’s.</div>
+<p>Before training, every number in the table is random, drawn from a normal distribution with a standard deviation of 0.02. Training then adjusts the embeddings, as sections 7 to 9 show. Here is one embedding from the toy model, at any step of its training, next to the same token’s real embedding from GPT-2.</p>
+<div class="slide-say" hidden>One row of the table: the toy model’s at any step of training, and GPT-2’s.</div>
 <div class="module" id="m3v">
   <h4 class="m3title">One token’s embedding</h4>
   <div class="row">
@@ -229,8 +229,8 @@
 <p>The input vector at a position only knows its own token and where it sits. To predict what comes next, it needs the rest of the prior context: after “ hot”, it matters whether “a cup of” came before. That is what the layers between looking up the embeddings and scoring them do.</p>
 <p>Each layer has two parts. An <em>attention</em> part lets each position draw on the vectors at its own and every earlier position, more on some than on others, and adds the mix to its own vector. An <em>MLP</em> part then works on each position’s vector by itself and adds its result too. Because each part adds to the vector instead of replacing it, the vector that comes out of the last layer, the final <em>hidden state</em> <em>h</em>, is exactly a sum of the input vector and what each part added to it:</p>
 <div class="formula fxblock"><span class="fx"><span class="w"><span class="t">final hidden state</span><span class="g"><span class="o">=</span><span class="t tv">input vector</span></span><span class="g"><span class="o">+</span><span class="t">attention’s mix</span></span><span class="g"><span class="o">+</span><span class="t">MLP’s change</span></span></span><span class="s"><i>h</i> = <span class="sv"><i>x</i></span> + attn(<i>x</i><sub>0</sub> … <i>x</i><sub><i>t</i></sub>) + mlp(…)</span></span><span class="fxsw seg" role="group" aria-label="show formulas as"><button data-fx="w">words</button><button data-fx="s">symbols</button></span></div>
-<p>The toy has one such layer, so here it is in full for the selected prediction.</p>
-<div class="slide-say" hidden>The toy’s one layer, in full, for the selected prediction.</div>
+<p>The toy model has one such layer, so here it is in full for the selected prediction.</p>
+<div class="slide-say" hidden>The toy model’s one layer, in full, for the selected prediction.</div>
 <div class="module" id="mix">
   <h4 class="m3title">Build h from the prior context</h4>
   <h4 id="mix-wh"></h4>
@@ -285,13 +285,13 @@
 <div class="slide-say" hidden>The input embeddings sit behind the layers, so the error is worked backwards to reach them.</div>
 <h3 id="s8-2"><span class="num">8.2</span>The Δ from being the input</h3>
 <p>The embeddings looked up at the start, the input token’s and the position’s, learn too, but they are harder to reach: they affect the error only through the layers. To find which way each of them should move, GPT-2 works backwards from the error through the same steps that made the prediction, the scores, then each layer’s MLP and attention parts, down to the input vectors. At each step backwards it uses the chain rule of calculus. This is <em>backpropagation</em>. It gives a direction for every number in the model. The embeddings scored at the end are the first step back, which is why their change is so simple. word2vec never needed more than that first step, since nothing sits between its vectors and the score.</p>
-<p>Further back, backpropagation gives directions for the layers’ own tables too, which this page doesn’t show, and what arrives at the input vector is an <em>error-reducing nudge</em>. It is a vector the same size as an embedding: its direction says which way to move the input vector to lower this prediction’s error fastest, and its length how steeply the error falls that way. The input token’s embedding and the position embedding each get a change of the learning rate times that nudge. On this page the whole backwards pass is computed exactly, through the toy’s one layer.</p>
+<p>Further back, backpropagation gives directions for the layers’ own tables too, which this page doesn’t show, and what arrives at the input vector is an <em>error-reducing nudge</em>. It is a vector the same size as an embedding: its direction says which way to move the input vector to lower this prediction’s error fastest, and its length how steeply the error falls that way. The input token’s embedding and the position embedding each get a change of the learning rate times that nudge. On this page the whole backwards pass is computed exactly, through the toy model’s one layer.</p>
 <div class="formula fxblock"><span class="fx"><span class="w"><span class="t tv">change to the input embedding</span><span class="g"><span class="o">=</span><span class="t">learning rate</span></span><span class="g"><span class="o">×</span><span class="t">error-reducing nudge</span></span></span><span class="s">Δ<span class="sv"><i>E</i><sub><i>x</i></sub></span> = α · ∇</span></span><span class="fxsw seg" role="group" aria-label="show formulas as"><button data-fx="w">words</button><button data-fx="s">symbols</button></span></div>
-<div class="slide-say" hidden>The backwards pass through the toy’s one layer, worked out exactly.</div>
+<div class="slide-say" hidden>The backwards pass through the toy model’s one layer, worked out exactly.</div>
 <div class="module" id="m7b">
   <h4 class="m3title">The Δ from being the input, for one prediction</h4>
   <div id="m7-in"></div>
-  <p class="note" style="margin:8px 0 0">The error-reducing nudge for the input vector at this position: which way to move each of its 6 numbers, and how much, to lower this prediction’s error fastest. Backpropagation works it out, backwards through the toy’s one layer. The position embedding gets the same Δ. Section 9 adds it to the rest.</p>
+  <p class="note" style="margin:8px 0 0">The error-reducing nudge for the input vector at this position: which way to move each of its 6 numbers, and how much, to lower this prediction’s error fastest. Backpropagation works it out, backwards through the toy model’s one layer. The position embedding gets the same Δ. Section 9 adds it to the rest.</p>
 </div>
 <div class="slide-say" hidden>Work out every part first, then change each embedding once.</div>
 <h2 id="s9"><span class="num">9</span>Adding up an update</h2>
@@ -359,7 +359,7 @@
 </div>
 <div class="slide-say" hidden>The same step over the whole corpus, 120 times.</div>
 <h2 id="s11"><span class="num">11</span>Training at scale</h2>
-<p>Now run the toy over the whole corpus, 120 times, one sentence per step: 3,600 steps. The <em>loss</em> is the error as the model measures it: −log p of the token that really came next, averaged over the sentence’s predictions. It starts at log 41 ≈ 3.7, a uniform guess among 41 tokens.</p>
+<p>Now run the toy model over the whole corpus, 120 times, one sentence per step: 3,600 steps. The <em>loss</em> is the error as the model measures it: −log p of the token that really came next, averaged over the sentence’s predictions. It starts at log 41 ≈ 3.7, a uniform guess among 41 tokens.</p>
 <div class="slide-say" hidden>The loss starts at a blind guess among 41 tokens. How low can it get?</div>
 <div class="module" id="m10l">
   <h4 class="m3title">Train the toy model on the corpus</h4>
@@ -414,7 +414,7 @@
   <div id="m11-out"></div>
   <p class="note" style="margin:8px 0 0">The page looks up the token for the word with a space in front, as it would appear mid-sentence. Neighbour lists are included for 14,940 common word tokens.</p>
 </div>
-<p>Many of the neighbours are the same word in another form: capitalized, plural, or without its space. GPT-2 has to learn for itself that <span class="tok"><span class="sp">·</span>coffee</span> and <span class="tok"><span class="sp">·</span>Coffee</span> mean the same thing, and puts their embeddings close together. The rest are related words: for <span class="tok"><span class="sp">·</span>coffee</span>, <span class="tok"><span class="sp">·</span>espresso</span>, <span class="tok"><span class="sp">·</span>caffeine</span> and, as in the toy, <span class="tok"><span class="sp">·</span>tea</span>.</p>
+<p>Many of the neighbours are the same word in another form: capitalized, plural, or without its space. GPT-2 has to learn for itself that <span class="tok"><span class="sp">·</span>coffee</span> and <span class="tok"><span class="sp">·</span>Coffee</span> mean the same thing, and puts their embeddings close together. The rest are related words: for <span class="tok"><span class="sp">·</span>coffee</span>, <span class="tok"><span class="sp">·</span>espresso</span>, <span class="tok"><span class="sp">·</span>caffeine</span> and, as in the toy model, <span class="tok"><span class="sp">·</span>tea</span>.</p>
 <p>The table has other habits. Its embeddings are not spread evenly in every direction: they all share a large common offset, so two random embeddings have a cosine similarity of about 0.27 instead of 0. Subtract the average embedding and that drops to about 0. And some embeddings barely moved at all. A token’s embedding only gets the pull toward <em>h</em> when that token comes next, which some tokens almost never did. The tokenizer seems to have been built from different text than the model was trained on, so it has tokens like <span class="tok"><span class="sp">·</span>TheNitrome</span>, <span class="tok"><span class="sp">·</span>RandomRedditor</span> and <span class="tok"><span class="sp">·</span>externalToEVA</span>: strings common in the tokenizer’s text that hardly appear in the model’s. They were found in 2023 as “glitch tokens”, which confuse the model. Their embeddings got almost no training, and sit close to the average embedding.</p>
 <div class="slide-say" hidden>Not every row of the table got the same amount of training.</div>
 <div class="module" id="m11g">
@@ -444,7 +444,7 @@
     <li>Yedidia, <a href="https://www.lesswrong.com/posts/qvWP3aBDBaqXvPNhS/gpt-2-s-positional-embedding-matrix-is-a-helix">“GPT-2’s positional embedding matrix is a helix”</a> (2023): three directions hold about 90% of the position embeddings’ variation, and plotted in them the 1,024 embeddings trace a helix, with positions 0 and 1,023 as outliers. And <a href="https://www.lesswrong.com/posts/zRA8B2FJLtTYRgie6/the-positional-embedding-matrix-and-previous-token-heads-how">“The positional embedding matrix and previous-token heads: how do they actually work?”</a> (2023), on averaging neighbouring position embeddings with little effect on GPT-2’s predictions.</li>
     <li>Rumbelow and Watkins, <a href="https://www.lesswrong.com/posts/aPeJE8bSo6rAFoLqg/solidgoldmagikarp-plus-prompt-generation">“SolidGoldMagikarp (plus, prompt generation)”</a> (2023), on GPT-2 and GPT-3’s “glitch tokens”, such as <span class="tok"><span class="sp">·</span>SolidGoldMagikarp</span> (a single token, as section 2 shows), and their embeddings near the centre of the table.</li>
     <li>Ethayarajh, <a href="https://arxiv.org/abs/1909.00512">“How Contextual are Contextualized Word Representations?”</a>, EMNLP (2019), on how GPT-2’s vectors share a common direction and grow more context-specific in higher layers. Section 13 subtracts each layer’s average vector, taken over a dozen ordinary sentences, before comparing, so the shared offset doesn’t make every pair look alike. Its layer 12 is the last layer’s output before GPT-2’s final LayerNorm.</li>
-    <li>The toy model, corpus and seeds are this page’s own. The toy adds up its loss over a sentence’s predictions, where GPT-2 averages over a batch; that only changes the scale of the learning rate. It uses GELU in its MLP, as GPT-2 does, and no LayerNorm. Sections 6 to 9 look at the model just before the selected sentence’s own update, in whichever of its 120 passes is chosen; sections 3, 4, 10 and 11 share one training step, from 0 to 3,600. Across 100 initialization seeds, <span class="tok"><span class="sp">·</span>coffee</span> and <span class="tok"><span class="sp">·</span>tea</span> ended up as each other’s nearest neighbours 99 times, and <span class="tok"><span class="sp">·</span>dog</span> and <span class="tok"><span class="sp">·</span>cat</span> 99 times too.</li>
+    <li>The toy model, corpus and seeds are this page’s own. The model adds up its loss over a sentence’s predictions, where GPT-2 averages over a batch; that only changes the scale of the learning rate. It uses GELU in its MLP, as GPT-2 does, and no LayerNorm. Sections 6 to 9 look at the model just before the selected sentence’s own update, in whichever of its 120 passes is chosen; sections 3, 4, 10 and 11 share one training step, from 0 to 3,600. Across 100 initialization seeds, <span class="tok"><span class="sp">·</span>coffee</span> and <span class="tok"><span class="sp">·</span>tea</span> ended up as each other’s nearest neighbours 99 times, and <span class="tok"><span class="sp">·</span>dog</span> and <span class="tok"><span class="sp">·</span>cat</span> 99 times too.</li>
   </ol>
 </footer>
 
