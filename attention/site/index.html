@@ -1,0 +1,217 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>How attention lets GPT-2 look back</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;700&display=swap">
+<link rel="stylesheet" href="style.css">
+<link rel="stylesheet" href="present.css">
+</head>
+<body>
+
+<main>
+<div class="slide-say" hidden>Attention is how each token in GPT-2 reads the tokens before it. Here is how one attention head works, and what GPT-2’s 144 heads do.</div>
+<h1>How attention lets GPT-2 look back</h1>
+<p class="lede">A token’s embedding is the same wherever the token appears. To predict what comes next, GPT-2 needs to know what came before, and the part that brings it in is called <em>attention</em>. At every position, attention picks which earlier tokens matter and copies some of what they carry. This page takes one attention head apart, watches it learn, and then looks at what the 144 heads in GPT-2 have learned to do.</p>
+<p class="note">This page follows on from <a href="../gpt2-embeddings/">How GPT-2 turns text into vectors</a>, and uses the same toy model: GPT-2’s structure, shrunk to 6 numbers per token and one layer with one attention head, trained on 30 short sentences. It trains in your browser when the page loads, and every number from the toy model is computed from it. GPT-2’s own attention weights, from section 9 on, were computed ahead of time from its released weights. Interactives with a play bar can be driven from the keyboard: → steps, space plays or pauses, shift + → skips to the end, and shift + ← resets.</p>
+<nav class="toc">
+  <a href="#s1">1. The problem</a>
+  <a href="#s2">2. Where to look</a>
+  <a href="#s3">3. Queries and keys</a>
+  <a href="#s4">4. No peeking ahead</a>
+  <a href="#s5">5. From scores to weights</a>
+  <a href="#s6">6. Values: what gets passed along</a>
+  <a href="#s7">7. Adding it back in</a>
+  <a href="#s8">8. How training shapes the head</a>
+  <a href="#s9">9. Many heads</a>
+  <a href="#s10">10. Inside GPT-2: 144 heads</a>
+  <a href="#s11">11. Previous-token and induction heads</a>
+  <a href="#s12">12. The attention sink</a>
+  <a href="#s13">13. What attention adds</a>
+</nav>
+<div class="slide-say" hidden>Same word, same position, different next word.</div>
+<h2 id="s1"><span class="num">1</span>The problem</h2>
+<p>Two of the toy model’s sentences are “the dog can bark” and “the cat can purr”. After “the dog can”, the next token should be <span class="tok"><span class="sp">·</span>bark</span>; after “the cat can”, it should be <span class="tok"><span class="sp">·</span>pur</span>, the first half of “purr”, which GPT-2 cuts in two.</p>
+<p>The vector at <span class="tok"><span class="sp">·</span>can</span> starts out as the embedding of <span class="tok"><span class="sp">·</span>can</span> plus the embedding of position 3, and both are the same in the two sentences. Nothing in that vector says which animal came before. If each position only worked on its own vector, the two sentences would get exactly the same prediction.</p>
+<div class="slide-say" hidden>Without attention, the two sentences look the same to “can”.</div>
+<div class="module" id="m1">
+  <h4>The same vector, two sentences</h4>
+  <div class="m1cards" id="m1-cards"></div>
+  <p class="note" id="m1-note" style="margin:12px 0 0"></p>
+</div>
+<p>With attention switched off, the toy model gives both sentences the same guess, and gets one of them wrong. With it on, the vector at <span class="tok"><span class="sp">·</span>can</span> has taken something from the animal, and each sentence gets its own answer.</p>
+<div class="slide-say" hidden>Where should “can” look?</div>
+<h2 id="s2"><span class="num">2</span>Where to look</h2>
+<p>Attention works in two steps. First, the vector at <span class="tok"><span class="sp">·</span>can</span> gives each token up to and including itself a <em>weight</em>: how much to take from it. The weights are between 0 and 1 and add up to 1. Then it takes a blend of what those tokens carry, mixed in those proportions, and adds the blend to its own vector.</p>
+<p>Before seeing how the model picks the weights, pick them yourself. The sliders set how much <span class="tok"><span class="sp">·</span>can</span> draws on each token; the toy model’s own layer does the rest.</p>
+<div class="slide-say" hidden>Set the weights yourself, and watch the prediction.</div>
+<div class="module" id="m2">
+  <h4>Set the weights for <span class="lc">·can</span> yourself</h4>
+  <div class="row"><span class="seg" id="m2-sent" role="group" aria-label="sentence"></span>
+    <span class="seg" id="m2-preset" role="group" aria-label="presets"><button data-p="even">even</button><button data-p="own">the model’s own</button></span></div>
+  <div class="m2rows" id="m2-rows"></div>
+  <p class="note" style="margin:0">The sliders set how much each token counts; the weights are those amounts divided by their total, so they always add up to 100%.</p>
+  <div class="m2out">
+    <div><h4 style="margin-bottom:8px">What comes next</h4><div class="pred" id="m2-pred"></div></div>
+    <div class="m2fb" id="m2-fb" aria-live="polite"></div>
+  </div>
+</div>
+<p>A good set of weights depends on the sentence, but the rule behind it doesn’t. The model can’t store one set of weights for “the dog can” and another for “the cat can”; it has to <em>compute</em> them, from the vectors at hand, in a way that works for every sentence. The next three sections show how.</p>
+<div class="slide-say" hidden>Every token makes a query and a key. Their dot product is a score.</div>
+<h2 id="s3"><span class="num">3</span>Queries and keys</h2>
+<p>Each position turns its vector <em>x</em> into two new vectors, by multiplying it with two small tables of numbers that the model learns: a <em>query</em> <span class="cq">q</span>, with the table <em>W</em><sub>Q</sub>, and a <em>key</em> <span class="ck">k</span>, with the table <em>W</em><sub>K</sub>. Loosely, the query says what this position is looking for, and the key says what this token has to offer. In the toy model both are 6 numbers long, like <em>x</em>.</p>
+<p>To score how well an earlier token matches, the position takes the dot product of its own query with that token’s key, as word2vec did with its two vectors: multiply the numbers pair by pair and add them up. A large score means a good match. The score is then divided by √6, the square root of the vector’s length; section 5 says why.</p>
+<div class="formula fxblock"><span class="fx"><span class="w"><span class="t">score</span><span class="g"><span class="o">=</span><span class="t tq">query here</span></span><span class="g"><span class="o">·</span><span class="t tk">key there</span></span><span class="g"><span class="o">÷</span><span class="t">√6</span></span></span><span class="s">score<sub><i>t</i>,<i>u</i></sub> = <span class="sq"><i>q</i><sub><i>t</i></sub></span> · <span class="sk"><i>k</i><sub><i>u</i></sub></span> / √<i>d</i>, &nbsp; <span class="sq"><i>q</i><sub><i>t</i></sub></span> = <span class="sv"><i>x</i><sub><i>t</i></sub></span><i>W</i><sub>Q</sub>, &nbsp; <span class="sk"><i>k</i><sub><i>u</i></sub></span> = <span class="sv"><i>x</i><sub><i>u</i></sub></span><i>W</i><sub>K</sub></span></span><span class="fxsw seg" role="group" aria-label="show formulas as"><button data-fx="w">words</button><button data-fx="s">symbols</button></span></div>
+<p>Every position uses the same two tables. What differs from sentence to sentence is the vectors that go in.</p>
+<div class="slide-say" hidden>One query, scored against every key up to it.</div>
+<div class="module" id="m3">
+  <h4>Score earlier tokens against one query</h4>
+  <div class="selrow" id="m3-sel"></div>
+  <div class="qline" id="m3-q"></div>
+  <div class="tscroll"><table class="at" id="m3-t"></table></div>
+  <div class="math" id="m3-math"></div>
+  <p class="note" style="margin:10px 0 0">Click a sentence’s token to make it the query, and a row to see its dot product worked out. Blue squares are positive numbers, orange negative.</p>
+</div>
+<p>The query of <span class="tok"><span class="sp">·</span>can</span> is the same in both sentences, since its vector is. The keys of <span class="tok"><span class="sp">·</span>dog</span> and <span class="tok"><span class="sp">·</span>cat</span> are different, because their embeddings are, and so are their scores.</p>
+<div class="slide-say" hidden>A position may only look back.</div>
+<h2 id="s4"><span class="num">4</span>No peeking ahead</h2>
+<p>Section 3 only scored the tokens up to the query’s own position, and that is a rule, not a shortcut. GPT-2 trains every position of a text at once, each predicting the token after it. If <span class="tok"><span class="sp">·</span>can</span> could see the tokens after it, it could read the answer, <span class="tok"><span class="sp">·</span>pur</span>, straight off the next position, and would learn nothing useful for text it hasn’t seen.</p>
+<p>So every score from a position to a later one is replaced by −∞ before the next step. That is the <em>causal mask</em>. Here is every score in one sentence, each row a query and each column a key.</p>
+<div class="slide-say" hidden>Every score in a sentence. The mask hides the future.</div>
+<div class="module" id="m4">
+  <h4>Every score in the sentence</h4>
+  <div class="selrow" id="m4-sel"></div>
+  <div class="row"><span class="seg" id="m4-mask" role="group" aria-label="causal mask"><button data-m="on">mask on</button><button data-m="off">mask off</button></span></div>
+  <div class="m4wrap"><div class="grid4" id="m4-grid"></div></div>
+  <p class="note" id="m4-note" style="margin:10px 0 0"></p>
+</div>
+<p>With the mask on, the grid is a triangle: the first position can only look at itself, the last at everything. This is also what lets GPT-2 write text one token at a time: a position’s vector never depends on what comes after it, so adding a token at the end leaves every earlier vector as it was.</p>
+<div class="slide-say" hidden>The softmax turns scores into weights that add up to 1.</div>
+<h2 id="s5"><span class="num">5</span>From scores to weights</h2>
+<p>The scores can be any number, positive or negative. To turn them into weights, attention uses the <em>softmax</em>, the same function GPT-2 uses at the very end to turn its scores for every token into probabilities: raise <em>e</em> to the power of each score, then divide each by their total.</p>
+<div class="formula fxblock"><span class="fx"><span class="w"><span class="t">weight</span><span class="g"><span class="o">=</span><span class="t">e<sup>score</sup></span></span><span class="g"><span class="o">÷</span><span class="t">the sum of e<sup>score</sup> over every token up to here</span></span></span><span class="s"><i>a</i><sub><i>t</i>,<i>u</i></sub> = e<sup>score<sub><i>t</i>,<i>u</i></sub></sup> / (e<sup>score<sub><i>t</i>,0</sub></sup> + … + e<sup>score<sub><i>t</i>,<i>t</i></sub></sup>)</span></span><span class="fxsw seg" role="group" aria-label="show formulas as"><button data-fx="w">words</button><button data-fx="s">symbols</button></span></div>
+<p>The result is always between 0 and 1, the weights add up to 1, and a higher score always gets a higher weight. A masked score of −∞ becomes e<sup>−∞</sup> = 0: no weight at all.</p>
+<div class="slide-say" hidden>The softmax, step by step, and what scaling the scores does.</div>
+<div class="module" id="m5">
+  <h4>From scores to weights</h4>
+  <div class="selrow" id="m5-sel"></div>
+  <div class="tscroll"><table class="at" id="m5-t"></table></div>
+  <div class="m5ctl"><label class="ctl">multiply every score by <input type="range" id="m5-k" min="-3" max="3" step="0.1" value="0" aria-label="multiply every score by"> <b id="m5-kv">×1</b></label><button id="m5-k1">×1</button></div>
+  <p class="note" id="m5-note" style="margin:8px 0 0"></p>
+</div>
+<p>The softmax cares about the gaps between scores. Stretch the scores apart and the largest one takes nearly all the weight; squash them together and the weights even out. A dot product of two longer vectors adds up more products, so its scores tend to be spread wider: in GPT-2, where a head’s vectors have 64 numbers, they would be about 8 times as wide as for vectors of one number. Dividing by √64 = 8 brings them back, so that a head starts training with weights that are spread out, and can learn where to look, instead of starting stuck on one token.</p>
+<div class="slide-say" hidden>Values: what each token hands over.</div>
+<h2 id="s6"><span class="num">6</span>Values: what gets passed along</h2>
+<p>The weights say how much to take from each token. What is taken is a third vector, the <em>value</em> <span class="cvv">v</span>, made from each position’s <em>x</em> with a third table, <em>W</em><sub>V</sub>. Keeping the value apart from the key lets a token be found for one reason and hand over something else: the key of <span class="tok"><span class="sp">·</span>cat</span> only has to say “I’m the one to look at”, while its value can carry what follows from it.</p>
+<p>The head multiplies each value by its weight and adds them up. That blend goes through one more table, <em>W</em><sub>O</sub>, which turns it into a change for the position’s vector.</p>
+<div class="formula fxblock"><span class="fx"><span class="w"><span class="t">attention’s output</span><span class="g"><span class="o">=</span><span class="t">(weight × </span><span class="t tval">value</span><span class="o">, added up over every token up to here)</span></span><span class="g"><span class="o">×</span><span class="t">W<sub>O</sub></span></span></span><span class="s">attn<sub><i>t</i></sub> = (<i>a</i><sub><i>t</i>,0</sub><span class="svv"><i>v</i><sub>0</sub></span> + … + <i>a</i><sub><i>t</i>,<i>t</i></sub><span class="svv"><i>v</i><sub><i>t</i></sub></span>) <i>W</i><sub>O</sub>, &nbsp; <span class="svv"><i>v</i><sub><i>u</i></sub></span> = <span class="sv"><i>x</i><sub><i>u</i></sub></span><i>W</i><sub>V</sub></span></span><span class="fxsw seg" role="group" aria-label="show formulas as"><button data-fx="w">words</button><button data-fx="s">symbols</button></span></div>
+<div class="slide-say" hidden>The weighted values, added up, become the change.</div>
+<div class="module" id="m6">
+  <h4>Blend the values</h4>
+  <div class="selrow" id="m6-sel"></div>
+  <div class="tscroll"><table class="at m6sum" id="m6-t"></table></div>
+  <div class="m2out" style="margin-top:16px">
+    <div><h4 style="margin-bottom:8px" id="m6-ph">What comes next</h4><div class="pred" id="m6-pred"></div></div>
+    <p class="note" id="m6-note" style="margin:0"></p>
+  </div>
+</div>
+<h2 id="s7"><span class="num">7</span>Adding it back in</h2>
+<p>Attention doesn’t replace the vector at a position: it adds its output to it. The vector keeps everything it had, its own token and position, and gains what the head took from the context.</p>
+<div class="formula fxblock"><span class="fx"><span class="w"><span class="t">new vector</span><span class="g"><span class="o">=</span><span class="t tv">old vector</span></span><span class="g"><span class="o">+</span><span class="t">attention’s output</span></span></span><span class="s"><i>h</i><sub><i>t</i></sub> = <span class="sv"><i>x</i><sub><i>t</i></sub></span> + attn<sub><i>t</i></sub></span></span><span class="fxsw seg" role="group" aria-label="show formulas as"><button data-fx="w">words</button><button data-fx="s">symbols</button></span></div>
+<p>In the toy model, an MLP then works on that vector, still at its own position, and adds its own change, and the result is scored against every token in the table, as on the <a href="../gpt2-embeddings/#s7">previous page</a>. GPT-2 does the same 12 times over. The running vector that every layer reads from and adds to is often called the <em>residual stream</em>: attention is the only part of the model that moves information from one position to another along it.</p>
+<div class="slide-say" hidden>Nobody tells the head where to look. Training finds out.</div>
+<h2 id="s8"><span class="num">8</span>How training shapes the head</h2>
+<p>No one tells the toy model that <span class="tok"><span class="sp">·</span>can</span> should look at the animal. At the start, its four tables hold small random numbers, every score is close to 0, and the weights are nearly even. Each training step works out how every number in the model should change to make the right next token more likely, and changes it a little, as on the previous page. That includes <em>W</em><sub>Q</sub>, <em>W</em><sub>K</sub>, <em>W</em><sub>V</sub> and <em>W</em><sub>O</sub>.</p>
+<p>When <span class="tok"><span class="sp">·</span>pur</span> should have been more likely after “the cat can”, the update asks for more of <span class="tok"><span class="sp">·</span>cat</span>’s value in the mix, and so for a higher score between the query of <span class="tok"><span class="sp">·</span>can</span> and the key of <span class="tok"><span class="sp">·</span>cat</span>; and asks for <span class="tok"><span class="sp">·</span>cat</span>’s value, through <em>W</em><sub>O</sub>, to point towards <span class="tok"><span class="sp">·</span>pur</span>. Step through the toy model’s training and watch both happen.</p>
+<div class="slide-say" hidden>The weight on the animal, and the right guess, over training.</div>
+<div class="module" id="m8">
+  <h4>The head over training</h4>
+  <div class="m8top"><span class="playbar-host" id="m8-bar"></span><input type="range" id="m8-step" min="0" max="360" value="0" aria-label="training step" style="width:200px"><span class="m8step" id="m8-stepv"></span>
+    <span class="seg" id="m8-pair" role="group" aria-label="which pair"><button data-p="can">can ___</button><button data-p="likes">likes to ___</button></span></div>
+  <div class="m8rows" id="m8-rows"></div>
+  <div class="m8chart" id="m8-chart"></div>
+  <div class="legend" id="m8-leg"></div>
+</div>
+<p>The other pair doesn’t work out. After “the dog likes to” and “the cat likes to”, the answers are <span class="tok"><span class="sp">·</span>play</span> and <span class="tok"><span class="sp">·</span>sleep</span>, and the clue is just as far back, but <span class="tok"><span class="sp">·</span>to</span> never learns to look at the animal, and the model ends up guessing about 50–50. One head in one layer has a single query table for every position; it can learn to send <span class="tok"><span class="sp">·</span>can</span> to the animal, but here it didn’t find a way to send <span class="tok"><span class="sp">·</span>to</span> there too. GPT-2 has far more room: many heads, in many layers.</p>
+<div class="slide-say" hidden>GPT-2 runs 12 heads side by side in every layer.</div>
+<h2 id="s9"><span class="num">9</span>Many heads</h2>
+<p>GPT-2 small has 12 layers, and each has 12 attention heads working side by side, 144 in all. Each head has its own <em>W</em><sub>Q</sub>, <em>W</em><sub>K</sub> and <em>W</em><sub>V</sub>, which turn the 768-number vector into a query, key and value of 64 numbers each, and so each head picks its own weights. The 12 heads’ blends, 12 × 64 = 768 numbers, are put side by side and go through one <em>W</em><sub>O</sub> back into the vector.</p>
+<p>Here are the 12 heads of one layer, on one sentence. Each square is a head’s grid of weights, drawn as in section 4: a row for each position, a column for each token it can look at, and darker for more weight.</p>
+<div class="slide-say" hidden>Twelve heads, twelve different ways to look.</div>
+<div class="module" id="m9">
+  <h4 id="m9-h">The 12 heads of one layer</h4>
+  <div class="row"><label class="ctl">layer <input type="range" id="m9-l" min="0" max="11" value="4" aria-label="layer"> <b id="m9-lv">4</b></label></div>
+  <div class="heads12" id="m9-heads"></div>
+  <p class="note" style="margin:10px 0 0" id="m9-note"></p>
+</div>
+<p>Heads in the same layer read the same vectors, but they look in very different ways: some spread their weight out, some always look one token back, and many put almost all of it on the very first token.</p>
+<div class="slide-say" hidden>All 144 of GPT-2’s heads, on real text.</div>
+<h2 id="s10"><span class="num">10</span>Inside GPT-2: 144 heads</h2>
+<p>Pick any of GPT-2’s 144 heads, by layer and head number, and see its weights on one of three texts: a sentence, the same sentence without the <code>&lt;|endoftext|&gt;</code> GPT-2 puts between documents, and a list of 20 random words, then the same 20 again. Hover over the big grid to read a weight.</p>
+<div class="slide-say" hidden>Pick a head.</div>
+<div class="module" id="m10">
+  <h4 id="m10-h">One of GPT-2’s heads</h4>
+  <div class="row"><span class="seg" id="m10-text" role="group" aria-label="text"><button data-t="nat">sentence</button><button data-t="natNoEot">without &lt;|endoftext|&gt;</button><button data-t="rep">random words, twice</button></span></div>
+  <div class="m10wrap">
+    <div class="grid144" id="m10-grid"></div>
+    <p class="note" style="margin:0">Rows are layers, and columns heads; each small square is that head’s grid, shrunk. Click one to see it full size.</p>
+    <div class="bigcol"><div class="big"><div class="bigmap" id="m10-big"></div></div><div class="hover" id="m10-hover"></div></div>
+  </div>
+</div>
+<p>Most heads are hard to name. A few do something simple and clear enough to have names, and the next two sections look at them.</p>
+<div class="slide-say" hidden>One head looks one token back. Another uses it to find repeats.</div>
+<h2 id="s11"><span class="num">11</span>Previous-token and induction heads</h2>
+<p>Head 4.11, the twelfth head of the fifth layer (both counted from 0), puts almost all its weight, on average 99.9% on the sentence above, on the token just before. That sounds useless on its own, but it writes into each position’s vector what the token before it was.</p>
+<p>That lets a head in a later layer do something cleverer. Take the random words, repeated. In the second copy, at <span class="tok"><span class="sp">·</span>mask</span>, the head can ask, with its query, for a position whose <em>previous</em> token was <span class="tok"><span class="sp">·</span>mask</span>, and the key it matches is the one 4.11 helped build, at <span class="tok"><span class="sp">·</span>artist</span>. The head copies <span class="tok"><span class="sp">·</span>artist</span>’s value, and GPT-2 predicts <span class="tok"><span class="sp">·</span>artist</span> again. A head that does this is an <em>induction head</em>: it completes a pattern that appeared earlier, “mask artist … mask → artist”, whatever the words. Heads 5.1, 5.5, 6.9, 7.2 and 7.10 are the clearest in GPT-2.</p>
+<div class="slide-say" hidden>Two heads working together to continue a pattern.</div>
+<div class="module" id="m11">
+  <h4>Two heads that find a repeat</h4>
+  <p class="note" style="margin:0 0 10px">Click any word to make it the query.</p>
+  <div class="m11h" id="m11-h1"></div><div class="strip" id="m11-s1"></div>
+  <div class="m11h" id="m11-h2"></div><div class="strip" id="m11-s2"></div>
+  <div class="m11h" id="m11-h3"></div>
+  <div class="pnext" id="m11-p"></div>
+  <div class="pnextax"><span>first copy</span><span>second copy</span></div>
+</div>
+<p>In the first copy the words are random, and GPT-2 can’t predict any of them. From the second word of the second copy on, its top guess is right every time. Nothing about these words was learned in training; the heads look the answer up in the text itself. Researchers have found that induction heads form at a particular point in training, at the same time as a model gets much better at using what came earlier in a long text.</p>
+<div class="slide-say" hidden>Most heads, most of the time, look at the first token.</div>
+<h2 id="s12"><span class="num">12</span>The attention sink</h2>
+<p>In section 10, many heads were dark down the first column. Of GPT-2’s 144 heads, 90 put more than half their weight on the first token of the sentence, averaged over its positions. Without the <code>&lt;|endoftext|&gt;</code> at the start, 92 do the same with whatever token comes first.</p>
+<p>The softmax explains why. The weights at a position have to add up to 1, so a head can’t give <em>no</em> weight to everything; it has to put it somewhere. A head that is only useful in some contexts, such as an induction head with no repeat to find, needs somewhere harmless to put it the rest of the time. The first token is visible from every position, and in these heads its value is small, a median of 0.11 times the size of the other values, so weight parked there adds almost nothing. Such a place is called an <em>attention sink</em>.</p>
+<div class="slide-say" hidden>Each dot is one of GPT-2’s heads.</div>
+<div class="module" id="m12">
+  <h4>How much each head puts on the first token</h4>
+  <div class="row"><span class="seg" id="m12-text" role="group" aria-label="text"><button data-t="nat">with &lt;|endoftext|&gt; first</button><button data-t="natNoEot">without</button></span></div>
+  <div class="m12plot" id="m12-plot"></div>
+  <div class="hover" id="m12-hover"></div>
+</div>
+<p>So a dark first column usually means a head that is <em>idle</em> at that position, not one that thinks the first token matters. The weights say where a head looks; what it takes from there is the value, and a large weight on a small value is a small effect.</p>
+<div class="slide-say" hidden>Attention is the only way information moves between positions.</div>
+<h2 id="s13"><span class="num">13</span>What attention adds</h2>
+<p>The first layer of GPT-2 gives every token the same vector wherever it appears. Attention is how that changes: each position asks a question with its query, every earlier token answers with its key, the softmax turns the match into weights, and the values, blended in those proportions, are added to the position’s vector. It is the only place in the model where one position reads another. Repeated over 144 heads in 12 layers, that is enough for a vector to come out of GPT-2 knowing which animal came before, what followed a word the last time it appeared, and a great deal else.</p>
+<p class="next-explainer">The next explainer, <a href="https://ulyssespascal.com/apps/residual-stream">What GPT-2’s heads read and write</a>, follows the residual stream: what each head takes from it, what it puts back, and how one head writes for another. This page continues <a href="https://ulyssespascal.com/apps/gpt2-embeddings">How GPT-2 turns text into vectors</a>, which follows the same toy model from its first layer, and <a href="https://ulyssespascal.com/apps/word2vec">How word2vec learns</a> before it.</p>
+<footer>
+  <h4 class="fn-h">Footnotes</h4>
+  <ol class="fn">
+    <li>Vaswani, Shazeer, Parmar, Uszkoreit, Jones, Gomez, Kaiser and Polosukhin, <a href="https://arxiv.org/abs/1706.03762">“Attention Is All You Need”</a>, NeurIPS (2017): queries, keys and values, scaling by √<i>d</i>, the mask, and many heads side by side. Bahdanau, Cho and Bengio, <a href="https://arxiv.org/abs/1409.0473">“Neural Machine Translation by Jointly Learning to Align and Translate”</a>, ICLR (2015), introduced attention as a weighted blend picked by a softmax.</li>
+    <li>Radford, Wu, Child, Luan, Amodei and Sutskever, <a href="https://cdn.openai.com/better-language-models/language_models_are_unsupervised_multitask_learners.pdf">“Language Models are Unsupervised Multitask Learners”</a> (2019). GPT-2 small: 12 layers of 12 heads, 768 numbers per vector, 64 per head. Its weights on this page come from the released model (Hugging Face <code>gpt2</code>), on the texts shown.</li>
+    <li>Elhage, Nanda, Olsson and others, <a href="https://transformer-circuits.pub/2021/framework/index.html">“A Mathematical Framework for Transformer Circuits”</a> (2021), on the residual stream (the subject of the <a href="../residual-stream/">next page</a>), attention as the only part that moves information between positions, and how a previous-token head and an induction head work together.</li>
+    <li>Olsson, Elhage, Nanda and others, <a href="https://transformer-circuits.pub/2022/in-context-learning-and-induction-heads/index.html">“In-context Learning and Induction Heads”</a> (2022), on induction heads, repeated random tokens as a test for them, and the point in training where they form. Wang, Variengien, Conmy, Shlegeris and Steinhardt, <a href="https://arxiv.org/abs/2211.00593">“Interpretability in the Wild”</a>, ICLR (2023), name 2.2 and 4.11 as GPT-2 small’s previous-token heads. The induction scores here are the average weight from each word in the second copy to the word after its first appearance.</li>
+    <li>Xiao, Tian, Chen, Han and Lewis, <a href="https://arxiv.org/abs/2309.17453">“Efficient Streaming Language Models with Attention Sinks”</a>, ICLR (2024), named the attention sink. Kobayashi, Kuribayashi, Yokoi and Inui, <a href="https://arxiv.org/abs/2004.10102">“Attention is Not Only a Weight: Analyzing Transformers with Vector Norms”</a>, EMNLP (2020), found in BERT that heavy weights often fall on tokens with small values. The ratio in section 12 is, for each head with more than half its weight on the first token, the length of its value at the first position over the average length at the others, on the sentence of section 10; 99% of those heads are under 0.5.</li>
+    <li>The toy model is the one on the <a href="../gpt2-embeddings/">GPT-2 embeddings page</a>, with initialization seed 2 and the same training order; that page uses seed 1. With seed 2 its head sends <span class="tok"><span class="sp">·</span>can</span> to the animal clearly, and each animal’s value alone points to the right answer. Across 100 seeds, 79 trained toy models predict both <span class="tok"><span class="sp">·</span>bark</span> and <span class="tok"><span class="sp">·</span>pur</span> right, 54 put more than half of <span class="tok"><span class="sp">·</span>can</span>’s weight on the animal in both sentences, and in 47 the animal’s value alone gives the right answer; in the rest, the head spreads the job over several tokens. 14 of the 100 learn “likes to” as well.</li>
+  </ol>
+</footer>
+
+</main>
+
+<script src="gpt2data.js"></script>
+<script src="model.js"></script>
+<script src="attndata.js"></script>
+<script src="toy.js"></script>
+<script src="app.js"></script>
+<script src="present.js"></script>
+</body>
+</html>
