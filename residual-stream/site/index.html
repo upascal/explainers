@@ -1,0 +1,144 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>What GPT-2’s heads read and write</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;700&display=swap">
+<link rel="stylesheet" href="style.css">
+<link rel="stylesheet" href="present.css">
+</head>
+<body>
+
+<main>
+<div class="slide-say" hidden>Every layer of GPT-2 reads from one running vector and adds to it. Here is how to see what each part reads and writes.</div>
+<h1>What GPT-2’s heads read and write</h1>
+<p class="lede">Inside GPT-2, each position has one running vector of 768 numbers. Every layer reads it and adds something to it, and nothing is ever taken out. That shared vector, the <em>residual stream</em>, is where one part of the model leaves information for another. This page uses it to answer a question the <a href="../attention/">attention page</a> left open: what does a head take from the stream, what does it put back, and how do the two relate?</p>
+<p class="note">Everything on this page comes from GPT-2 small’s released weights, and from running it on two texts. It was computed ahead of time; nothing is trained here. It follows on from <a href="../attention/">How attention lets GPT-2 look back</a>, and uses the same two texts as its sections 10 and 11.</p>
+<nav class="toc">
+  <a href="#s1">1. One stream, many writers</a>
+  <a href="#s2">2. A window into the stream</a>
+  <a href="#s3">3. Reading and writing directions</a>
+  <a href="#s4">4. Copying and suppressing</a>
+  <a href="#s5">5. One head writing for another</a>
+  <a href="#s6">6. Who finds the answer, and who writes it</a>
+  <a href="#s7">7. What the weights can’t tell you</a>
+</nav>
+<div class="slide-say" hidden>The final vector is a sum, and every part of it can be measured.</div>
+<h2 id="s1"><span class="num">1</span>One stream, many writers</h2>
+<p>GPT-2 starts each position’s vector as a token embedding plus a position embedding. Then each of its 12 layers adds two things: the output of its attention part, and the output of its MLP. So the vector after the last layer is exactly a sum of 25 parts.</p>
+<div class="formula fxblock"><span class="fx"><span class="w"><span class="t">final vector</span><span class="g"><span class="o">=</span><span class="t tv">embeddings</span></span><span class="g"><span class="o">+</span><span class="t">attention 0</span><span class="o">+</span><span class="t">MLP 0</span></span><span class="g"><span class="o">+ … +</span><span class="t">attention 11</span><span class="o">+</span><span class="t">MLP 11</span></span></span><span class="s"><i>x</i><sub>12</sub> = <span class="sv"><i>x</i><sub>0</sub></span> + attn<sub>0</sub> + mlp<sub>0</sub> + … + attn<sub>11</sub> + mlp<sub>11</sub></span></span><span class="fxsw seg" role="group" aria-label="show formulas as"><button data-fx="w">words</button><button data-fx="s">symbols</button></span></div>
+<p>GPT-2 scores the final vector against every token’s embedding to pick the next token, after one last <em>LayerNorm</em>, which subtracts the vector’s average and divides it by its length. The division depends on the whole vector, but for one prediction it is a single number, and with it fixed at its real value the score of any token splits exactly into 25 pieces. Only differences between scores matter to the softmax, so each piece is measured against the average token’s: how much that part pushed this token up or down compared with the rest.</p>
+<div class="slide-say" hidden>Each part’s push on the token that really came next.</div>
+<div class="module" id="m1">
+  <h4>Every part’s push on the next token</h4>
+  <div class="row"><span class="seg" id="m1-text" role="group" aria-label="text"><button data-t="nat">sentence</button><button data-t="rep">random words, twice</button></span></div>
+  <div class="strip" id="m1-strip"></div>
+  <p class="note" id="m1-h" style="margin:12px 0 10px"></p>
+  <div class="m1split">
+    <div class="parts" id="m1-parts"></div>
+    <div><h4 style="margin-bottom:6px">How long the vector gets</h4><div id="m1-norm"></div><p class="note" id="m1-nnote" style="margin:6px 0 0"></p></div>
+  </div>
+</div>
+<p>At the second <span class="tok"><span class="sp">·</span>mask</span>, the answer, <span class="tok"><span class="sp">·</span>artist</span>, is a word GPT-2 has seen once, 19 tokens back. The 25 parts put its score 15.2 above the average token’s. Attention adds 10.5 of that, the MLPs 4.6, and the embeddings almost nothing: the answer isn’t at this position, so the parts that move information between positions do most of the work. Over the whole second copy, attention adds 11.1 on average; over the first, where there is no earlier copy to find, 1.4.</p>
+<p>The vector also grows as it goes. Over the sentence’s positions it starts with a length of about 5 and ends near 450, so a part that adds a lot late on can outweigh everything before it.</p>
+<div class="slide-say" hidden>A head reads through a 64-number window.</div>
+<h2 id="s2"><span class="num">2</span>A window into the stream</h2>
+<p>An attention head doesn’t read the whole stream. It reads it through its tables: the value it takes from a token is that token’s vector times <em>W</em><sub>V</sub>, which keeps 64 numbers out of 768. Whatever is in the other 704 directions, the head can’t see. Then <em>W</em><sub>O</sub> turns the 64 numbers back into 768 and adds them in. Put together, the two tables make one map from the stream to the stream, called the head’s <em>OV circuit</em>:</p>
+<div class="formula fxblock"><span class="fx"><span class="w"><span class="t">what the head adds, per token it looks at</span><span class="g"><span class="o">=</span><span class="t">weight</span><span class="o">×</span><span class="t tv">that token’s vector</span></span><span class="g"><span class="o">×</span><span class="t tval">W<sub>V</sub> W<sub>O</sub></span></span></span><span class="s"><i>a</i><sub><i>t</i>,<i>u</i></sub> <span class="sv"><i>x</i><sub><i>u</i></sub></span> <span class="svv"><i>W</i><sub>OV</sub></span>, &nbsp; <span class="svv"><i>W</i><sub>OV</sub></span> = <i>W</i><sub>V</sub><i>W</i><sub>O</sub> (768 × 768, rank ≤ 64)</span></span><span class="fxsw seg" role="group" aria-label="show formulas as"><button data-fx="w">words</button><button data-fx="s">symbols</button></span></div>
+<p>The queries and keys work the same way. A score is a query times a key, and both come from the stream, so the two tables fold into one <em>QK circuit</em>, <em>W</em><sub>Q</sub><em>W</em><sub>K</sub><sup>T</sup>, that compares two vectors from the stream. The QK circuit decides <em>where</em> the head looks; the OV circuit decides <em>what</em> it moves from there.</p>
+<p>Only these products mean anything. Stretch one of the 64 numbers in the middle by any amount, and shrink it by the same amount on the way out, and the head does exactly what it did before. So asking what <em>W</em><sub>V</sub> alone reads, or how large the 64-number value is, has no single answer.</p>
+<div class="slide-say" hidden>Change both tables, and nothing changes.</div>
+<div class="module" id="m2">
+  <h4>A dial no one can see</h4>
+  <div class="row"><label class="ctl">turn the dial <input type="range" id="m2-t" min="-1" max="1" step="0.01" value="0" aria-label="turn the dial"></label><button id="m2-0">back to GPT-2’s</button></div>
+  <div class="mats" id="m2-mats"></div>
+  <p class="note" id="m2-note" style="margin:12px 0 0"></p>
+</div>
+<div class="slide-say" hidden>What a head reads, and where it writes, in the same space.</div>
+<h2 id="s3"><span class="num">3</span>Reading and writing directions</h2>
+<p>Because the OV circuit goes from the stream back to the stream, what a head reads and what it writes live in the same 768-number space, and can be compared. Taking the circuit apart with the <em>singular value decomposition</em> gives up to 64 pairs: a direction the head reads, the direction it writes the result to, and a gain between them. Every other direction of the stream it ignores.</p>
+<p>So does a head write back into the directions it reads, or somewhere else? Compare its 64 read directions with its 64 write directions: the cosines between the two sets, best match first, are their <em>principal angles</em>. A cosine of 1 means some direction is both read and written.</p>
+<p>There is a catch. Two 64-direction subspaces of a 768-number space overlap by chance: picked at random, their best match has a cosine of about 0.54, not 0. GPT-2’s heads average 0.71, and 129 of the 144 are above what random subspaces reach 99 times in 100. They mostly write near where they read, but not into the same place. The highest is head 4.7, at 0.97: some direction it writes is almost exactly one it reads.</p>
+<div class="slide-say" hidden>Each head’s overlap between reading and writing.</div>
+<div class="module" id="m3">
+  <h4>What a head reads, and where it writes</h4>
+  <div class="hgwrap">
+    <div><div class="hg" id="m3-grid"></div><div class="scale" id="m3-scale"></div></div>
+    <div class="detail" id="m3-d"></div>
+  </div>
+</div>
+<p>High overlap doesn’t say what the head does with it. A head can read a direction and write it back as it was, or write it back reversed, which erases it. The next section tells those apart, and head 4.7 turns out to be the second kind.</p>
+<div class="slide-say" hidden>Feed a head a token, and see which tokens it pushes up.</div>
+<h2 id="s4"><span class="num">4</span>Copying and suppressing</h2>
+<p>The cleanest way to see what an OV circuit does is in terms of tokens. Feed it a token, and score its output against every token in the vocabulary, as GPT-2 does at the end. One adjustment matters: a head after layer 0 doesn’t see a token’s raw embedding, but what layer 0 made of it, so the input here is the embedding plus layer 0’s MLP’s change to it. With the raw embedding, almost every head looks like noise.</p>
+<p>A head that pushes up the very token it read <em>copies</em>. One that pushes it down <em>suppresses</em>. The <em>copying score</em> sums this up over 500 common words: +1 for a head that only copies, −1 for one that only suppresses, and about 0 for random tables.</p>
+<div class="slide-say" hidden>Copying, suppressing, and everything between.</div>
+<div class="module" id="m4">
+  <h4>A head as a map from tokens to tokens</h4>
+  <div class="hgwrap">
+    <div><div class="hg" id="m4-grid"></div><div class="scale" id="m4-scale"></div></div>
+    <div class="detail"><h5 id="m4-h"></h5><div class="chips" id="m4-ex" style="margin-bottom:12px"></div><div class="toplist" id="m4-top"></div><p class="note" id="m4-note"></p></div>
+  </div>
+</div>
+<p>Of GPT-2’s 144 heads, 62 score above +0.5 and 12 below −0.5. Head 7.2 is a clean copier: feed it <span class="tok"><span class="sp">·</span>coffee</span> and <span class="tok"><span class="sp">·</span>coffee</span> comes out on top, and the same for <span class="tok"><span class="sp">·</span>Paris</span>. Head 10.7 is the opposite: feed it <span class="tok"><span class="sp">·</span>artist</span>, and <span class="tok"><span class="sp">·</span>artist</span> comes out 50,256th of 50,257, second to last. Head 4.7, which writes back almost exactly where it reads, scores −0.47, and a typical word fed to it comes out 49,709th: it reads a token and pushes it down. Head 5.5, the induction head from the attention page, scores +0.83, yet <span class="tok"><span class="sp">·</span>artist</span> itself comes out only 502nd. The score sums up the circuit as a whole; a head can lean towards copying without handing a given token on cleanly. Section 6 shows what that means on text.</p>
+<div class="slide-say" hidden>One head writes where another reads.</div>
+<h2 id="s5"><span class="num">5</span>One head writing for another</h2>
+<p>The same comparison works between two heads. Head A writes into the stream; a head B in a later layer reads from it. How much of what A writes lands where B reads? B reads in three ways, so there are three answers: through its keys (<em>K-composition</em>), its queries (<em>Q-composition</em>) or its values (<em>V-composition</em>). Each is measured from the two heads’ circuits alone, as a number between 0 and 1, and two random circuits of the same shape score about 0.036.</p>
+<p>On the attention page, head 4.11 wrote into each position which token came before it, and induction heads used that with their keys to find a repeat. If that is right, 4.11’s OV circuit should line up with those heads’ keys. It does: of all heads after layer 4, the six that read most of 4.11’s writing with their keys are 6.9, 5.1, 5.5, 7.10, 5.0 and 7.2, at about 2.4 to 2.8 times chance. Five of them are the induction heads from the attention page. Nothing about any text went into this: it comes from the weights alone.</p>
+<div class="slide-say" hidden>Pick a head, and see who reads what it writes.</div>
+<div class="module" id="m5">
+  <h4>Where one head’s writing is read</h4>
+  <div class="row"><span class="seg" id="m5-kind" role="group" aria-label="read by"><button data-k="k">keys</button><button data-k="q">queries</button><button data-k="v">values</button></span></div>
+  <div class="hgwrap">
+    <div><div class="hg" id="m5-grid"></div><div class="scale" id="m5-scale"></div><p class="note" style="margin:8px 0 0;max-width:340px">Click a head to make it the writer, outlined in pink. Each later head is shaded by how much of what it reads lands in what the writer writes.</p></div>
+    <div class="detail"><h5 id="m5-h"></h5><div class="toplist" id="m5-top"></div><p class="note" id="m5-note"></p></div>
+  </div>
+</div>
+<p>The scores are small, a tenth of the way to 1, because each head reads and writes only a sliver of the stream, and shares it with everything else. Their size only means something next to chance.</p>
+<div class="slide-say" hidden>On real text: who finds the answer, and who writes it.</div>
+<h2 id="s6"><span class="num">6</span>Who finds the answer, and who writes it</h2>
+<p>The weights say what a head <em>can</em> do. On real text, the same split as section 1 works for every head: each head’s output at a position is a sum over the tokens it looked at, weight times that token’s vector through the OV circuit, plus a constant from the value’s bias, which arrives in full wherever the head looks, since the weights add up to 1. So each head’s push on the next token splits exactly by the token it came from.</p>
+<p>Take the second <span class="tok"><span class="sp">·</span>mask</span> again. Head 5.5 puts 96% of its weight on the first <span class="tok"><span class="sp">·</span>artist</span>, as on the attention page, but its own push on <span class="tok"><span class="sp">·</span>artist</span> is only +0.34. Heads 7.2 and 9.9 look there too, with 66% and 85% of their weight, and push harder: +0.48 and +1.00. Head 10.7 looks there as well, with 81%, and pushes <span class="tok"><span class="sp">·</span>artist</span> <em>down</em>, by 1.76: the copy suppression section 4 read off its weights. Over the whole second copy, the heads that push the right word up most are 7.2, 9.9 and 9.6, and the one that pushes it down most is 10.7.</p>
+<p>So finding the earlier copy and writing the answer are different jobs. Head 5.5 finds it, but writes little of the answer itself; whatever else it contributes has to reach the answer through the heads and MLPs after it.</p>
+<div class="slide-say" hidden>Each head’s push, and where it came from.</div>
+<div class="module" id="m6">
+  <h4>Who writes the answer</h4>
+  <p class="note" style="margin:0 0 8px">Click any word to look at the prediction made there.</p>
+  <div class="strip" id="m6-strip"></div>
+  <p class="note" id="m6-h" style="margin:12px 0 10px"></p>
+  <div class="hgwrap">
+    <div><div class="hg" id="m6-grid"></div><div class="scale" id="m6-scale"></div></div>
+    <div class="detail"><div class="row"><span class="seg" id="m6-head" role="group" aria-label="head"></span></div><h5 id="m6-sh"></h5><div class="parts" id="m6-src"></div><p class="note" id="m6-note"></p></div>
+  </div>
+</div>
+<h2 id="s7"><span class="num">7</span>What the weights can’t tell you</h2>
+<p>Everything above treats a head as a straight line from what it reads to what it writes, and for the OV circuit that is exactly true: once the weights are fixed, the value and output tables are just multiplications. Three things keep it from being the whole story.</p>
+<ul>
+<li><strong>LayerNorm.</strong> Each head reads the stream after a LayerNorm, which subtracts the average and divides by the length. The gain and bias can be folded into the head’s tables, as here, but the division can’t: the head sees each vector at the same length, however long it was.</li>
+<li><strong>The MLPs.</strong> Half of what is written to the stream comes from the MLPs, which aren’t linear. Section 4 already needed layer 0’s MLP just to describe a head’s input.</li>
+<li><strong>Directions aren’t meanings.</strong> A read direction is a direction in a space of 768 numbers that carries far more than 768 things at once. What one <em>means</em> has to be found from data, for example with sparse autoencoders trained on the stream or on heads’ outputs, which split it into many more, sparser directions.</li>
+</ul>
+<p>Still, the stream is what makes this kind of measurement possible at all. Every part reads from the same space and writes into the same space, so any two can be compared directly, from the weights or on a text: one head’s writing with another’s reading, or a head’s writing with the vocabulary at the end.</p>
+<p class="next-explainer">This page follows <a href="https://ulyssespascal.com/apps/attention">How attention lets GPT-2 look back</a>, which opens up a single attention head.</p>
+<footer>
+  <h4 class="fn-h">Footnotes</h4>
+  <ol class="fn">
+    <li>Elhage, Nanda, Olsson and others, <a href="https://transformer-circuits.pub/2021/framework/index.html">“A Mathematical Framework for Transformer Circuits”</a> (2021): the residual stream, the OV and QK circuits, their freedom to rescale, eigenvalues as a measure of copying, and Q-, K- and V-composition. Composition scores here are their ‖<i>M</i><sub>B</sub><i>W</i><sub>OV</sub><sup>A</sup>‖ / (‖<i>M</i><sub>B</sub>‖ ‖<i>W</i><sub>OV</sub><sup>A</sup>‖), in Frobenius norm, with <i>M</i><sub>B</sub> the later head’s QK or OV circuit; the chance level is the same score for two products of random 768 × 64 and 64 × 768 tables, averaged over 50 draws.</li>
+    <li>GPT-2 applies its tables to row vectors (<i>x</i> <i>W</i>), so a head reads through the columns of <i>W</i><sub>V</sub> and writes into the rows of <i>W</i><sub>O</sub>, and in <i>W</i><sub>OV</sub> = <i>U</i> Σ <i>V</i><sup>T</sup> the read directions are the columns of <i>U</i> and the write directions those of <i>V</i>: the other way round from the usual column-vector convention. Each head’s LayerNorm gain is folded into its <i>W</i><sub>Q</sub>, <i>W</i><sub>K</sub> and <i>W</i><sub>V</sub>. The overlaps of section 3 are the singular values of <i>Q</i><sub>read</sub><sup>T</sup><i>Q</i><sub>write</sub>, for orthonormal bases of the two subspaces; the chance level averages 200 pairs of random 64-dimensional subspaces, and its 99th percentile comes from 300 more.</li>
+    <li>Section 4’s copying score is the sum of the eigenvalues of the token-to-token circuit divided by the sum of their sizes, as in Elhage et al., computed over 500 common single-token words: their effective embeddings (embedding plus layer 0’s MLP), normalized, in; centred scores against the same words’ embeddings out. Random tables of the same shape score about 0, give or take 0.09.</li>
+    <li>McDougall, Conmy, Rushing, McGrath and Nanda, <a href="https://arxiv.org/abs/2310.04625">“Copy Suppression: Comprehensively Understanding an Attention Head”</a> (2023), on head 10.7 of GPT-2 small, which pushes down tokens that appear earlier in the context when the model predicts them. Wang, Variengien, Conmy, Shlegeris and Steinhardt, <a href="https://arxiv.org/abs/2211.00593">“Interpretability in the Wild”</a>, ICLR (2023), found heads of both kinds in GPT-2 small.</li>
+    <li>Section 1 and 6’s split of a score is exact: the final LayerNorm’s division is fixed at its value in the real run, and its own bias adds a constant to each score that belongs to no part. Every score is taken relative to the average over all 50,257 tokens, since only differences between scores reach the softmax. The precompute checks that the 25 parts and the constant add up to GPT-2’s own score, and that each head’s split by source adds up to its whole push. Head-level pushes leave out the output bias, which belongs to the attention part as a whole.</li>
+    <li>Kissane, Krzyzanowski, Bloom, Conmy and Nanda, <a href="https://arxiv.org/abs/2406.17759">“Interpreting Attention Layer Outputs with Sparse Autoencoders”</a> (2024), train sparse autoencoders on what attention heads write, and use them to name what each head moves.</li>
+  </ol>
+</footer>
+
+</main>
+
+<script src="resdata.js"></script>
+<script src="app.js"></script>
+<script src="present.js"></script>
+</body>
+</html>

@@ -10,6 +10,8 @@ folder with the same layout: prose in `src/index.md`, one widget per file in
 | [`synthid/`](synthid/) | how tournament-sampling text watermarks (SynthID-Text) work |
 | [`word2vec/`](word2vec/) | how word2vec (skip-gram with negative sampling) learns, trained live in the browser |
 | [`gpt2-embeddings/`](gpt2-embeddings/) | GPT-2's first layer: tokenizer, token and position tables, and how next-token prediction trains them |
+| [`attention/`](attention/) | attention in GPT-2: one head taken apart on the toy model, then GPT-2's own 144 heads |
+| [`residual-stream/`](residual-stream/) | GPT-2's residual stream: what each head reads and writes, copying and suppression, and how heads compose |
 
 ```bash
 pip install -r requirements.txt     # markdown-it-py, shared by every build.py
